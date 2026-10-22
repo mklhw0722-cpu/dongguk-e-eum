@@ -10,19 +10,39 @@ import {
   DemoInfoBanner,
 } from "@/components/common/Cards";
 import {
-  Users,
-  Search,
-  Sparkles,
-  MessageSquare,
-  Lock,
-  Globe,
-  X,
-  CheckCircle2,
-  UserCog,
-} from "lucide-react";
+  Avatar,
+  Badge,
+  Button,
+  Checkbox,
+  Chip,
+  ChipGroup,
+  EmptyState,
+  Field,
+  Input,
+  Modal,
+  PageHeader,
+  Panel,
+  SearchInput,
+  SectionHeader,
+  Select,
+  Tabs,
+  Textarea,
+  useToast,
+} from "@/components/ui";
+import type { BadgeTone } from "@/components/ui";
+import { MessageSquare, Sparkles, Lock, Globe } from "lucide-react";
+
+type AlumniTab = "directory" | "mentoring" | "my_profile";
+
+const MENTORING_STATUS_TONE: Record<string, BadgeTone> = {
+  대기중: "warning",
+  수락됨: "success",
+  답변완료: "info",
+};
 
 export default function AlumniPage() {
   const router = useRouter();
+  const toast = useToast();
   const {
     alumniProfiles,
     mentoringRequests,
@@ -36,9 +56,7 @@ export default function AlumniPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCareer, setSelectedCareer] = useState<string>("전체");
   const [selectedDoubleMajor, setSelectedDoubleMajor] = useState<string>("전체");
-  const [activeTab, setActiveTab] = useState<"directory" | "mentoring" | "my_profile">(
-    "directory"
-  );
+  const [activeTab, setActiveTab] = useState<AlumniTab>("directory");
 
   // 모달 상태
   const [detailAlumni, setDetailAlumni] = useState<AlumniProfile | null>(null);
@@ -47,7 +65,6 @@ export default function AlumniPage() {
   );
   const [mentoringTopic, setMentoringTopic] = useState("");
   const [mentoringMsg, setMentoringMsg] = useState("");
-  const [feedbackBanner, setFeedbackBanner] = useState<string | null>(null);
 
   // 졸업생 본인 프로필 등록/수정 상태 (데모)
   const [profName, setProfName] = useState("정혜원 (18학번)");
@@ -101,12 +118,14 @@ export default function AlumniPage() {
       mentoringTopic.trim(),
       mentoringMsg.trim()
     );
+    const targetName = mentoringTarget.displayName;
     setMentoringTarget(null);
     setMentoringTopic("");
     setMentoringMsg("");
-    setFeedbackBanner(
-      `${mentoringTarget.displayName} 동문에게 멘토링 신청이 접수되었습니다! [멘토링 요청 현황] 탭에서 확인할 수 있습니다.`
-    );
+    toast({
+      title: `${targetName} 동문에게 멘토링 신청이 접수되었습니다!`,
+      description: "[멘토링 요청 현황] 탭에서 확인할 수 있습니다.",
+    });
   };
 
   const handleSaveMyAlumniProfile = (e: React.FormEvent) => {
@@ -129,137 +148,70 @@ export default function AlumniPage() {
         allowDirectChat: true,
       },
     });
-    setFeedbackBanner("졸업생 프로필 및 개인정보 공개 범위가 저장되었습니다.");
+    toast({ title: "졸업생 프로필 및 개인정보 공개 범위가 저장되었습니다." });
     setActiveTab("directory");
   };
 
   return (
     <div className="space-y-6">
-      {/* 상단 헤더 */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <Users className="w-6 h-6 text-orange-600" />
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-              졸업생 동문 연결 네트워크
-            </h1>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            교직, 교육행정, 공공기관, 기업 HRD, 에듀테크, 대학원 등 각 분야로 진출한 교육학과 선배들과 연결하세요.
-          </p>
-        </div>
+      <PageHeader
+        title="졸업생 동문 연결 네트워크"
+        description="교직, 교육행정, 공공기관, 기업 HRD, 에듀테크, 대학원 등 각 분야로 진출한 교육학과 선배들과 연결하세요."
+      />
 
-        {/* 상단 탭 전환 */}
-        <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 self-start">
-          <button
-            type="button"
-            onClick={() => setActiveTab("directory")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-              activeTab === "directory"
-                ? "bg-orange-600 text-white"
-                : "text-slate-600 dark:text-slate-300"
-            }`}
-          >
-            동문 프로필 탐색 ({alumniProfiles.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("mentoring")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-              activeTab === "mentoring"
-                ? "bg-orange-600 text-white"
-                : "text-slate-600 dark:text-slate-300"
-            }`}
-          >
-            멘토링 요청 현황 ({mentoringRequests.length})
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("my_profile")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-              activeTab === "my_profile"
-                ? "bg-orange-600 text-white"
-                : "text-slate-600 dark:text-slate-300"
-            }`}
-          >
-            졸업생 프로필·공개범위 설정
-          </button>
-        </div>
-      </div>
-
-      {feedbackBanner && (
-        <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-xs sm:text-sm flex items-center justify-between">
-          <span className="font-semibold flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-            {feedbackBanner}
-          </span>
-          <button
-            type="button"
-            onClick={() => setFeedbackBanner(null)}
-            className="text-xs underline"
-          >
-            닫기
-          </button>
-        </div>
-      )}
+      <Tabs
+        variant="underline"
+        label="졸업생 동문 메뉴"
+        value={activeTab}
+        onChange={setActiveTab}
+        items={[
+          {
+            value: "directory",
+            label: "동문 프로필 탐색",
+            count: alumniProfiles.length,
+          },
+          {
+            value: "mentoring",
+            label: "멘토링 요청 현황",
+            count: mentoringRequests.length,
+          },
+          { value: "my_profile", label: "졸업생 프로필·공개범위 설정" },
+        ]}
+      />
 
       {activeTab === "directory" && (
-        <>
+        <div className="space-y-4">
           {/* 검색 및 진로·복수전공 이중 필터 */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3 shadow-xs">
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="선배 이름, 직무, 관심 키워드(예: 온보딩, 임용, PM, NCS) 검색..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs font-bold text-slate-500 mr-1">
-                  진로 분야:
-                </span>
-                {["전체", ...CAREER_TRACK_LIST].map((track) => (
-                  <button
-                    key={track}
-                    type="button"
-                    onClick={() => setSelectedCareer(track)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
-                      selectedCareer === track
-                        ? "bg-orange-600 text-white"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
-                    }`}
-                  >
-                    {track}
-                  </button>
-                ))}
-              </div>
-
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-xs font-bold text-slate-500 mr-1">
-                  복수전공:
-                </span>
-                {doubleMajorOptions.map((dm) => (
-                  <button
-                    key={dm}
-                    type="button"
-                    onClick={() => setSelectedDoubleMajor(dm)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
-                      selectedDoubleMajor === dm
-                        ? "bg-slate-900 dark:bg-slate-700 text-white"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
-                    }`}
-                  >
-                    {dm}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <Panel className="space-y-3">
+            <SearchInput
+              label="동문 검색"
+              value={searchQuery}
+              onValueChange={setSearchQuery}
+              placeholder="선배 이름, 직무, 관심 키워드(예: 온보딩, 임용, PM, NCS) 검색..."
+            />
+            <ChipGroup label="진로 분야" scroll>
+              {["전체", ...CAREER_TRACK_LIST].map((track) => (
+                <Chip
+                  key={track}
+                  selected={selectedCareer === track}
+                  onClick={() => setSelectedCareer(track)}
+                >
+                  {track}
+                </Chip>
+              ))}
+            </ChipGroup>
+            <ChipGroup label="복수전공" scroll>
+              {doubleMajorOptions.map((dm) => (
+                <Chip
+                  key={dm}
+                  selected={selectedDoubleMajor === dm}
+                  onClick={() => setSelectedDoubleMajor(dm)}
+                >
+                  {dm}
+                </Chip>
+              ))}
+            </ChipGroup>
+          </Panel>
 
           {/* 졸업생 카드 그리드 */}
           {filteredAlumni.length === 0 ? (
@@ -274,19 +226,24 @@ export default function AlumniPage() {
               }}
             />
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredAlumni.map((alumni) => (
-                <AlumniCard
-                  key={alumni.id}
-                  alumni={alumni}
-                  onSelectProfile={(a) => setDetailAlumni(a)}
-                  onRequestChat={(a) => handleRequestChat(a)}
-                  onRequestMentoring={(a) => setMentoringTarget(a)}
-                />
-              ))}
-            </div>
+            <>
+              <p className="text-sm text-ink-3" aria-live="polite">
+                동문 <span className="tabular font-semibold text-ink-2">{filteredAlumni.length}</span>명
+              </p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {filteredAlumni.map((alumni) => (
+                  <AlumniCard
+                    key={alumni.id}
+                    alumni={alumni}
+                    onSelectProfile={(a) => setDetailAlumni(a)}
+                    onRequestChat={(a) => handleRequestChat(a)}
+                    onRequestMentoring={(a) => setMentoringTarget(a)}
+                  />
+                ))}
+              </div>
+            </>
           )}
-        </>
+        </div>
       )}
 
       {activeTab === "mentoring" && (
@@ -296,364 +253,348 @@ export default function AlumniPage() {
             description="재학생이 신청한 멘토링 내역을 확인하고, 졸업생 역할에서는 '수락됨' 또는 '답변완료'로 상태를 변경할 수 있습니다."
           />
 
-          <div className="space-y-3">
-            {mentoringRequests.map((req) => (
-              <div
-                key={req.id}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                        req.status === "수락됨"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : req.status === "답변완료"
-                          ? "bg-blue-100 text-blue-800"
-                          : "bg-amber-100 text-amber-800"
-                      }`}
-                    >
-                      {req.status}
-                    </span>
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                      신청자: {req.fromUserName} → 멘토: {req.toAlumniName}
-                    </span>
-                  </div>
-                  <span className="text-xs text-slate-400">{req.createdAt}</span>
-                </div>
+          {mentoringRequests.length === 0 ? (
+            <EmptyState
+              title="멘토링 요청이 없습니다"
+              description="동문 프로필에서 멘토링을 신청하면 이곳에 표시됩니다."
+              action={
+                <Button variant="secondary" onClick={() => setActiveTab("directory")}>
+                  동문 프로필 탐색
+                </Button>
+              }
+            />
+          ) : (
+            <Panel>
+              <p className="mb-4 text-sm text-ink-3">
+                {currentRole === "alumni"
+                  ? "졸업생 모드: 요청 상태를 변경할 수 있습니다."
+                  : "상단에서 '졸업생' 역할로 전환하면 수락/답변완료 처리가 가능합니다."}
+              </p>
+              <ul className="divide-y divide-line border-t border-line">
+                {mentoringRequests.map((req) => (
+                  <li key={req.id} className="space-y-3 py-4 last:pb-0">
+                    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
+                        <Badge tone={MENTORING_STATUS_TONE[req.status] ?? "neutral"} dot>
+                          {req.status}
+                        </Badge>
+                        <span className="text-sm text-ink-2">
+                          신청자: {req.fromUserName} → 멘토: {req.toAlumniName}
+                        </span>
+                      </div>
+                      <span className="tabular text-xs text-ink-3">{req.createdAt}</span>
+                    </div>
 
-                <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
-                  {req.topic}
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl">
-                  {req.message}
-                </p>
+                    <h3 className="text-base font-semibold text-ink">{req.topic}</h3>
+                    <p className="rounded-xl bg-surface-2 p-3.5 text-sm leading-relaxed text-ink-2">
+                      {req.message}
+                    </p>
 
-                <div className="flex items-center justify-between pt-2">
-                  <span className="text-[11px] text-slate-400">
-                    {currentRole === "alumni"
-                      ? "졸업생 모드: 요청 상태를 변경할 수 있습니다."
-                      : "상단에서 '졸업생' 역할로 전환하면 수락/답변완료 처리가 가능합니다."}
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => updateMentoringStatus(req.id, "수락됨")}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
-                    >
-                      멘토링 수락
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateMentoringStatus(req.id, "답변완료")}
-                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold"
-                    >
-                      답변완료 표시
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Button
+                        variant="success"
+                        size="sm"
+                        onClick={() => updateMentoringStatus(req.id, "수락됨")}
+                      >
+                        멘토링 수락
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => updateMentoringStatus(req.id, "답변완료")}
+                      >
+                        답변완료 표시
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          )}
         </div>
       )}
 
       {activeTab === "my_profile" && (
-        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-xs">
-          <div className="flex items-center gap-2">
-            <UserCog className="w-5 h-5 text-orange-600" />
-            <h2 className="text-lg font-black text-slate-900 dark:text-white">
-              졸업생 진로 프로필 등록 및 개인정보 공개 범위 설정
-            </h2>
-          </div>
-          <p className="text-xs text-slate-500">
-            졸업생 회원은 본인의 소속 직장명, 이메일, 멘토링 가능 여부를 직접 선택해 공개 범위를 제어할 수 있습니다.
-          </p>
+        <Panel padding="lg" className="space-y-5">
+          <SectionHeader
+            title="졸업생 진로 프로필 등록 및 개인정보 공개 범위 설정"
+            description="졸업생 회원은 본인의 소속 직장명, 이메일, 멘토링 가능 여부를 직접 선택해 공개 범위를 제어할 수 있습니다."
+          />
 
           <form
             onSubmit={handleSaveMyAlumniProfile}
-            className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs sm:text-sm"
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2"
           >
-            <div>
-              <label className="block font-bold mb-1">표시 이름 또는 닉네임</label>
-              <input
+            <Field label="표시 이름 또는 닉네임">
+              <Input
                 type="text"
                 value={profName}
                 onChange={(e) => setProfName(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className="block font-bold mb-1">졸업 연도</label>
-              <input
+            <Field label="졸업 연도">
+              <Input
                 type="number"
+                inputMode="numeric"
                 value={profGradYear}
                 onChange={(e) => setProfGradYear(Number(e.target.value))}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className="block font-bold mb-1">진로 분야</label>
-              <select
+            <Field label="진로 분야">
+              <Select
                 value={profCareer}
                 onChange={(e) => setProfCareer(e.target.value as CareerTrack)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
               >
                 {CAREER_TRACK_LIST.map((c) => (
                   <option key={c} value={c}>
                     {c}
                   </option>
                 ))}
-              </select>
-            </div>
+              </Select>
+            </Field>
 
-            <div>
-              <label className="block font-bold mb-1">복수전공 이수 내역</label>
-              <input
+            <Field label="복수전공 이수 내역">
+              <Input
                 type="text"
                 value={profDoubleMajor}
                 onChange={(e) => setProfDoubleMajor(e.target.value)}
                 placeholder="예: 심리학, 경영학, 단일전공(교육학)"
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className="block font-bold mb-1">현재 담당 직무명</label>
-              <input
+            <Field label="현재 담당 직무명">
+              <Input
                 type="text"
                 value={profRoleTitle}
                 onChange={(e) => setProfRoleTitle(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
               />
-            </div>
+            </Field>
 
-            <div>
-              <label className="block font-bold mb-1">현재 소속 기관/기업명 (선택 공개)</label>
-              <input
+            <Field label="현재 소속 기관/기업명 (선택 공개)">
+              <Input
                 type="text"
                 value={profOrg}
                 onChange={(e) => setProfOrg(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
               />
-            </div>
+            </Field>
 
-            <div className="sm:col-span-2">
-              <label className="block font-bold mb-1">한 줄 자기소개</label>
-              <input
+            <Field label="한 줄 자기소개" className="sm:col-span-2">
+              <Input
                 type="text"
                 value={profBio}
                 onChange={(e) => setProfBio(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
               />
-            </div>
+            </Field>
 
-            <div className="sm:col-span-2">
-              <label className="block font-bold mb-1">후배들에게 나눌 수 있는 경험 상세</label>
-              <textarea
+            <Field label="후배들에게 나눌 수 있는 경험 상세" className="sm:col-span-2">
+              <Textarea
                 rows={3}
                 value={profExp}
                 onChange={(e) => setProfExp(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
               />
-            </div>
+            </Field>
 
             {/* 개인정보 공개 범위 설정 박스 */}
-            <div className="sm:col-span-2 p-4 rounded-2xl bg-orange-50/60 dark:bg-slate-800 border border-orange-200 dark:border-slate-700 space-y-2">
-              <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                <Lock className="w-4 h-4 text-orange-600" /> 개인정보 및 멘토링 공개 범위 설정
-              </p>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={profShowOrg}
-                  onChange={(e) => setProfShowOrg(e.target.checked)}
-                />
-                <span>현재 소속 직장/기관명을 후배들에게 공개합니다 (해제 시 비공개 처리)</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={profShowEmail}
-                  onChange={(e) => setProfShowEmail(e.target.checked)}
-                />
-                <span>개인 이메일 연락처를 프로필 상세에 표시합니다</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={profMentoringAvail}
-                  onChange={(e) => setProfMentoringAvail(e.target.checked)}
-                />
-                <span>현재 멘토링 신청 접수를 받습니다</span>
-              </label>
-            </div>
-
-            <div className="sm:col-span-2 flex justify-end">
-              <button
-                type="submit"
-                className="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold"
+            <Panel
+              tone="muted"
+              padding="sm"
+              role="group"
+              aria-labelledby="alumni-privacy-title"
+              className="space-y-3 sm:col-span-2"
+            >
+              <p
+                id="alumni-privacy-title"
+                className="flex items-center gap-1.5 text-sm font-semibold text-ink"
               >
+                <Lock className="size-4 text-ink-3" aria-hidden="true" />
+                개인정보 및 멘토링 공개 범위 설정
+              </p>
+              <Checkbox
+                checked={profShowOrg}
+                onChange={(e) => setProfShowOrg(e.target.checked)}
+                label="현재 소속 직장/기관명을 후배들에게 공개합니다"
+                description="해제 시 비공개 처리"
+              />
+              <Checkbox
+                checked={profShowEmail}
+                onChange={(e) => setProfShowEmail(e.target.checked)}
+                label="개인 이메일 연락처를 프로필 상세에 표시합니다"
+              />
+              <Checkbox
+                checked={profMentoringAvail}
+                onChange={(e) => setProfMentoringAvail(e.target.checked)}
+                label="현재 멘토링 신청 접수를 받습니다"
+              />
+            </Panel>
+
+            <div className="flex sm:col-span-2 sm:justify-end">
+              <Button type="submit" variant="primary" className="max-sm:w-full">
                 프로필 및 공개 설정 저장
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
+        </Panel>
       )}
 
       {/* 상세 프로필 모달 */}
       {detailAlumni && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 space-y-4 shadow-xl">
-            <div className="flex items-start justify-between">
-              <div>
-                <span className="px-2.5 py-0.5 rounded-md bg-orange-100 text-orange-800 text-xs font-bold">
-                  {detailAlumni.careerTrack} 트랙
-                </span>
-                <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1">
-                  {detailAlumni.displayName}
-                </h2>
-                <p className="text-xs text-slate-500">
-                  {detailAlumni.graduationYear}년 졸업 · 복수전공:{" "}
-                  {detailAlumni.doubleMajor}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDetailAlumni(null)}
-                className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 space-y-2 text-xs sm:text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-500">현재 직무</span>
-                <span className="font-bold">{detailAlumni.currentRoleTitle}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">현재 소속 (선택 공개)</span>
-                {detailAlumni.privacy.showOrganization ? (
-                  <span className="font-semibold flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
-                    <Globe className="w-3.5 h-3.5" /> {detailAlumni.organization}
-                  </span>
-                ) : (
-                  <span className="text-slate-400 flex items-center gap-1">
-                    <Lock className="w-3.5 h-3.5" /> 본인 설정에 의해 비공개
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-2 text-xs sm:text-sm">
-              <h3 className="font-bold text-slate-900 dark:text-white">소개 및 진로 스토리</h3>
-              <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                {detailAlumni.bio}
-              </p>
-              <h3 className="font-bold text-slate-900 dark:text-white pt-2">
-                멘토링 가능 주제 및 경험 요약
-              </h3>
-              <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                {detailAlumni.experienceSummary}
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-              <button
-                type="button"
+        <Modal
+          open
+          onClose={() => setDetailAlumni(null)}
+          size="lg"
+          meta={<Badge tone="brand">{detailAlumni.careerTrack} 트랙</Badge>}
+          title={detailAlumni.displayName}
+          description={`${detailAlumni.graduationYear}년 졸업 · 복수전공: ${detailAlumni.doubleMajor}`}
+          footer={
+            <>
+              <Button
+                variant="secondary"
+                icon={<MessageSquare className="size-4" />}
                 onClick={() => {
                   const target = detailAlumni;
                   setDetailAlumni(null);
                   handleRequestChat(target);
                 }}
-                className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold inline-flex items-center gap-1.5"
               >
-                <MessageSquare className="w-3.5 h-3.5" /> 1:1 대화 요청
-              </button>
-              <button
-                type="button"
+                1:1 대화 요청
+              </Button>
+              <Button
+                variant="primary"
+                icon={<Sparkles className="size-4" />}
                 onClick={() => {
                   const target = detailAlumni;
                   setDetailAlumni(null);
                   setMentoringTarget(target);
                 }}
-                className="px-4 py-2 rounded-xl bg-orange-600 text-white text-xs font-bold inline-flex items-center gap-1.5"
               >
-                <Sparkles className="w-3.5 h-3.5" /> 멘토링 신청하기
-              </button>
+                멘토링 신청하기
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-5">
+            <div className="flex items-start gap-4 rounded-xl bg-surface-2 p-3.5">
+              <Avatar
+                name={detailAlumni.displayName}
+                role="alumni"
+                size="xl"
+              />
+              <dl className="min-w-0 flex-1 space-y-2.5 text-sm">
+                <div>
+                  <dt className="text-xs text-ink-3">현재 직무</dt>
+                  <dd className="font-semibold text-ink">
+                    {detailAlumni.currentRoleTitle}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-ink-3">현재 소속 (선택 공개)</dt>
+                  <dd>
+                    {detailAlumni.privacy.showOrganization ? (
+                      <span className="flex items-start gap-1.5 font-medium text-success">
+                        <Globe className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                        {detailAlumni.organization}
+                      </span>
+                    ) : (
+                      <span className="flex items-start gap-1.5 text-ink-3">
+                        <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden="true" />
+                        본인 설정에 의해 비공개
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
             </div>
+
+            <div className="space-y-4 text-sm">
+              <section className="space-y-1.5">
+                <h3 className="font-semibold text-ink">소개 및 진로 스토리</h3>
+                <p className="leading-relaxed text-ink-2">{detailAlumni.bio}</p>
+              </section>
+              <section className="space-y-1.5">
+                <h3 className="font-semibold text-ink">
+                  멘토링 가능 주제 및 경험 요약
+                </h3>
+                <p className="leading-relaxed text-ink-2">
+                  {detailAlumni.experienceSummary}
+                </p>
+              </section>
+            </div>
+
+            {detailAlumni.interests.length > 0 && (
+              <ul className="flex flex-wrap gap-1.5" aria-label="관심 분야">
+                {detailAlumni.interests.map((tag) => (
+                  <li
+                    key={tag}
+                    className="rounded-md bg-surface-2 px-2 py-0.5 text-xs text-ink-2"
+                  >
+                    #{tag}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* 멘토링 신청 모달 */}
       {mentoringTarget && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                  {mentoringTarget.displayName} 동문에게 멘토링 신청
-                </h2>
-                <p className="text-xs text-slate-500">
+        <Modal
+          open
+          onClose={() => setMentoringTarget(null)}
+          title={`${mentoringTarget.displayName} 동문에게 멘토링 신청`}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setMentoringTarget(null)}>
+                취소
+              </Button>
+              <Button type="submit" form="mentoring-request-form" variant="primary">
+                멘토링 요청 등록
+              </Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 rounded-xl bg-surface-2 p-3.5">
+              <Avatar name={mentoringTarget.displayName} role="alumni" size="md" />
+              <div className="min-w-0">
+                <p className="font-semibold text-ink">
+                  {mentoringTarget.displayName}
+                </p>
+                <p className="text-xs text-ink-3">
                   {mentoringTarget.careerTrack} · {mentoringTarget.currentRoleTitle}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setMentoringTarget(null)}
-                className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
             </div>
 
-            <form onSubmit={handleSubmitMentoring} className="space-y-3 text-xs sm:text-sm">
-              <div>
-                <label className="block font-bold mb-1">질문/멘토링 주제</label>
-                <input
+            <form
+              id="mentoring-request-form"
+              onSubmit={handleSubmitMentoring}
+              className="space-y-4"
+            >
+              <Field label="질문/멘토링 주제">
+                <Input
                   type="text"
                   required
                   value={mentoringTopic}
                   onChange={(e) => setMentoringTopic(e.target.value)}
                   placeholder="예: 복수전공 학점 관리와 직무 인턴 준비 시기 문의"
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                 />
-              </div>
+              </Field>
 
-              <div>
-                <label className="block font-bold mb-1">상세 질문 내용</label>
-                <textarea
+              <Field label="상세 질문 내용">
+                <Textarea
                   rows={4}
                   required
                   value={mentoringMsg}
                   onChange={(e) => setMentoringMsg(e.target.value)}
                   placeholder="선배님이 답변하기 쉽도록 본인의 학년, 관심 분야, 궁금한 점을 구체적으로 적어주세요."
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                 />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setMentoringTarget(null)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 font-semibold"
-                >
-                  취소
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold"
-                >
-                  멘토링 요청 등록
-                </button>
-              </div>
+              </Field>
             </form>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

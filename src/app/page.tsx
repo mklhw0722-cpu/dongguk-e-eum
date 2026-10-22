@@ -3,7 +3,23 @@
 import React from "react";
 import Link from "next/link";
 import { useApp } from "@/context/AppContext";
-import { ROLE_LABELS, DemoInfoBanner } from "@/components/common/Cards";
+import { User } from "@/types";
+import {
+  ROLE_LABELS,
+  DemoInfoBanner,
+  NOTICE_CATEGORY_TONE,
+} from "@/components/common/Cards";
+import {
+  Avatar,
+  AvatarStack,
+  Badge,
+  CountBadge,
+  EmptyState,
+  Panel,
+  SectionHeader,
+  buttonClass,
+  textLinkClass,
+} from "@/components/ui";
 import {
   Megaphone,
   MessageSquare,
@@ -12,7 +28,6 @@ import {
   CheckSquare,
   ArrowRight,
   Pin,
-  BookOpen,
   Sparkles,
   UserCheck,
   ShieldCheck,
@@ -23,6 +38,7 @@ export default function HomePage() {
   const {
     currentUser,
     currentRole,
+    users,
     notices,
     conversations,
     communityRooms,
@@ -51,6 +67,13 @@ export default function HomePage() {
 
   // 추천 졸업생 (상위 3명)
   const recommendedAlumni = alumniProfiles.slice(0, 3);
+
+  // 대화 상대 표시용
+  const otherMembersOf = (memberIds: string[]) =>
+    memberIds
+      .filter((id) => id !== currentUser.id)
+      .map((id) => users.find((u) => u.id === id))
+      .filter((u): u is User => Boolean(u));
 
   // 역할별 맞춤형 바로가기 구성
   const roleShortcuts = {
@@ -151,40 +174,41 @@ export default function HomePage() {
   }[currentRole];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* 환영 배너 */}
-      <section className="rounded-3xl bg-gradient-to-br from-orange-600 via-orange-500 to-amber-500 text-white p-6 sm:p-8 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs text-xs font-bold">
-              <Sparkles className="w-3.5 h-3.5" />
+      <section className="relative overflow-hidden rounded-3xl bg-brand-600 px-6 py-7 text-white sm:px-9 sm:py-9 dark:bg-brand-800">
+        <ConnectionMotif />
+        <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-2xl space-y-3">
+            <p className="inline-flex items-center gap-1.5 rounded-full bg-black/15 px-3 py-1 text-xs font-semibold">
+              <Sparkles className="size-3.5" aria-hidden="true" />
               동국대학교 교육학과 폐쇄형 소통 플랫폼 · 동국e음
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-              반갑습니다, {currentUser.name}님! ({ROLE_LABELS[currentRole]} 모드)
+            </p>
+            <h1 className="text-[28px] leading-tight font-bold sm:text-display">
+              반갑습니다, {currentUser.name}님!{" "}
+              <span className="block text-lg font-semibold sm:inline sm:text-2xl">
+                ({ROLE_LABELS[currentRole]} 모드)
+              </span>
             </h1>
-            <p className="text-xs sm:text-sm text-orange-50 max-w-2xl leading-relaxed">
-              교육(e)으로 사람과 사람을 잇는 <strong>동국e음</strong>입니다. 학과 공지부터
-              졸업요건 자가점검, 복수전공·진로 트랙 공유방, 동문 멘토링까지 한곳에서 연결하세요.
+            <p className="text-sm leading-relaxed sm:text-body">
+              교육(e)으로 사람과 사람을 잇는 <strong className="font-bold">동국e음</strong>입니다.
+              학과 공지부터 졸업요건 자가점검, 복수전공·진로 트랙 공유방, 동문 멘토링까지
+              한곳에서 연결하세요.
             </p>
           </div>
 
-          <div className="flex flex-wrap sm:flex-col gap-2 shrink-0">
+          <div className="flex shrink-0 flex-wrap gap-2 lg:flex-col lg:items-stretch">
             <Link
               href="/chat"
-              className="px-4 py-2.5 rounded-xl bg-white text-orange-700 font-bold text-xs sm:text-sm shadow-xs hover:bg-orange-50 transition inline-flex items-center justify-center gap-1.5"
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-bold text-brand-700 shadow-raise transition-colors hover:bg-brand-50"
             >
-              <MessageSquare className="w-4 h-4" />
+              <MessageSquare className="size-4" aria-hidden="true" />
               대화창 열기
-              {unreadConversations.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-orange-600 text-white text-[10px]">
-                  {unreadConversations.length}
-                </span>
-              )}
+              <CountBadge count={unreadConversations.length} />
             </Link>
             <Link
               href="/auth"
-              className="px-4 py-2 rounded-xl bg-orange-700/60 hover:bg-orange-700/80 text-white font-semibold text-xs text-center transition"
+              className="inline-flex h-11 items-center justify-center rounded-xl bg-black/15 px-5 text-sm font-semibold text-white transition-colors hover:bg-black/25"
             >
               가입·승인 프로세스 보기
             </Link>
@@ -198,326 +222,376 @@ export default function HomePage() {
       />
 
       {/* 역할별 맞춤 바로가기 3종 */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-slate-100">
-            {ROLE_LABELS[currentRole]} 맞춤 바로가기
-          </h2>
-          <span className="text-xs text-slate-500">
-            현재 선택된 역할: {ROLE_LABELS[currentRole]}
-          </span>
+      <section className="space-y-4">
+        <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1">
+          <h2 className="text-lg font-bold text-ink">{ROLE_LABELS[currentRole]} 맞춤 바로가기</h2>
+          <span className="text-xs text-ink-3">현재 선택된 역할: {ROLE_LABELS[currentRole]}</span>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <ul className="grid grid-cols-1 gap-4 md:grid-cols-3">
           {roleShortcuts.map((item) => {
             const Icon = item.icon;
             return (
-              <Link
-                key={item.title}
-                href={item.href}
-                className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 hover:border-orange-400 transition flex flex-col justify-between shadow-xs"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/60 text-orange-600 flex items-center justify-center">
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <span className="px-2.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-[11px] font-bold">
-                      {item.badge}
+              <li key={item.title}>
+                <Link
+                  href={item.href}
+                  className="group flex h-full flex-col rounded-2xl border border-line bg-surface p-5 transition-[border-color,box-shadow] duration-150 hover:border-line-strong hover:shadow-raise"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="grid size-10 place-items-center rounded-xl bg-accent-soft text-accent">
+                      <Icon className="size-5" aria-hidden="true" />
                     </span>
+                    <Badge tone="neutral">{item.badge}</Badge>
                   </div>
-                  <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm sm:text-base mb-1 group-hover:text-orange-600 transition">
+                  <h3 className="mt-4 text-base font-semibold text-ink transition-colors group-hover:text-accent">
                     {item.title}
                   </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                    {item.desc}
-                  </p>
-                </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-semibold text-orange-600">
-                  <span>바로 이동하기</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </Link>
+                  <p className="mt-1 text-sm leading-relaxed text-ink-2">{item.desc}</p>
+                  <span className="mt-auto flex items-center justify-between pt-4 text-sm font-semibold text-accent">
+                    바로 이동하기
+                    <ArrowRight
+                      className="size-4 transition-transform duration-150 group-hover:translate-x-0.5"
+                      aria-hidden="true"
+                    />
+                  </span>
+                </Link>
+              </li>
             );
           })}
-        </div>
+        </ul>
       </section>
 
       {/* 중단 2단 그리드: 최근 학과 공지 & 읽지 않은 채팅 + 졸업요건 바로가기 */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         {/* 최근 학과 공지 */}
-        <section className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Megaphone className="w-5 h-5 text-orange-600" />
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
+        <Panel as="section" className="lg:col-span-7 lg:self-start">
+          <SectionHeader
+            title={
+              <span className="inline-flex flex-wrap items-center gap-2">
                 최근 학교·교육학과 공지
-              </h2>
-              <span className="px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 text-[10px] font-bold">
-                예시 데이터
+                <Badge tone="demo">예시 데이터</Badge>
               </span>
-            </div>
-            <Link
-              href="/notices"
-              className="text-xs font-semibold text-orange-600 hover:underline flex items-center gap-1"
-            >
-              전체보기 <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
+            }
+            action={
+              <Link href="/notices" className={textLinkClass}>
+                전체보기 <ArrowRight aria-hidden="true" />
+              </Link>
+            }
+          />
 
-          <div className="space-y-2.5">
+          <ul className="mt-2 divide-y divide-line">
             {notices.slice(0, 4).map((notice) => (
-              <Link
-                key={notice.id}
-                href="/notices"
-                className="block p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-orange-300 bg-slate-50/60 dark:bg-slate-800/40 transition"
-              >
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
+              <li key={notice.id}>
+                <Link
+                  href="/notices"
+                  className="group -mx-2 flex flex-col gap-1.5 rounded-lg px-2 py-3 transition-colors hover:bg-surface-2"
+                >
+                  <div className="flex items-center gap-1.5">
                     {notice.isPinned && (
-                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-orange-600 text-white text-[10px] font-bold">
-                        <Pin className="w-2.5 h-2.5" /> 고정
-                      </span>
+                      <Badge tone="brand" variant="solid" icon={<Pin />}>
+                        고정
+                      </Badge>
                     )}
-                    <span className="text-[11px] font-semibold text-orange-700 dark:text-orange-400">
-                      [{notice.category}]
+                    <Badge tone={NOTICE_CATEGORY_TONE[notice.category] ?? "neutral"} dot>
+                      {notice.category}
+                    </Badge>
+                    <span className="tabular ml-auto shrink-0 text-xs text-ink-3">
+                      {notice.createdAt}
                     </span>
                   </div>
-                  <span className="text-[11px] text-slate-400">{notice.createdAt}</span>
-                </div>
-                <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 line-clamp-1">
-                  {notice.title}
-                </p>
-              </Link>
+                  <p className="line-clamp-1 text-sm font-medium text-ink transition-colors group-hover:text-accent">
+                    {notice.title}
+                  </p>
+                </Link>
+              </li>
             ))}
-          </div>
-        </section>
+          </ul>
+        </Panel>
 
         {/* 우측: 읽지 않은 채팅 & 나의 졸업요건 확인 바로가기 */}
-        <div className="lg:col-span-5 space-y-6">
+        <div className="space-y-6 lg:col-span-5">
           {/* 읽지 않은 채팅 */}
-          <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-orange-600" />
-                <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                  읽지 않은 대화
-                </h2>
-              </div>
-              <Link
-                href="/chat"
-                className="text-xs font-semibold text-orange-600 hover:underline flex items-center gap-1"
-              >
-                대화창 이동 <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
+          <Panel as="section">
+            <SectionHeader
+              title="읽지 않은 대화"
+              count={unreadConversations.length}
+              action={
+                <Link href="/chat" className={textLinkClass}>
+                  대화창 이동 <ArrowRight aria-hidden="true" />
+                </Link>
+              }
+            />
 
             {unreadConversations.length === 0 ? (
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-center text-xs text-slate-500">
-                현재 읽지 않은 새 메시지가 없습니다.
-              </div>
+              <EmptyState
+                compact
+                className="mt-3"
+                icon={<MessageSquare />}
+                title="현재 읽지 않은 새 메시지가 없습니다."
+              />
             ) : (
-              <div className="space-y-2">
+              <ul className="mt-2 space-y-0.5">
                 {unreadConversations.map((conv) => {
                   const myMember = conv.members.find(
                     (m) => m.userId === currentUser.id
                   );
+                  const others = otherMembersOf(conv.memberIds);
                   return (
-                    <Link
-                      key={conv.id}
-                      href="/chat"
-                      className="flex items-center justify-between gap-3 p-3 rounded-xl bg-orange-50/60 dark:bg-orange-950/20 border border-orange-200/70 dark:border-orange-900/40 hover:border-orange-400 transition"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
-                            {conv.title}
-                          </p>
-                          <span className="px-1.5 py-0.5 rounded bg-orange-600 text-white text-[10px] font-bold">
-                            +{myMember?.unreadCount}
-                          </span>
+                    <li key={conv.id}>
+                      <Link
+                        href="/chat"
+                        className="group -mx-2 flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-surface-2"
+                      >
+                        {conv.isGroup ? (
+                          <AvatarStack
+                            people={others.map((u) => ({
+                              name: u.name,
+                              initials: u.avatarInitials,
+                              role: u.role,
+                            }))}
+                            max={2}
+                            size="sm"
+                          />
+                        ) : others[0] ? (
+                          <Avatar
+                            name={others[0].name}
+                            initials={others[0].avatarInitials}
+                            role={others[0].role}
+                          />
+                        ) : (
+                          <Avatar name={conv.title} />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-ink">{conv.title}</p>
+                          <p className="truncate text-[13px] text-ink-3">{conv.lastMessageText}</p>
                         </div>
-                        <p className="text-xs text-slate-600 dark:text-slate-300 truncate mt-0.5">
-                          {conv.lastMessageText}
-                        </p>
-                      </div>
-                      <span className="text-[11px] text-slate-400 shrink-0">
-                        {conv.lastMessageAt}
-                      </span>
-                    </Link>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <span className="tabular text-xs text-ink-3">{conv.lastMessageAt}</span>
+                          <CountBadge count={myMember?.unreadCount ?? 0} />
+                        </div>
+                      </Link>
+                    </li>
                   );
                 })}
-              </div>
+              </ul>
             )}
-          </section>
+          </Panel>
 
           {/* 나의 졸업요건 확인 바로가기 */}
-          <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckSquare className="w-5 h-5 text-orange-600" />
-                <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                  나의 졸업요건 자가점검 요약
-                </h2>
-              </div>
-              <Link
-                href="/graduation"
-                className="text-xs font-semibold text-orange-600 hover:underline"
-              >
-                상세 기록하기 →
-              </Link>
-            </div>
+          <Panel as="section">
+            <SectionHeader
+              title="나의 졸업요건 자가점검 요약"
+              action={
+                <Link href="/graduation" className={textLinkClass}>
+                  상세 기록하기 <ArrowRight aria-hidden="true" />
+                </Link>
+              }
+            />
 
-            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700 space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-500">적용 기준 정보</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">
+            <dl className="mt-3 divide-y divide-line rounded-xl bg-surface-2 px-3.5 text-sm">
+              <div className="flex items-baseline justify-between gap-3 py-2.5">
+                <dt className="text-ink-3">적용 기준 정보</dt>
+                <dd className="text-right font-semibold text-ink">
                   {studentProgress.admissionYear} · {studentProgress.majorType}
-                </span>
+                </dd>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">내가 기록한 총 이수 학점</span>
-                <span className="font-bold text-orange-600">
-                  {studentProgress.credits["졸업 이수 학점"]?.completedValue ?? 0}학점 (기준 미설정)
-                </span>
+              <div className="flex items-baseline justify-between gap-3 py-2.5">
+                <dt className="text-ink-3">내가 기록한 총 이수 학점</dt>
+                <dd className="text-right">
+                  <span className="tabular font-semibold text-ink">
+                    {studentProgress.credits["졸업 이수 학점"]?.completedValue ?? 0}학점
+                  </span>{" "}
+                  <span className="text-xs font-medium text-warning">(기준 미설정)</span>
+                </dd>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">내가 기록한 교육봉사 시간</span>
-                <span className="font-bold text-orange-600">
-                  {studentProgress.credits["교육봉사 시간"]?.completedValue ?? 0}시간 (기준 미설정)
-                </span>
+              <div className="flex items-baseline justify-between gap-3 py-2.5">
+                <dt className="text-ink-3">내가 기록한 교육봉사 시간</dt>
+                <dd className="text-right">
+                  <span className="tabular font-semibold text-ink">
+                    {studentProgress.credits["교육봉사 시간"]?.completedValue ?? 0}시간
+                  </span>{" "}
+                  <span className="text-xs font-medium text-warning">(기준 미설정)</span>
+                </dd>
               </div>
-              <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-700">
-                ※ 공식 학사 시스템 연동 결과가 아닌 학생 개인의 자가점검 메모입니다.
-              </p>
-            </div>
-          </section>
+            </dl>
+            <p className="mt-2.5 text-xs leading-relaxed text-ink-3">
+              ※ 공식 학사 시스템 연동 결과가 아닌 학생 개인의 자가점검 메모입니다.
+            </p>
+          </Panel>
         </div>
       </div>
 
       {/* 내가 참여한 진로 공유방 & 최근 등록된 복수전공 후기 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* 내가 참여한 진로 공유방 */}
-        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Compass className="w-5 h-5 text-orange-600" />
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                내가 참여 중인 공유방 ({myJoinedRooms.length})
-              </h2>
-            </div>
-            <Link
-              href="/rooms"
-              className="text-xs font-semibold text-orange-600 hover:underline flex items-center gap-1"
-            >
-              전체 공유방 탐색 <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {myJoinedRooms.slice(0, 4).map((room) => (
-              <Link
-                key={room.id}
-                href="/rooms"
-                className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-orange-400 transition bg-slate-50/50 dark:bg-slate-800/40"
-              >
-                <span className="inline-block px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-[10px] font-bold mb-1.5">
-                  {room.type === "career" ? "진로 트랙" : "복수전공"} · {room.categoryName}
-                </span>
-                <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 mb-1">
-                  {room.name}
-                </h3>
-                <p className="text-[11px] text-slate-500 line-clamp-1">
-                  참여 인원 {room.memberIds.length}명
-                </p>
+        <Panel as="section">
+          <SectionHeader
+            title="내가 참여 중인 공유방"
+            count={myJoinedRooms.length}
+            action={
+              <Link href="/rooms" className={textLinkClass}>
+                전체 공유방 탐색 <ArrowRight aria-hidden="true" />
               </Link>
-            ))}
-          </div>
-        </section>
+            }
+          />
+
+          {myJoinedRooms.length === 0 ? (
+            <EmptyState
+              compact
+              className="mt-3"
+              icon={<Compass />}
+              title="아직 참여 중인 공유방이 없어요"
+              description="관심 있는 진로 트랙이나 복수전공 공유방에 참여해 보세요."
+              action={
+                <Link href="/rooms" className={buttonClass("secondary", "sm")}>
+                  공유방 둘러보기
+                </Link>
+              }
+            />
+          ) : (
+            <ul className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              {myJoinedRooms.slice(0, 4).map((room) => (
+                <li key={room.id}>
+                  <Link
+                    href="/rooms"
+                    className="group flex h-full flex-col items-start gap-1.5 rounded-xl bg-surface-2 p-3.5 transition-colors hover:bg-surface-3"
+                  >
+                    <Badge tone={room.type === "career" ? "brand" : "info"}>
+                      {room.type === "career" ? "진로 트랙" : "복수전공"} · {room.categoryName}
+                    </Badge>
+                    <h3 className="text-sm font-semibold text-ink transition-colors group-hover:text-accent">
+                      {room.name}
+                    </h3>
+                    <p className="text-xs text-ink-3">참여 인원 {room.memberIds.length}명</p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
 
         {/* 최근 등록된 복수전공 후기 */}
-        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-orange-600" />
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                최근 등록된 복수전공 후기
-              </h2>
-            </div>
-            <Link
-              href="/rooms"
-              className="text-xs font-semibold text-orange-600 hover:underline flex items-center gap-1"
-            >
-              후기 더보기 <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="space-y-2.5">
-            {doubleMajorReviews.map((post) => (
-              <Link
-                key={post.id}
-                href="/rooms"
-                className="block p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-orange-300 bg-slate-50/60 dark:bg-slate-800/40 transition"
-              >
-                <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
-                  <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                    [{post.roomName}]
-                  </span>
-                  <span>
-                    {post.authorName} ({post.authorBadge})
-                  </span>
-                </div>
-                <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-1">
-                  {post.title}
-                </p>
+        <Panel as="section">
+          <SectionHeader
+            title="최근 등록된 복수전공 후기"
+            action={
+              <Link href="/rooms" className={textLinkClass}>
+                후기 더보기 <ArrowRight aria-hidden="true" />
               </Link>
+            }
+          />
+
+          <ul className="mt-2 divide-y divide-line">
+            {doubleMajorReviews.map((post) => (
+              <li key={post.id}>
+                <Link
+                  href="/rooms"
+                  className="group -mx-2 block rounded-lg px-2 py-3 transition-colors hover:bg-surface-2"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <Badge tone="info">{post.roomName}</Badge>
+                    <span className="truncate text-xs text-ink-3">
+                      {post.authorName} ({post.authorBadge})
+                    </span>
+                  </div>
+                  <p className="mt-1.5 line-clamp-1 text-sm font-medium text-ink transition-colors group-hover:text-accent">
+                    {post.title}
+                  </p>
+                </Link>
+              </li>
             ))}
-          </div>
-        </section>
+          </ul>
+        </Panel>
       </div>
 
       {/* 추천 졸업생 멘토 */}
-      <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-orange-600" />
-            <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-              추천 졸업생 동문 프로필
-            </h2>
-          </div>
-          <Link
-            href="/alumni"
-            className="text-xs font-semibold text-orange-600 hover:underline flex items-center gap-1"
-          >
-            졸업생 전체 탐색 <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {recommendedAlumni.map((alumni) => (
-            <Link
-              key={alumni.id}
-              href="/alumni"
-              className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-orange-400 transition space-y-2"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                  {alumni.displayName}
-                </span>
-                <span className="px-2 py-0.5 rounded bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 text-[11px] font-bold">
-                  {alumni.careerTrack}
-                </span>
-              </div>
-              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                {alumni.currentRoleTitle}
-              </p>
-              <p className="text-xs text-slate-500">
-                복수전공: {alumni.doubleMajor} · {alumni.graduationYear}년 졸업
-              </p>
+      <Panel as="section">
+        <SectionHeader
+          title="추천 졸업생 동문 프로필"
+          action={
+            <Link href="/alumni" className={textLinkClass}>
+              졸업생 전체 탐색 <ArrowRight aria-hidden="true" />
             </Link>
+          }
+        />
+
+        <ul className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          {recommendedAlumni.map((alumni) => (
+            <li key={alumni.id}>
+              <Link
+                href="/alumni"
+                className="group flex h-full items-start gap-3 rounded-xl bg-surface-2 p-4 transition-colors hover:bg-surface-3"
+              >
+                <Avatar name={alumni.displayName} role="alumni" />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-sm font-semibold text-ink transition-colors group-hover:text-accent">
+                      {alumni.displayName}
+                    </span>
+                    <Badge tone="brand">{alumni.careerTrack}</Badge>
+                  </div>
+                  <p className="text-[13px] font-medium text-ink-2">{alumni.currentRoleTitle}</p>
+                  <p className="text-xs text-ink-3">
+                    복수전공: {alumni.doubleMajor} · {alumni.graduationYear}년 졸업
+                  </p>
+                </div>
+              </Link>
+            </li>
           ))}
-        </div>
-      </section>
+        </ul>
+      </Panel>
     </div>
+  );
+}
+
+/**
+ * 환영 배너 오른쪽의 '이음' 그림: 사람(점)과 사람을 잇는 선.
+ * 처음 열릴 때 한 번만 선이 그려진다 (동작 줄이기 설정이면 바로 완성된 상태).
+ */
+function ConnectionMotif() {
+  const links = [
+    "M48 178 L142 96",
+    "M142 96 L246 150",
+    "M246 150 L330 58",
+    "M246 150 L372 196",
+    "M142 96 L330 58",
+    "M48 178 L196 224",
+    "M196 224 L246 150",
+  ];
+  const nodes: [number, number, number][] = [
+    [48, 178, 5],
+    [142, 96, 7],
+    [246, 150, 9],
+    [330, 58, 6],
+    [372, 196, 5],
+    [196, 224, 4],
+  ];
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 400 260"
+      fill="none"
+      className="pointer-events-none absolute top-1/2 -right-8 hidden h-[135%] -translate-y-1/2 text-white sm:block"
+    >
+      {links.map((d, i) => (
+        <path
+          key={d}
+          d={d}
+          pathLength={1}
+          stroke="currentColor"
+          strokeOpacity={i === 4 ? 0.14 : 0.26}
+          strokeWidth={1.5}
+          strokeDasharray={i === 4 ? "0.02 0.02" : "1"}
+          className={i === 4 ? undefined : "animate-draw [stroke-dashoffset:1]"}
+          style={i === 4 ? undefined : { animationDelay: `${i * 90}ms` }}
+        />
+      ))}
+      {nodes.map(([cx, cy, r], i) => (
+        <g key={i}>
+          <circle cx={cx} cy={cy} r={r + 7} stroke="currentColor" strokeOpacity={0.16} />
+          <circle cx={cx} cy={cy} r={r} fill="currentColor" fillOpacity={i === 2 ? 0.9 : 0.35} />
+        </g>
+      ))}
+    </svg>
   );
 }

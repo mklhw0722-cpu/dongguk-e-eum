@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import Link from "next/link";
 import {
   Notice,
+  NoticeCategory,
   AlumniProfile,
   CommunityRoom,
   GraduationRequirement,
@@ -12,19 +12,29 @@ import {
 import {
   Pin,
   ExternalLink,
-  Calendar,
   MessageSquare,
   Users,
-  GraduationCap,
   Briefcase,
-  Award,
-  Search,
-  AlertCircle,
+  Building2,
   CheckCircle2,
-  HelpCircle,
+  ChevronRight,
   Lock,
+  Plus,
   Sparkles,
 } from "lucide-react";
+import {
+  Avatar,
+  Badge,
+  Button,
+  Callout,
+  Chip,
+  ChipGroup,
+  EmptyState,
+  SearchInput,
+  cn,
+  type BadgeTone,
+  type CalloutTone,
+} from "@/components/ui";
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   student: "재학생",
@@ -33,13 +43,41 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   admin: "관리자",
 };
 
+/** 역할 배지 색 (Badge tone과 같은 이름). 새 코드에서는 <RoleBadge />를 쓴다. */
 export const ROLE_BADGE_STYLES: Record<UserRole, string> = {
-  student: "bg-orange-100 text-orange-800 border-orange-200",
-  alumni: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  professor: "bg-blue-100 text-blue-800 border-blue-200",
-  admin: "bg-purple-100 text-purple-800 border-purple-200",
+  student: "bg-role-student-soft text-role-student",
+  alumni: "bg-role-alumni-soft text-role-alumni",
+  professor: "bg-role-professor-soft text-role-professor",
+  admin: "bg-role-admin-soft text-role-admin",
 };
 
+/** 역할 이름 배지 (재학생·졸업생·교수·관리자) */
+export function RoleBadge({
+  role,
+  className,
+  size,
+}: {
+  role: UserRole;
+  className?: string;
+  size?: "sm" | "md";
+}) {
+  return (
+    <Badge tone={role} size={size} className={className}>
+      {ROLE_LABELS[role]}
+    </Badge>
+  );
+}
+
+/** 공지 분류별 색 */
+export const NOTICE_CATEGORY_TONE: Record<NoticeCategory, BadgeTone> = {
+  "교육학과 공지": "brand",
+  "학교 공지": "neutral",
+  "학사 일정": "info",
+  "장학 및 지원": "success",
+  "교직 관련 안내": "violet",
+};
+
+/** 데모·예시 데이터 안내 상자 (페이지 상단) */
 export function DemoInfoBanner({
   title,
   description,
@@ -49,23 +87,8 @@ export function DemoInfoBanner({
   description: string;
   variant?: "orange" | "blue" | "amber";
 }) {
-  const styles = {
-    orange:
-      "bg-orange-50/90 border-orange-200 text-orange-950 dark:bg-orange-950/30 dark:border-orange-800/60 dark:text-orange-200",
-    blue: "bg-slate-100 border-slate-200 text-slate-800 dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-200",
-    amber:
-      "bg-amber-50 border-amber-200 text-amber-950 dark:bg-amber-950/30 dark:border-amber-800/60 dark:text-amber-200",
-  }[variant];
-
-  return (
-    <div className={`rounded-xl border p-3.5 text-xs sm:text-sm flex items-start gap-3 ${styles}`}>
-      <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-orange-600 dark:text-orange-400" />
-      <div className="space-y-0.5">
-        <p className="font-semibold">{title}</p>
-        <p className="opacity-90 leading-relaxed">{description}</p>
-      </div>
-    </div>
-  );
+  const tone: CalloutTone = { orange: "brand", blue: "neutral", amber: "warning" }[variant] as CalloutTone;
+  return <Callout tone={tone} title={title} description={description} />;
 }
 
 export function EmptyStateBox({
@@ -80,26 +103,17 @@ export function EmptyStateBox({
   onAction?: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-900/40 p-8 text-center">
-      <div className="mx-auto w-11 h-11 rounded-full bg-orange-50 dark:bg-orange-950/50 flex items-center justify-center text-orange-600 mb-3">
-        <HelpCircle className="w-6 h-6" />
-      </div>
-      <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-1">
-        {title}
-      </h3>
-      <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-        {description}
-      </p>
-      {actionLabel && onAction && (
-        <button
-          type="button"
-          onClick={onAction}
-          className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs sm:text-sm font-semibold transition"
-        >
-          {actionLabel}
-        </button>
-      )}
-    </div>
+    <EmptyState
+      title={title}
+      description={description}
+      action={
+        actionLabel && onAction ? (
+          <Button variant="secondary" onClick={onAction}>
+            {actionLabel}
+          </Button>
+        ) : undefined
+      }
+    />
   );
 }
 
@@ -119,36 +133,24 @@ export function SearchAndFilterBar({
   onSelectCategory: (cat: string) => void;
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3 shadow-xs">
-      <div className="relative">
-        <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder={placeholder}
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
-        />
-      </div>
-      <div className="flex flex-wrap gap-1.5">
-        {categories.map((cat) => {
-          const active = selectedCategory === cat;
-          return (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => onSelectCategory(cat)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                active
-                  ? "bg-orange-600 text-white shadow-xs"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-              }`}
-            >
-              {cat}
-            </button>
-          );
-        })}
-      </div>
+    <div className="space-y-3">
+      <SearchInput
+        value={searchQuery}
+        onValueChange={onSearchChange}
+        placeholder={placeholder}
+        label="검색"
+      />
+      <ChipGroup label="분류" labelHidden scroll>
+        {categories.map((cat) => (
+          <Chip
+            key={cat}
+            selected={selectedCategory === cat}
+            onClick={() => onSelectCategory(cat)}
+          >
+            {cat}
+          </Chip>
+        ))}
+      </ChipGroup>
     </div>
   );
 }
@@ -160,61 +162,47 @@ export function NoticeCard({
   notice: Notice;
   onSelect?: (notice: Notice) => void;
 }) {
-  const categoryColors: Record<string, string> = {
-    "교육학과 공지": "bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300",
-    "학교 공지": "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
-    "학사 일정": "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300",
-    "장학 및 지원": "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300",
-    "교직 관련 안내": "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300",
-  };
-
   return (
-    <div
-      onClick={() => onSelect && onSelect(notice)}
-      className={`rounded-2xl border p-4 sm:p-5 transition cursor-pointer ${
+    <article
+      className={cn(
+        "group relative rounded-2xl border p-4 transition-[border-color,box-shadow] duration-150 sm:p-5",
+        "has-[button:focus-visible]:outline-2 has-[button:focus-visible]:outline-offset-2 has-[button:focus-visible]:outline-[var(--focus-ring)]",
         notice.isPinned
-          ? "bg-orange-50/40 dark:bg-orange-950/15 border-orange-200 dark:border-orange-900/50 hover:border-orange-400"
-          : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-orange-300"
-      }`}
+          ? "border-accent-line bg-accent-soft/50 hover:border-brand-300 dark:hover:border-brand-800"
+          : "border-line bg-surface hover:border-line-strong hover:shadow-raise"
+      )}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-        <div className="flex items-center gap-2 flex-wrap">
-          {notice.isPinned && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-orange-600 text-white text-[11px] font-semibold">
-              <Pin className="w-3 h-3" /> 중요 고정
-            </span>
-          )}
-          <span
-            className={`px-2.5 py-0.5 rounded-md text-xs font-semibold ${
-              categoryColors[notice.category] || "bg-slate-100 text-slate-700"
-            }`}
-          >
-            {notice.category}
-          </span>
-          <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 text-[11px] font-medium">
-            예시 데이터 (실제 공지 아님)
-          </span>
-        </div>
-        <span className="text-xs text-slate-400 flex items-center gap-1">
-          <Calendar className="w-3.5 h-3.5" />
-          {notice.createdAt}
-        </span>
+      <div className="flex flex-wrap items-center gap-1.5">
+        {notice.isPinned && (
+          <Badge tone="brand" variant="solid" icon={<Pin />}>
+            중요 고정
+          </Badge>
+        )}
+        <Badge tone={NOTICE_CATEGORY_TONE[notice.category] ?? "neutral"} dot>
+          {notice.category}
+        </Badge>
+        <Badge tone="demo">예시 데이터 (실제 공지 아님)</Badge>
+        <span className="tabular ml-auto text-xs text-ink-3">{notice.createdAt}</span>
       </div>
 
-      <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 mb-1.5">
-        {notice.title}
+      <h3 className="mt-2.5 text-[15px] font-semibold text-ink sm:text-base">
+        <button
+          type="button"
+          onClick={() => onSelect && onSelect(notice)}
+          className="text-left after:absolute after:inset-0 after:rounded-2xl focus-visible:outline-none group-hover:text-accent"
+        >
+          {notice.title}
+        </button>
       </h3>
-      <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 line-clamp-2 mb-3">
-        {notice.summary}
-      </p>
+      <p className="mt-1 line-clamp-2 text-sm text-ink-2">{notice.summary}</p>
 
-      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
-        <span>작성: {notice.authorName}</span>
-        <span className="inline-flex items-center gap-1 text-orange-600 dark:text-orange-400 font-medium">
-          상세 보기 & 공식 출처 <ExternalLink className="w-3 h-3" />
+      <div className="mt-3 flex items-center justify-between gap-3 text-xs text-ink-3">
+        <span className="truncate">작성: {notice.authorName}</span>
+        <span className="inline-flex shrink-0 items-center gap-0.5 font-semibold text-accent">
+          상세 보기 & 공식 출처 <ChevronRight className="size-3.5" aria-hidden="true" />
         </span>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -230,95 +218,98 @@ export function AlumniCard({
   onRequestMentoring: (alumni: AlumniProfile) => void;
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-between shadow-xs hover:border-orange-300 transition">
-      <div>
-        <div className="flex items-start justify-between gap-3 mb-3">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-orange-100 dark:bg-orange-950/80 text-orange-700 dark:text-orange-300 font-bold flex items-center justify-center text-sm shrink-0">
-              {alumni.displayName.slice(0, 2)}
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
-                  {alumni.displayName}
-                </h3>
-                <span className="px-2 py-0.5 rounded-md bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 text-xs font-semibold border border-orange-200 dark:border-orange-800/50">
-                  {alumni.careerTrack}
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {alumni.graduationYear}년 졸업 · 복수전공: {alumni.doubleMajor}
-              </p>
-            </div>
-          </div>
-          {alumni.mentoringAvailable ? (
-            <span className="px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold shrink-0">
-              멘토링 가능
-            </span>
-          ) : (
-            <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 text-[11px] font-medium shrink-0">
-              일정 조율중
-            </span>
-          )}
-        </div>
-
-        <div className="space-y-1.5 mb-3 text-xs sm:text-sm">
-          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-medium">
-            <Briefcase className="w-4 h-4 text-orange-600 shrink-0" />
-            <span>{alumni.currentRoleTitle}</span>
-          </div>
-          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs">
-            <Award className="w-4 h-4 text-slate-400 shrink-0" />
-            {alumni.privacy.showOrganization ? (
-              <span>소속: {alumni.organization}</span>
+    <article className="flex flex-col rounded-2xl border border-line bg-surface p-4 transition-[border-color,box-shadow] duration-150 hover:border-line-strong hover:shadow-raise sm:p-5">
+      <div className="flex items-start gap-3">
+        <Avatar name={alumni.displayName} role="alumni" size="lg" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="min-w-0 text-base font-semibold text-ink">
+              <button
+                type="button"
+                onClick={() => onSelectProfile(alumni)}
+                className="text-left underline-offset-4 hover:underline"
+              >
+                {alumni.displayName}
+              </button>
+            </h3>
+            {alumni.mentoringAvailable ? (
+              <Badge tone="success" dot className="shrink-0">
+                멘토링 가능
+              </Badge>
             ) : (
-              <span className="inline-flex items-center gap-1 text-slate-400">
-                <Lock className="w-3 h-3" /> 소속 비공개 설정됨 (직무 정보만 공개)
-              </span>
+              <Badge tone="neutral" className="shrink-0">
+                일정 조율중
+              </Badge>
             )}
           </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <Badge tone="brand">{alumni.careerTrack}</Badge>
+            <span className="text-xs text-ink-3">
+              {alumni.graduationYear}년 졸업 · 복수전공: {alumni.doubleMajor}
+            </span>
+          </div>
         </div>
+      </div>
 
-        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 line-clamp-2 mb-3">
-          {alumni.bio}
+      <div className="mt-4 space-y-1.5 text-sm">
+        <p className="flex items-start gap-2 font-medium text-ink">
+          <Briefcase className="mt-0.5 size-4 shrink-0 text-ink-3" aria-hidden="true" />
+          <span>{alumni.currentRoleTitle}</span>
         </p>
+        <p className="flex items-start gap-2 text-[13px] text-ink-3">
+          {alumni.privacy.showOrganization ? (
+            <>
+              <Building2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <span>소속: {alumni.organization}</span>
+            </>
+          ) : (
+            <>
+              <Lock className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+              <span>소속 비공개 설정됨 (직무 정보만 공개)</span>
+            </>
+          )}
+        </p>
+      </div>
 
-        <div className="flex flex-wrap gap-1.5 mb-4">
+      <p className="mt-3 line-clamp-2 text-sm text-ink-2">{alumni.bio}</p>
+
+      {alumni.interests.length > 0 && (
+        <ul className="mt-3 flex flex-wrap gap-1.5" aria-label="관심 분야">
           {alumni.interests.map((tag) => (
-            <span
+            <li
               key={tag}
-              className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px]"
+              className="rounded-md bg-surface-2 px-2 py-0.5 text-xs text-ink-2"
             >
               #{tag}
-            </span>
+            </li>
           ))}
+        </ul>
+      )}
+
+      <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
+        <Button variant="ghost" size="sm" onClick={() => onSelectProfile(alumni)} className="-ml-2">
+          상세 프로필
+        </Button>
+        <div className="ml-auto flex gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<MessageSquare />}
+            onClick={() => onRequestChat(alumni)}
+          >
+            대화 요청
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            icon={<Sparkles />}
+            onClick={() => onRequestMentoring(alumni)}
+          >
+            멘토링 신청
+          </Button>
         </div>
       </div>
-
-      <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-        <button
-          type="button"
-          onClick={() => onSelectProfile(alumni)}
-          className="px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
-        >
-          상세 프로필
-        </button>
-        <button
-          type="button"
-          onClick={() => onRequestChat(alumni)}
-          className="px-2.5 py-2 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-semibold hover:bg-slate-800 transition flex items-center justify-center gap-1"
-        >
-          <MessageSquare className="w-3.5 h-3.5" /> 대화 요청
-        </button>
-        <button
-          type="button"
-          onClick={() => onRequestMentoring(alumni)}
-          className="px-2.5 py-2 rounded-xl bg-orange-600 text-white text-xs font-semibold hover:bg-orange-700 transition flex items-center justify-center gap-1"
-        >
-          <Sparkles className="w-3.5 h-3.5" /> 멘토링 신청
-        </button>
-      </div>
-    </div>
+    </article>
   );
 }
 
@@ -336,58 +327,46 @@ export function CommunityRoomCard({
   onSelectRoom: (roomId: string) => void;
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-between shadow-xs hover:border-orange-300 transition">
-      <div>
-        <div className="flex items-center justify-between gap-2 mb-2.5">
-          <span
-            className={`px-2.5 py-0.5 rounded-md text-xs font-semibold ${
-              room.type === "career"
-                ? "bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300"
-                : "bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300"
-            }`}
-          >
-            {room.type === "career" ? "진로 트랙 공유방" : "복수전공 공유방"} ·{" "}
-            {room.categoryName}
-          </span>
-          <span className="text-xs text-slate-400 flex items-center gap-1">
-            <Users className="w-3.5 h-3.5" /> {room.memberIds.length}명 참여
-          </span>
-        </div>
-
-        <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1.5">
-          {room.name}
-        </h3>
-        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">
-          {room.description}
-        </p>
-      </div>
-
-      <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
-        <span className="text-xs text-slate-500">
-          축적된 게시글 <strong className="text-slate-800 dark:text-slate-200">{postCount}건</strong>
+    <article className="flex flex-col rounded-2xl border border-line bg-surface p-4 transition-[border-color,box-shadow] duration-150 hover:border-line-strong hover:shadow-raise sm:p-5">
+      <div className="flex items-center justify-between gap-2">
+        <Badge tone={room.type === "career" ? "brand" : "info"}>
+          {room.type === "career" ? "진로 트랙 공유방" : "복수전공 공유방"} · {room.categoryName}
+        </Badge>
+        <span className="inline-flex shrink-0 items-center gap-1 text-xs text-ink-3">
+          <Users className="size-3.5" aria-hidden="true" /> {room.memberIds.length}명 참여
         </span>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onToggleJoin(room.id)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-              isJoined
-                ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-rose-50 hover:text-rose-600"
-                : "bg-orange-50 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800"
-            }`}
-          >
-            {isJoined ? "참여중 (나가기)" : "+ 참여하기"}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectRoom(room.id)}
-            className="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold transition"
-          >
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <h3 className="text-base font-semibold text-ink">{room.name}</h3>
+        {isJoined && (
+          <Badge tone="success" icon={<CheckCircle2 />}>
+            참여중
+          </Badge>
+        )}
+      </div>
+      <p className="mt-1 text-sm leading-relaxed text-ink-2">{room.description}</p>
+
+      <div className="mt-auto flex items-center justify-between gap-2 pt-4">
+        <span className="text-xs text-ink-3">
+          축적된 게시글 <strong className="tabular font-semibold text-ink">{postCount}건</strong>
+        </span>
+        <div className="flex items-center gap-1.5">
+          {isJoined ? (
+            <Button variant="ghost" size="sm" onClick={() => onToggleJoin(room.id)}>
+              나가기
+            </Button>
+          ) : (
+            <Button variant="soft" size="sm" icon={<Plus />} onClick={() => onToggleJoin(room.id)}>
+              참여하기
+            </Button>
+          )}
+          <Button variant="primary" size="sm" onClick={() => onSelectRoom(room.id)}>
             입장하기
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </article>
   );
 }
 
@@ -416,104 +395,94 @@ export function RequirementProgressCard({
     : null;
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-between shadow-xs">
-      <div>
-        <div className="flex items-start justify-between gap-2 mb-2">
-          <span className="px-2.5 py-0.5 rounded-md bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 text-xs font-semibold">
-            {requirement.category}
-          </span>
-          <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[11px] font-medium">
-            자가점검 기록
-          </span>
-        </div>
-
-        <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 mb-1">
-          {requirement.title}
-        </h3>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
-          {requirement.applicableCondition}
-        </p>
-
-        {requirement.unit === "여부" ? (
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-700 mb-3 flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
-              자가점검 상태
-            </span>
-            {isCompletedBoolean ? (
-              <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600">
-                <CheckCircle2 className="w-4 h-4" /> 이수/충족 완료 표시됨
-              </span>
-            ) : (
-              <span className="text-xs font-semibold text-amber-600">
-                미완료 (점검 필요)
-              </span>
-            )}
-          </div>
-        ) : (
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-700 mb-3 space-y-2">
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                내가 입력한 이수량
-              </span>
-              <span className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                {completedValue} {requirement.unit}
-              </span>
-            </div>
-
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs text-slate-500 dark:text-slate-400">
-                기준 목표치
-              </span>
-              {hasValidTarget ? (
-                <span className="text-xs font-semibold text-orange-700 dark:text-orange-300">
-                  {effectiveTarget} {requirement.unit} (사용자 직접 설정)
-                </span>
-              ) : (
-                <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
-                  기준 미설정 (요람 확인 후 직접 입력)
-                </span>
-              )}
-            </div>
-
-            {hasValidTarget && calculatedPercent !== null ? (
-              <div className="pt-1">
-                <div className="flex justify-between text-[11px] font-semibold text-orange-600 mb-1">
-                  <span>자가점검 달성률</span>
-                  <span>{calculatedPercent}%</span>
-                </div>
-                <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
-                  <div
-                    className="h-full bg-orange-600 rounded-full transition-all"
-                    style={{ width: `${calculatedPercent}%` }}
-                  />
-                </div>
-              </div>
-            ) : (
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-700">
-                ※ 공식 기준값이 설정되지 않아 임의 진행률(%)을 표시하지 않습니다.
-              </p>
-            )}
-          </div>
-        )}
+    <article className="flex flex-col rounded-2xl border border-line bg-surface p-4 sm:p-5">
+      <div className="flex items-center justify-between gap-2">
+        <Badge tone="brand">{requirement.category}</Badge>
+        <Badge tone="neutral">자가점검 기록</Badge>
       </div>
 
-      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+      <h3 className="mt-3 text-base font-semibold text-ink">{requirement.title}</h3>
+      <p className="mt-0.5 text-xs leading-relaxed text-ink-3">
+        {requirement.applicableCondition}
+      </p>
+
+      {requirement.unit === "여부" ? (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface-2 px-3.5 py-3">
+          <span className="text-sm text-ink-2">자가점검 상태</span>
+          {isCompletedBoolean ? (
+            <span className="inline-flex items-center gap-1 text-sm font-semibold text-success">
+              <CheckCircle2 className="size-4" aria-hidden="true" /> 이수/충족 완료 표시됨
+            </span>
+          ) : (
+            <span className="text-sm font-semibold text-warning">미완료 (점검 필요)</span>
+          )}
+        </div>
+      ) : (
+        <div className="mt-4 space-y-2.5 rounded-xl bg-surface-2 px-3.5 py-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+            <span className="text-xs text-ink-3">내가 입력한 이수량</span>
+            <span className="tabular text-lg font-bold text-ink">
+              {completedValue}
+              <span className="ml-0.5 text-sm font-semibold text-ink-2">{requirement.unit}</span>
+            </span>
+          </div>
+
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+            <span className="text-xs text-ink-3">기준 목표치</span>
+            {hasValidTarget ? (
+              <span className="text-xs font-semibold text-accent">
+                {effectiveTarget} {requirement.unit} (사용자 직접 설정)
+              </span>
+            ) : (
+              <span className="text-xs font-semibold text-warning">
+                기준 미설정 (요람 확인 후 직접 입력)
+              </span>
+            )}
+          </div>
+
+          {hasValidTarget && calculatedPercent !== null ? (
+            <div className="pt-0.5">
+              <div className="mb-1 flex justify-between text-xs font-semibold">
+                <span className="text-ink-2">자가점검 달성률</span>
+                <span className="tabular text-accent">{calculatedPercent}%</span>
+              </div>
+              <div
+                role="progressbar"
+                aria-label={`${requirement.title} 자가점검 달성률`}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={calculatedPercent}
+                className="h-2 w-full overflow-hidden rounded-full bg-surface-3"
+              >
+                <div
+                  className="h-full rounded-full bg-brand-600 transition-[width] duration-500"
+                  style={{ width: `${calculatedPercent}%` }}
+                />
+              </div>
+            </div>
+          ) : (
+            <p className="border-t border-line pt-2 text-xs text-ink-3">
+              ※ 공식 기준값이 설정되지 않아 임의 진행률(%)을 표시하지 않습니다.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="mt-auto flex items-center justify-between gap-2 pt-4">
         <a
           href={requirement.officialGuideUrl}
           target="_blank"
           rel="noreferrer"
-          className="text-[11px] text-slate-500 hover:text-orange-600 inline-flex items-center gap-1"
+          className="inline-flex min-w-0 items-center gap-1 text-xs text-ink-3 hover:text-accent"
         >
-          {requirement.officialGuideLabel} <ExternalLink className="w-3 h-3" />
+          <span className="truncate">{requirement.officialGuideLabel}</span>
+          <ExternalLink className="size-3 shrink-0" aria-hidden="true" />
+          <span className="sr-only">(새 창)</span>
         </a>
-        <button
-          type="button"
-          onClick={onEdit}
-          className="px-3 py-1.5 rounded-lg bg-orange-50 dark:bg-orange-950/60 hover:bg-orange-100 text-orange-700 dark:text-orange-300 text-xs font-semibold transition"
-        >
+        <Button variant="soft" size="sm" onClick={onEdit} className="shrink-0">
           수치·목표 수정
-        </button>
+        </Button>
       </div>
-    </div>
+    </article>
   );
 }

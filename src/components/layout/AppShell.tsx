@@ -1,11 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import { UserRole } from "@/types";
-import { ROLE_LABELS } from "@/components/common/Cards";
+import { ROLE_LABELS, RoleBadge } from "@/components/common/Cards";
+import { Avatar, Button, CountBadge, Modal, cn, useToast } from "@/components/ui";
 import {
   Home,
   Megaphone,
@@ -18,10 +19,18 @@ import {
   Moon,
   Sun,
   RotateCcw,
-  Sparkles,
+  ChevronDown,
+  type LucideIcon,
 } from "lucide-react";
 
-const NAV_ITEMS = [
+type NavItem = {
+  href: string;
+  label: string;
+  shortLabel: string;
+  icon: LucideIcon;
+};
+
+const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "홈 대시보드", shortLabel: "홈", icon: Home },
   { href: "/notices", label: "학교·학과 공지", shortLabel: "공지", icon: Megaphone },
   { href: "/chat", label: "대화창 (메신저)", shortLabel: "대화창", icon: MessageSquare },
@@ -31,6 +40,20 @@ const NAV_ITEMS = [
   { href: "/auth", label: "가입·인증 안내", shortLabel: "가입/인증", icon: UserCheck },
   { href: "/admin", label: "관리자 센터", shortLabel: "관리자", icon: ShieldCheck },
 ];
+
+// 사이드바에서 목적별로 묶어 보여 준다 (모바일 하단 탭은 앞의 6개)
+const NAV_GROUPS: { label?: string; hrefs: string[] }[] = [
+  { hrefs: ["/"] },
+  { label: "소통", hrefs: ["/notices", "/chat", "/rooms", "/alumni"] },
+  { label: "학업", hrefs: ["/graduation"] },
+  { label: "가입·운영", hrefs: ["/auth", "/admin"] },
+];
+
+const ROLES: UserRole[] = ["student", "alumni", "professor", "admin"];
+
+function isActivePath(pathname: string, href: string) {
+  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -44,6 +67,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     conversations,
     approvalRequests,
   } = useApp();
+  const toast = useToast();
+  const [isResetOpen, setIsResetOpen] = useState(false);
 
   // 현재 사용자의 읽지 않은 메시지 총합
   const totalUnreadMessages = conversations.reduce((sum, conv) => {
@@ -55,239 +80,328 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     (r) => r.status === "pending"
   ).length;
 
-  const roles: UserRole[] = ["student", "alumni", "professor", "admin"];
+  const badgeFor = (href: string) => {
+    if (href === "/chat") return { count: totalUnreadMessages, tone: "brand" as const };
+    if (href === "/admin") return { count: pendingApprovalsCount, tone: "warning" as const };
+    return null;
+  };
+
+  const handleReset = () => {
+    resetDemoData();
+    setIsResetOpen(false);
+    toast({ title: "데모 데이터를 처음 상태로 되돌렸어요", tone: "info" });
+  };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg-main)] text-[var(--text-main)]">
-      {/* 상단 개발용 프로토타입 & 역할 전환 안내 바 */}
-      <div className="bg-slate-900 text-white px-3 sm:px-6 py-2 text-xs border-b border-slate-800 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded bg-orange-600 text-white font-bold text-[11px]">
-              1차 프로토타입 데모
+    <div className="flex min-h-dvh flex-col bg-canvas text-ink">
+      <a
+        href="#main"
+        className="sr-only z-[70] rounded-lg bg-surface px-4 py-2 text-sm font-semibold text-ink shadow-pop focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
+      >
+        본문으로 건너뛰기
+      </a>
+
+      {/* 상단 데모 바: 프로토타입 안내 + 역할(미리보기) 전환 */}
+      <div className="sticky top-0 z-40 border-b border-white/10 bg-[#111826] text-white">
+        <div className="flex h-11 items-center justify-between gap-3 px-3 sm:px-5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <span className="shrink-0 rounded-md bg-brand-600 px-2 py-0.5 text-xs font-bold">
+              <span className="sm:hidden">데모</span>
+              <span className="hidden sm:inline">1차 프로토타입 데모</span>
             </span>
-            <span className="text-slate-300 hidden sm:inline">
+            <span className="hidden truncate text-xs text-white/65 lg:inline">
               실제 서버/인증 미연결 상태 · 역할별 UI 미리보기 전환 기능 제공 (실제 권한 인증 아님)
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-slate-400 mr-1 text-[11px]">역할 전환:</span>
-            {roles.map((r) => (
-              <button
-                key={r}
-                type="button"
-                onClick={() => switchRole(r)}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold transition ${
-                  currentRole === r
-                    ? "bg-orange-500 text-white shadow-xs"
-                    : "bg-slate-800 text-slate-300 hover:bg-slate-700"
-                }`}
+          <div className="flex shrink-0 items-center gap-1.5">
+            <span className="hidden text-xs text-white/55 sm:inline">역할 전환</span>
+
+            {/* 데스크톱: 버튼 묶음 */}
+            <div
+              role="group"
+              aria-label="역할 전환 (UI 미리보기)"
+              className="hidden items-center gap-0.5 rounded-lg bg-white/8 p-0.5 sm:flex"
+            >
+              {ROLES.map((r) => {
+                const active = currentRole === r;
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => switchRole(r)}
+                    className={cn(
+                      "h-7 rounded-md px-2.5 text-xs font-semibold transition-colors",
+                      active
+                        ? "bg-white text-[#111826]"
+                        : "text-white/70 hover:bg-white/10 hover:text-white"
+                    )}
+                  >
+                    {ROLE_LABELS[r]}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* 모바일: 선택 상자 */}
+            <label className="relative sm:hidden">
+              <span className="sr-only">역할 전환 (UI 미리보기)</span>
+              <select
+                value={currentRole}
+                onChange={(e) => switchRole(e.target.value as UserRole)}
+                className="h-8 appearance-none rounded-md bg-white/10 pr-7 pl-2.5 text-[13px] font-semibold text-white focus:outline-none"
               >
-                {ROLE_LABELS[r]}
-              </button>
-            ))}
+                {ROLES.map((r) => (
+                  <option key={r} value={r} className="text-ink">
+                    {ROLE_LABELS[r]} 보기
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-white/70"
+              />
+            </label>
 
             <button
               type="button"
               onClick={toggleDarkMode}
-              title="다크모드 전환"
-              className="ml-1 p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 transition"
+              aria-label={isDarkMode ? "라이트 모드로 전환" : "다크 모드로 전환"}
+              title={isDarkMode ? "라이트 모드로 전환" : "다크 모드로 전환"}
+              className="grid size-8 place-items-center rounded-md text-white/75 transition-colors hover:bg-white/10 hover:text-white"
             >
-              {isDarkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+              {isDarkMode ? <Sun className="size-4" /> : <Moon className="size-4" />}
             </button>
 
             <button
               type="button"
-              onClick={resetDemoData}
+              onClick={() => setIsResetOpen(true)}
               title="데모 데이터 초기화"
-              className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 inline-flex items-center gap-1 text-[11px] transition"
+              className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-white/75 transition-colors hover:bg-white/10 hover:text-white"
             >
-              <RotateCcw className="w-3 h-3" /> 초기화
+              <RotateCcw className="size-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">초기화</span>
+              <span className="sr-only sm:hidden">데모 데이터 초기화</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* 본문 레이아웃 (PC: 좌측 사이드바 + 우측 메인 / 모바일: 상단 헤더 + 메인 + 하단 탭바) */}
-      <div className="flex-1 flex max-w-7xl w-full mx-auto">
+      <div className="flex flex-1">
         {/* PC 사이드바 */}
-        <aside className="hidden md:flex md:w-64 lg:w-72 flex-col shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sticky top-10 h-[calc(100vh-2.5rem)] justify-between">
-          <div className="space-y-6">
-            {/* 텍스트 기반 브랜드 로고 (학교 공식 상표 이미지 미사용 원칙 준수) */}
-            <Link href="/" className="block group">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-orange-600 text-white flex items-center justify-center font-black text-xl shadow-xs group-hover:bg-orange-700 transition">
-                  e
+        <aside className="sticky top-11 hidden h-[calc(100dvh-2.75rem)] w-60 shrink-0 flex-col border-r border-line bg-surface md:flex lg:w-64">
+          {/* 텍스트 기반 브랜드 로고 (학교 공식 상표 이미지 미사용 원칙 준수) */}
+          <div className="px-5 pt-5 pb-4">
+            <Link href="/" className="group flex items-center gap-2.5 rounded-lg">
+              <BrandMark />
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <BrandWordmark className="text-lg" />
+                  <span className="rounded bg-accent-soft px-1.5 py-px text-xs font-semibold text-accent">
+                    교육학과
+                  </span>
                 </div>
-                <div>
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white">
-                      동국<span className="text-orange-600">e</span>음
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 font-bold border border-orange-200 dark:border-orange-800">
-                      교육학과
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                    교육(e)과 사람을 잇는 학과 플랫폼
-                  </p>
-                </div>
+                <p className="truncate text-xs text-ink-3">교육(e)과 사람을 잇는 학과 플랫폼</p>
               </div>
             </Link>
-
-            {/* 현재 접속 프로필 카드 (데모) */}
-            <div className="p-3.5 rounded-2xl bg-orange-50/70 dark:bg-slate-800/80 border border-orange-200/70 dark:border-slate-700">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-600 text-white font-bold text-sm flex items-center justify-center shrink-0">
-                  {currentUser.avatarInitials}
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">
-                      {currentUser.name}
-                    </p>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-600 text-white">
-                      {ROLE_LABELS[currentUser.role]}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                    {currentUser.studentIdOrYear}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* 내비게이션 메뉴 */}
-            <nav className="space-y-1">
-              {NAV_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const isActive =
-                  item.href === "/"
-                    ? pathname === "/"
-                    : pathname.startsWith(item.href);
-
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-                      isActive
-                        ? "bg-orange-600 text-white shadow-xs"
-                        : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                    }`}
-                  >
-                    <span className="flex items-center gap-3">
-                      <Icon className="w-4 h-4" />
-                      {item.label}
-                    </span>
-
-                    {item.href === "/chat" && totalUnreadMessages > 0 && (
-                      <span
-                        className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold ${
-                          isActive
-                            ? "bg-white text-orange-600"
-                            : "bg-orange-600 text-white"
-                        }`}
-                      >
-                        {totalUnreadMessages}
-                      </span>
-                    )}
-
-                    {item.href === "/admin" && pendingApprovalsCount > 0 && (
-                      <span
-                        className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold ${
-                          isActive
-                            ? "bg-white text-orange-600"
-                            : "bg-amber-500 text-white"
-                        }`}
-                      >
-                        {pendingApprovalsCount}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
-            </nav>
           </div>
 
-          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-400 space-y-1">
-            <p className="font-semibold text-slate-500 dark:text-slate-300 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-orange-500" /> 동국e음 (Dongguk e-eum)
+          {/* 내비게이션 메뉴 */}
+          <nav aria-label="주 메뉴" className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+            {NAV_GROUPS.map((group, gi) => (
+              <div key={gi} className={cn(gi > 0 && "mt-5")}>
+                {group.label && (
+                  <p className="mb-1 px-3 text-xs font-semibold text-ink-3">{group.label}</p>
+                )}
+                <ul className="space-y-0.5">
+                  {group.hrefs.map((href) => {
+                    const item = NAV_ITEMS.find((n) => n.href === href)!;
+                    const Icon = item.icon;
+                    const active = isActivePath(pathname, item.href);
+                    const badge = badgeFor(item.href);
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          aria-current={active ? "page" : undefined}
+                          className={cn(
+                            "flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors",
+                            active
+                              ? "bg-accent-soft font-semibold text-accent"
+                              : "font-medium text-ink-2 hover:bg-surface-2 hover:text-ink"
+                          )}
+                        >
+                          <Icon
+                            aria-hidden="true"
+                            className={cn("size-[18px] shrink-0", active ? "text-accent" : "text-ink-3")}
+                          />
+                          <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                          {badge && <CountBadge count={badge.count} tone={badge.tone} />}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </nav>
+
+          {/* 현재 접속 프로필 (데모) */}
+          <div className="border-t border-line p-4">
+            <div className="flex items-center gap-3">
+              <Avatar
+                name={currentUser.name}
+                initials={currentUser.avatarInitials}
+                role={currentUser.role}
+                size="md"
+              />
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <p className="truncate text-sm font-semibold text-ink">{currentUser.name}</p>
+                  <RoleBadge role={currentUser.role} />
+                </div>
+                <p className="truncate text-xs text-ink-3">{currentUser.studentIdOrYear}</p>
+              </div>
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-ink-3">
+              동국대학교 교육학과 폐쇄형 커뮤니티 프로토타입 · ※ 모든 데이터는 개발용 가상 데이터입니다.
             </p>
-            <p>동국대학교 교육학과 폐쇄형 커뮤니티 프로토타입</p>
-            <p className="text-[10px]">※ 모든 데이터는 개발용 가상 데이터입니다.</p>
           </div>
         </aside>
 
         {/* 메인 컨텐츠 영역 */}
-        <div className="flex-1 flex flex-col min-w-0 pb-20 md:pb-8">
+        <div className="flex min-w-0 flex-1 flex-col">
           {/* 모바일 상단 브랜드 헤더 */}
-          <header className="md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
+          <header className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-2.5 md:hidden">
             <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-orange-600 text-white flex items-center justify-center font-black text-base">
-                e
-              </div>
-              <div>
-                <span className="font-black text-base text-slate-900 dark:text-white">
-                  동국<span className="text-orange-600">e</span>음
-                </span>
-                <span className="ml-1.5 text-[11px] text-slate-500">교육학과</span>
-              </div>
+              <BrandMark size="sm" />
+              <BrandWordmark className="text-base" />
+              <span className="text-xs text-ink-3">교육학과</span>
             </Link>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
               <Link
                 href="/auth"
-                className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200"
+                aria-current={isActivePath(pathname, "/auth") ? "page" : undefined}
+                className={cn(
+                  "inline-flex h-8 items-center rounded-lg px-2.5 text-[13px] font-medium transition-colors",
+                  isActivePath(pathname, "/auth")
+                    ? "bg-accent-soft text-accent"
+                    : "text-ink-2 hover:bg-surface-2"
+                )}
               >
                 가입/인증
               </Link>
               <Link
                 href="/admin"
-                className="px-2.5 py-1 rounded-lg bg-orange-50 dark:bg-orange-950/60 text-xs font-semibold text-orange-700 dark:text-orange-300"
+                aria-current={isActivePath(pathname, "/admin") ? "page" : undefined}
+                className={cn(
+                  "inline-flex h-8 items-center gap-1 rounded-lg px-2.5 text-[13px] font-medium transition-colors",
+                  isActivePath(pathname, "/admin")
+                    ? "bg-accent-soft text-accent"
+                    : "text-ink-2 hover:bg-surface-2"
+                )}
               >
                 관리자
+                <CountBadge count={pendingApprovalsCount} tone="warning" />
               </Link>
             </div>
           </header>
 
-          <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-5xl w-full mx-auto">
+          <main
+            id="main"
+            tabIndex={-1}
+            className="mx-auto w-full max-w-[1120px] flex-1 px-4 pt-5 pb-28 outline-none sm:px-6 md:pb-14 lg:px-10 lg:pt-8"
+          >
             {children}
           </main>
         </div>
       </div>
 
       {/* 모바일 하단 내비게이션 바 */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-2 py-1.5 grid grid-cols-6 gap-1">
-        {NAV_ITEMS.slice(0, 6).map((item) => {
-          const Icon = item.icon;
-          const isActive =
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col items-center justify-center py-1 rounded-xl text-[11px] font-semibold transition relative ${
-                isActive
-                  ? "text-orange-600"
-                  : "text-slate-500 dark:text-slate-400"
-              }`}
-            >
-              <Icon className="w-5 h-5 mb-0.5" />
-              <span className="truncate">{item.shortLabel}</span>
-              {item.href === "/chat" && totalUnreadMessages > 0 && (
-                <span className="absolute top-0.5 right-2 w-4 h-4 rounded-full bg-orange-600 text-white text-[10px] flex items-center justify-center">
-                  {totalUnreadMessages}
-                </span>
-              )}
-            </Link>
-          );
-        })}
+      <nav
+        aria-label="주 메뉴"
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-md md:hidden"
+      >
+        <ul className="grid grid-cols-6">
+          {NAV_ITEMS.slice(0, 6).map((item) => {
+            const Icon = item.icon;
+            const active = isActivePath(pathname, item.href);
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "relative flex h-14 flex-col items-center justify-center gap-0.5 text-xs transition-colors",
+                    active ? "font-semibold text-accent" : "font-medium text-ink-3"
+                  )}
+                >
+                  {active && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute top-0 h-0.5 w-7 rounded-full bg-brand-600"
+                    />
+                  )}
+                  <span className="relative">
+                    <Icon aria-hidden="true" className="size-[22px]" strokeWidth={active ? 2.25 : 1.9} />
+                    {item.href === "/chat" && totalUnreadMessages > 0 && (
+                      <CountBadge
+                        count={totalUnreadMessages}
+                        className="absolute -top-1.5 -right-2.5 ring-2 ring-surface"
+                      />
+                    )}
+                  </span>
+                  <span className="max-w-full truncate px-0.5">{item.shortLabel}</span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </nav>
+
+      <Modal
+        open={isResetOpen}
+        onClose={() => setIsResetOpen(false)}
+        size="sm"
+        title="데모 데이터를 초기화할까요?"
+        description="이 브라우저에 저장된 대화·글·졸업요건 기록이 처음 예시 상태로 돌아가요."
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setIsResetOpen(false)}>
+              취소
+            </Button>
+            <Button variant="primary" icon={<RotateCcw />} onClick={handleReset}>
+              초기화
+            </Button>
+          </>
+        }
+      />
     </div>
+  );
+}
+
+/** 동국e음 심볼: 'e'(교육)를 둥근 사각형에 담고, 오른쪽 아래 점으로 '이음'을 표시 */
+function BrandMark({ size = "md" }: { size?: "sm" | "md" }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "relative grid shrink-0 place-items-center rounded-[10px] bg-brand-600 font-black text-white",
+        size === "sm" ? "size-8 text-[17px]" : "size-10 text-xl"
+      )}
+    >
+      <span className="-mt-0.5 leading-none">e</span>
+      <span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-surface bg-brand-300" />
+    </span>
+  );
+}
+
+function BrandWordmark({ className }: { className?: string }) {
+  return (
+    <span className={cn("font-extrabold tracking-tight text-ink", className)}>
+      동국<span className="text-brand-600 dark:text-brand-400">e</span>음
+    </span>
   );
 }

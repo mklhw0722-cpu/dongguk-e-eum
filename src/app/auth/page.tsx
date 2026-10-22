@@ -6,21 +6,50 @@ import { useApp } from "@/context/AppContext";
 import { UserRole } from "@/types";
 import { ROLE_LABELS, DemoInfoBanner } from "@/components/common/Cards";
 import {
-  UserCheck,
   ShieldAlert,
   Clock,
   XCircle,
   CheckCircle2,
   Lock,
   ArrowRight,
-  FileWarning,
 } from "lucide-react";
+import {
+  Panel,
+  PageHeader,
+  Tabs,
+  Field,
+  Input,
+  Select,
+  Textarea,
+  Button,
+  Callout,
+  buttonClass,
+  useToast,
+} from "@/components/ui";
 
 type AuthScreenTab =
   | "login"
   | "signup"
   | "pending"
   | "rejected_or_supplement";
+
+const ROLE_OPTIONS: { role: UserRole; title: string; desc: string }[] = [
+  {
+    role: "student",
+    title: "재학생 (본전공·복수전공)",
+    desc: "공지 확인, 졸업요건 자가점검, 공유방·멘토링 참여",
+  },
+  {
+    role: "alumni",
+    title: "졸업생 (동문 멘토)",
+    desc: "진로 프로필 등록, 후배 멘토링 및 직무 경험 공유",
+  },
+  {
+    role: "professor",
+    title: "교수진 · 강사",
+    desc: "학생 검색 및 면담 요청, 연구·진로 공유방 지도",
+  },
+];
 
 export default function AuthPage() {
   const {
@@ -29,6 +58,7 @@ export default function AuthPage() {
     submitApprovalRequest,
     approvalRequests,
   } = useApp();
+  const toast = useToast();
 
   const [activeTab, setActiveTab] = useState<AuthScreenTab>("signup");
 
@@ -60,32 +90,21 @@ export default function AuthPage() {
     setNote("");
     setSubmittedNotice(true);
     setActiveTab("pending");
+    toast({ title: "가입 승인 신청을 등록했어요" });
   };
 
   return (
     <div className="space-y-6">
-      {/* 헤더 */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <UserCheck className="w-6 h-6 text-orange-600" />
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-              회원가입 · 소속 인증 · 관리자 승인 화면
-            </h1>
-          </div>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            폐쇄형 학과 플랫폼인 동국e음의 가입 절차와 승인 대기·보완 요청 UI를 미리 확인하고 테스트할 수 있습니다.
-          </p>
-        </div>
-
-        <Link
-          href="/admin"
-          className="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 self-start sm:self-auto"
-        >
-          관리자 가입 신청 목록 바로가기 ({approvalRequests.length})
-          <ArrowRight className="w-4 h-4" />
-        </Link>
-      </div>
+      <PageHeader
+        title="회원가입 · 소속 인증 · 관리자 승인 화면"
+        description="폐쇄형 학과 플랫폼인 동국e음의 가입 절차와 승인 대기·보완 요청 UI를 미리 확인하고 테스트할 수 있습니다."
+        actions={
+          <Link href="/admin" className={buttonClass("dark")}>
+            관리자 가입 신청 목록 바로가기 ({approvalRequests.length})
+            <ArrowRight aria-hidden="true" />
+          </Link>
+        }
+      />
 
       <DemoInfoBanner
         title="보안 및 개인정보 보호 안내 (1차 프로토타입)"
@@ -93,205 +112,172 @@ export default function AuthPage() {
         variant="amber"
       />
 
-      {/* 단계별 화면 전환 탭 */}
-      <div className="flex flex-wrap gap-2 bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800">
-        {[
-          { key: "login", label: "1. 로그인 화면 (데모)" },
-          { key: "signup", label: "2. 회원가입 · 사용자 유형 선택" },
-          { key: "pending", label: "3. 관리자 승인 대기 화면" },
-          {
-            key: "rejected_or_supplement",
-            label: "4. 승인 거절 · 보완 요청 안내",
-          },
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            type="button"
-            onClick={() => setActiveTab(tab.key as AuthScreenTab)}
-            className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition ${
-              activeTab === tab.key
-                ? "bg-orange-600 text-white"
-                : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Tabs<AuthScreenTab>
+        variant="underline"
+        label="가입·인증 화면 미리보기"
+        value={activeTab}
+        onChange={setActiveTab}
+        items={[
+          { value: "login", label: "1. 로그인 화면 (데모)" },
+          { value: "signup", label: "2. 회원가입 · 사용자 유형 선택" },
+          { value: "pending", label: "3. 관리자 승인 대기 화면" },
+          { value: "rejected_or_supplement", label: "4. 승인 거절 · 보완 요청 안내" },
+        ]}
+      />
 
       {/* 1. 로그인 화면 */}
       {activeTab === "login" && (
-        <div className="max-w-md mx-auto bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 space-y-5 shadow-xs">
-          <div className="text-center space-y-1.5">
-            <div className="w-12 h-12 rounded-2xl bg-orange-600 text-white font-black text-2xl flex items-center justify-center mx-auto">
+        <Panel padding="lg" className="mx-auto max-w-md space-y-5">
+          <div className="space-y-1.5 text-center">
+            <div
+              aria-hidden="true"
+              className="mx-auto flex size-12 items-center justify-center rounded-xl bg-brand-600 text-2xl font-bold text-white"
+            >
               e
             </div>
-            <h2 className="text-xl font-black text-slate-900 dark:text-white">
-              동국e음 로그인 (데모 화면)
-            </h2>
-            <p className="text-xs text-slate-500">
-              동국대학교 교육학과 승인 회원 전용 서비스
-            </p>
+            <h2 className="text-xl font-bold text-ink">동국e음 로그인 (데모 화면)</h2>
+            <p className="text-sm text-ink-3">동국대학교 교육학과 승인 회원 전용 서비스</p>
           </div>
 
-          <div className="p-3.5 rounded-2xl bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800/50 text-xs text-orange-900 dark:text-orange-200 space-y-1">
-            <p className="font-bold flex items-center gap-1.5">
-              <Lock className="w-4 h-4 text-orange-600" /> 실제 비밀번호 입력 불필요 안내
+          <div className="space-y-1 rounded-xl bg-surface-2 p-3.5 text-sm">
+            <p className="flex items-center gap-1.5 font-semibold text-ink">
+              <Lock aria-hidden="true" className="size-4 text-ink-3" /> 실제 비밀번호 입력 불필요 안내
             </p>
-            <p>
+            <p className="leading-relaxed text-ink-2">
               1차 버전에서는 실제 개인 비밀번호를 수집하지 않습니다. 아래 버튼으로 역할을 선택하면 즉시 해당 권한의 데모 세션으로 전환됩니다.
             </p>
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
+            <p className="text-sm font-semibold text-ink">
               데모 체험 계정 바로 전환하기 (현재: {ROLE_LABELS[currentRole]})
             </p>
-            <div className="grid grid-cols-2 gap-2">
-              {(["student", "alumni", "professor", "admin"] as UserRole[]).map(
-                (r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    onClick={() => switchRole(r)}
-                    className={`p-3 rounded-xl border text-xs font-bold transition ${
-                      currentRole === r
-                        ? "bg-orange-600 border-orange-600 text-white"
-                        : "border-slate-200 dark:border-slate-700 hover:border-orange-400"
-                    }`}
-                  >
-                    {ROLE_LABELS[r]} 계정으로 체험
-                  </button>
-                )
-              )}
+            <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
+              {(["student", "alumni", "professor", "admin"] as UserRole[]).map((r) => (
+                <Button
+                  key={r}
+                  variant={currentRole === r ? "primary" : "secondary"}
+                  aria-pressed={currentRole === r}
+                  onClick={() => switchRole(r)}
+                >
+                  {ROLE_LABELS[r]} 계정으로 체험
+                </Button>
+              ))}
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
+          <div className="border-t border-line pt-3 text-center">
             <button
               type="button"
               onClick={() => setActiveTab("signup")}
-              className="text-xs font-bold text-orange-600 hover:underline"
+              className="text-sm font-semibold text-accent underline-offset-4 hover:underline"
             >
               아직 회원이 아니신가요? 회원가입 및 소속 인증 신청 →
             </button>
           </div>
-        </div>
+        </Panel>
       )}
 
       {/* 2. 회원가입 · 사용자 유형 선택 · 소속 인증 안내 */}
       {activeTab === "signup" && (
-        <div className="max-w-2xl mx-auto bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 space-y-6 shadow-xs">
+        <Panel padding="lg" className="mx-auto max-w-3xl space-y-6">
           <div>
-            <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+            <h2 className="text-lg font-bold text-ink sm:text-xl">
               동국e음 회원가입 신청 및 소속 인증 안내
             </h2>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            <p className="mt-1 text-sm text-ink-2">
               가입 신청서를 제출하면 [관리자 센터]의 가입 신청 목록에 실시간(로컬 상태)으로 등록되어 승인/보완 절차를 시연할 수 있습니다.
             </p>
           </div>
 
           {/* Step 1: 사용자 유형 선택 */}
-          <div className="space-y-2">
-            <label className="block text-xs sm:text-sm font-bold">
+          <div className="space-y-2.5">
+            <h3 id="signup-role-label" className="text-base font-semibold text-ink">
               Step 1. 사용자 유형 선택
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                {
-                  role: "student" as UserRole,
-                  title: "재학생 (본전공·복수전공)",
-                  desc: "공지 확인, 졸업요건 자가점검, 공유방·멘토링 참여",
-                },
-                {
-                  role: "alumni" as UserRole,
-                  title: "졸업생 (동문 멘토)",
-                  desc: "진로 프로필 등록, 후배 멘토링 및 직무 경험 공유",
-                },
-                {
-                  role: "professor" as UserRole,
-                  title: "교수진 · 강사",
-                  desc: "학생 검색 및 면담 요청, 연구·진로 공유방 지도",
-                },
-              ].map((item) => (
-                <button
-                  key={item.role}
-                  type="button"
-                  onClick={() => setSelectedRole(item.role)}
-                  className={`p-4 rounded-2xl border text-left transition ${
-                    selectedRole === item.role
-                      ? "bg-orange-50 dark:bg-orange-950/40 border-orange-500 ring-2 ring-orange-500/20"
-                      : "border-slate-200 dark:border-slate-800 hover:border-orange-300"
-                  }`}
-                >
-                  <p className="font-extrabold text-sm text-slate-900 dark:text-white">
-                    {item.title}
-                  </p>
-                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    {item.desc}
-                  </p>
-                </button>
-              ))}
+            </h3>
+            <div
+              role="radiogroup"
+              aria-labelledby="signup-role-label"
+              className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+            >
+              {ROLE_OPTIONS.map((item) => {
+                const selected = selectedRole === item.role;
+                return (
+                  <button
+                    key={item.role}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => setSelectedRole(item.role)}
+                    className={`rounded-xl border p-4 text-left transition-colors duration-150 ${
+                      selected
+                        ? "border-brand-500 bg-accent-soft"
+                        : "border-line bg-surface hover:border-line-strong hover:bg-surface-2"
+                    }`}
+                  >
+                    <span className="flex items-start justify-between gap-2">
+                      <span className="text-sm font-semibold text-ink">{item.title}</span>
+                      {selected && (
+                        <CheckCircle2
+                          aria-hidden="true"
+                          className="size-4 shrink-0 text-accent"
+                        />
+                      )}
+                    </span>
+                    <span className="mt-1 block text-sm leading-relaxed text-ink-2">
+                      {item.desc}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Step 2: 소속 인증 안내 (증명서 파일 미업로드 원칙 준수) */}
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
-            <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-              <FileWarning className="w-4 h-4 text-orange-600" /> Step 2. 소속 인증 방식 안내 (민감 증명서 파일 업로드 미구현)
-            </p>
-            <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-              실제 서비스 운영 단계에서는 학교 공식 웹메일(<code>@dgu.ac.kr</code>) 인증 또는 학과 사무실 명부 대조를 통해 소속을 확인합니다. <strong>현재 프로토타입에서는 개인정보 보호를 위해 재학증명서·졸업증명서 등 민감한 파일을 업로드하거나 저장하지 않습니다.</strong>
-            </p>
-          </div>
+          <Callout
+            tone="info"
+            title="Step 2. 소속 인증 방식 안내 (민감 증명서 파일 업로드 미구현)"
+          >
+            실제 서비스 운영 단계에서는 학교 공식 웹메일(<code>@dgu.ac.kr</code>) 인증 또는 학과 사무실 명부 대조를 통해 소속을 확인합니다. <strong>현재 프로토타입에서는 개인정보 보호를 위해 재학증명서·졸업증명서 등 민감한 파일을 업로드하거나 저장하지 않습니다.</strong>
+          </Callout>
 
           {/* Step 3: 신청 정보 입력 */}
-          <form onSubmit={handleSignupSubmit} className="space-y-4 text-xs sm:text-sm">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block font-bold mb-1">이름 (가상 이름 입력 권장)</label>
-                <input
+          <form onSubmit={handleSignupSubmit} className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label="이름 (가상 이름 입력 권장)">
+                <Input
                   type="text"
                   required
                   value={applicantName}
                   onChange={(e) => setApplicantName(e.target.value)}
                   placeholder="예: 김교육"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                 />
-              </div>
+              </Field>
 
-              <div>
-                <label className="block font-bold mb-1">이메일 (예시 이메일)</label>
-                <input
+              <Field label="이메일 (예시 이메일)">
+                <Input
                   type="email"
                   required
                   value={applicantEmail}
                   onChange={(e) => setApplicantEmail(e.target.value)}
                   placeholder="예: student@sample.dgu.edu"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                 />
-              </div>
-            </div>
+              </Field>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block font-bold mb-1">학번 / 졸업연도 / 직함</label>
-                <input
+              <Field label="학번 / 졸업연도 / 직함">
+                <Input
                   type="text"
                   required
                   value={studentIdOrYear}
                   onChange={(e) => setStudentIdOrYear(e.target.value)}
                   placeholder="예: 24학번 재학 / 19학번 졸업"
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                 />
-              </div>
+              </Field>
 
-              <div>
-                <label className="block font-bold mb-1">희망 소속 확인 방법</label>
-                <select
+              <Field label="희망 소속 확인 방법">
+                <Select
                   value={verificationMethod}
                   onChange={(e) => setVerificationMethod(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                 >
                   <option value="학교 웹메일(@dgu.ac.kr) 인증 예정 (데모)">
                     학교 웹메일(@dgu.ac.kr) 인증 예정 (데모)
@@ -302,123 +288,105 @@ export default function AuthPage() {
                   <option value="복수전공 이수 승인 학번 확인 요청 (데모)">
                     복수전공 이수 승인 학번 확인 요청 (데모)
                   </option>
-                </select>
-              </div>
-            </div>
+                </Select>
+              </Field>
 
-            <div>
-              <label className="block font-bold mb-1">가입 인사 및 소속 확인 메모</label>
-              <textarea
-                rows={3}
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="학과 관리자가 소속을 확인할 수 있도록 간단한 소개를 남겨주세요."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
-              />
+              <Field label="가입 인사 및 소속 확인 메모" className="sm:col-span-2">
+                <Textarea
+                  rows={3}
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="학과 관리자가 소속을 확인할 수 있도록 간단한 소개를 남겨주세요."
+                />
+              </Field>
             </div>
 
             <div className="flex justify-end">
-              <button
-                type="submit"
-                className="px-6 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold"
-              >
+              <Button type="submit" size="lg" className="w-full sm:w-auto">
                 가입 승인 신청하기 (데모 등록)
-              </button>
+              </Button>
             </div>
           </form>
-        </div>
+        </Panel>
       )}
 
       {/* 3. 관리자 승인 대기 화면 */}
       {activeTab === "pending" && (
-        <div className="max-w-xl mx-auto bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 text-center space-y-4 shadow-xs">
+        <Panel padding="lg" className="mx-auto max-w-xl space-y-4 text-center">
           {submittedNotice && (
-            <div className="p-3 rounded-xl bg-emerald-50 text-emerald-800 text-xs font-bold flex items-center justify-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4" /> 가입 신청이 접수되어 관리자 신청 목록에 추가되었습니다!
-            </div>
+            <Callout
+              tone="success"
+              description="가입 신청이 접수되어 관리자 신청 목록에 추가되었습니다!"
+              className="text-left"
+            />
           )}
 
-          <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
-            <Clock className="w-7 h-7" />
+          <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-warning-soft text-warning">
+            <Clock aria-hidden="true" className="size-6" />
           </div>
 
-          <h2 className="text-xl font-black text-slate-900 dark:text-white">
-            관리자 소속 승인 대기 중입니다
-          </h2>
-          <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md mx-auto">
+          <h2 className="text-xl font-bold text-ink">관리자 소속 승인 대기 중입니다</h2>
+          <p className="mx-auto max-w-md text-sm leading-relaxed text-ink-2">
             <strong>동국e음</strong>은 동국대학교 교육학과 구성원(재학생·복수전공생·졸업생·교수진)의 안전한 소통을 위해 학과 관리자의 소속 확인 승인 후 모든 게시판과 대화창이 열립니다.
           </p>
 
-          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 text-left text-xs space-y-1.5">
-            <p className="font-bold text-slate-800 dark:text-slate-200">
-              승인 처리 절차 안내
-            </p>
-            <p className="text-slate-500">
+          <div className="space-y-1.5 rounded-xl bg-surface-2 p-3.5 text-left">
+            <p className="text-sm font-semibold text-ink">승인 처리 절차 안내</p>
+            <p className="text-sm leading-relaxed text-ink-2">
               1. 가입 신청 및 학번/이메일 제출 → 2. 교육학과 관리자 확인 → 3. 승인 완료 후 커뮤니티 전체 기능 활성화
             </p>
           </div>
 
-          <div className="pt-2 flex justify-center gap-2">
-            <Link
-              href="/admin"
-              className="px-4 py-2 rounded-xl bg-orange-600 text-white text-xs font-bold"
-            >
+          <div className="pt-2">
+            <Link href="/admin" className={buttonClass("primary")}>
               관리자 화면에서 방금 신청한 내역 승인해보기 →
             </Link>
           </div>
-        </div>
+        </Panel>
       )}
 
       {/* 4. 승인 거절 또는 보완 요청 안내 화면 */}
       {activeTab === "rejected_or_supplement" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {/* 보완 요청 화면 예시 */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-amber-300 dark:border-amber-800 p-6 space-y-4 shadow-xs">
-            <div className="flex items-center gap-2.5 text-amber-700 dark:text-amber-400">
-              <ShieldAlert className="w-6 h-6" />
-              <h3 className="text-lg font-black">소속 정보 보완 요청 안내 화면</h3>
+          <Panel padding="lg" className="space-y-4 text-center">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-warning-soft text-warning">
+              <ShieldAlert aria-hidden="true" className="size-6" />
             </div>
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+            <h2 className="text-lg font-bold text-ink">소속 정보 보완 요청 안내 화면</h2>
+            <p className="text-sm leading-relaxed text-ink-2">
               제출하신 가입 신청서에서 학번 또는 교육학과 소속 확인 정보가 부족하여 관리자가 보완을 요청한 상태입니다.
             </p>
-            <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-xs space-y-1">
-              <p className="font-bold text-amber-900 dark:text-amber-200">
-                관리자 전달 메모:
-              </p>
-              <p className="text-amber-800 dark:text-amber-300">
+            <div className="space-y-1 rounded-xl bg-surface-2 p-3.5 text-left text-sm">
+              <p className="font-semibold text-ink">관리자 전달 메모:</p>
+              <p className="leading-relaxed text-ink-2">
                 &ldquo;학번(입학연도)과 교육학과 본전공/복수전공 여부가 누락되어 있습니다. 정보를 보완하여 다시 제출해 주세요.&rdquo;
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setActiveTab("signup")}
-              className="w-full py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold"
-            >
+            <Button variant="warning" block onClick={() => setActiveTab("signup")}>
               가입 신청 정보 수정 및 재제출하기
-            </button>
-          </div>
+            </Button>
+          </Panel>
 
           {/* 승인 거절 화면 예시 */}
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-rose-200 dark:border-rose-900/60 p-6 space-y-4 shadow-xs">
-            <div className="flex items-center gap-2.5 text-rose-600">
-              <XCircle className="w-6 h-6" />
-              <h3 className="text-lg font-black">가입 승인 거절 안내 화면</h3>
+          <Panel padding="lg" className="space-y-4 text-center">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-danger-soft text-danger">
+              <XCircle aria-hidden="true" className="size-6" />
             </div>
-            <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300">
+            <h2 className="text-lg font-bold text-ink">가입 승인 거절 안내 화면</h2>
+            <p className="text-sm leading-relaxed text-ink-2">
               동국대학교 교육학과 구성원 자격이 확인되지 않거나 외부 홍보 목적 계정으로 판단되어 가입 승인이 거절되었습니다.
             </p>
-            <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900/50 text-xs space-y-1">
-              <p className="font-bold text-rose-900 dark:text-rose-200">
-                거절 사유:
-              </p>
-              <p className="text-rose-800 dark:text-rose-300">
+            <div className="space-y-1 rounded-xl bg-surface-2 p-3.5 text-left text-sm">
+              <p className="font-semibold text-ink">거절 사유:</p>
+              <p className="leading-relaxed text-ink-2">
                 &ldquo;동국대학교 교육학과 구성원(재학생·졸업생·교수진)만 가입할 수 있는 폐쇄형 플랫폼입니다.&rdquo;
               </p>
             </div>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-xs text-ink-3">
               ※ 착오로 거절된 경우 교육학과 사무실로 문의해 주시기 바랍니다.
             </p>
-          </div>
+          </Panel>
         </div>
       )}
     </div>
