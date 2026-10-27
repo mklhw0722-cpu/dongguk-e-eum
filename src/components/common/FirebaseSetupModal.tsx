@@ -18,37 +18,91 @@ export const FIRESTORE_RULES_TEXT = `rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // [동국e음] 학우들이 쓴 글 (communityPosts 컬렉션) 보안 규칙
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isApprovedUser() {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approvalStatus == 'approved';
+    }
+
+    function isApprovedAdmin() {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approvalStatus == 'approved'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // 1. 회원 프로필 및 가입 신청
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isApprovedAdmin());
+      allow create: if isAuthenticated()
+                    && request.auth.uid == userId
+                    && (
+                      (
+                        request.resource.data.approvalStatus == 'pending'
+                        && request.resource.data.role in ['student', 'alumni', 'professor']
+                      )
+                      || (
+                        !exists(/databases/$(database)/documents/system/admin_bootstrap)
+                        || (
+                          exists(/databases/$(database)/documents/system/admin_bootstrap)
+                          && get(/databases/$(database)/documents/system/admin_bootstrap).data.adminUid == request.auth.uid
+                        )
+                      )
+                    );
+      allow update: if isAuthenticated() && (
+        isApprovedAdmin()
+        || (
+          request.auth.uid == userId
+          && (
+            !exists(/databases/$(database)/documents/system/admin_bootstrap)
+            || (
+              exists(/databases/$(database)/documents/system/admin_bootstrap)
+              && get(/databases/$(database)/documents/system/admin_bootstrap).data.adminUid == request.auth.uid
+            )
+          )
+        )
+        || (
+          request.auth.uid == userId
+          && request.resource.data.approvalStatus == resource.data.approvalStatus
+          && request.resource.data.role == resource.data.role
+        )
+      );
+      allow delete: if isAuthenticated() && (request.auth.uid == userId || isApprovedAdmin());
+    }
+
+    // 2. 최초 관리자 안전 생성
+    match /system/admin_bootstrap {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && !exists(/databases/$(database)/documents/system/admin_bootstrap);
+      allow update: if isAuthenticated() && resource.data.adminUid == request.auth.uid;
+    }
+
+    // 3. 학우들이 쓴 글 (승인된 정회원만 조회/작성 가능)
     match /communityPosts/{postId} {
-
-      // 1. 읽기(Read): 동국e음에 접속한 학우 누구나 게시글과 댓글을 읽을 수 있음
-      allow read: if true;
-
-      // 2. 새 글 쓰기(Create): 필수 항목과 글자 수(제목 1~120자, 본문 1~5000자), 역할이 올바를 때만 허용
-      allow create: if request.resource.data.keys().hasAll([
-                        'id', 'roomId', 'roomName', 'category',
-                        'title', 'content', 'authorId', 'authorName',
-                        'authorRole', 'authorBadge', 'createdAt', 'likes', 'comments'
-                      ])
+      allow read: if isApprovedUser();
+      allow create: if isApprovedUser()
                     && request.resource.data.title is string
                     && request.resource.data.title.size() >= 1
                     && request.resource.data.title.size() <= 120
                     && request.resource.data.content is string
                     && request.resource.data.content.size() >= 1
-                    && request.resource.data.content.size() <= 5000
-                    && request.resource.data.authorRole in ['student', 'alumni', 'professor', 'admin'];
-
-      // 3. 댓글·공감 수정(Update): 원본 글의 제목·본문·작성자·공유방은 절대 수정 불가, 공감/댓글만 반영 허용
-      allow update: if request.resource.data.title == resource.data.title
+                    && request.resource.data.content.size() <= 5000;
+      allow update: if isApprovedUser()
+                    && request.resource.data.title == resource.data.title
                     && request.resource.data.content == resource.data.content
-                    && request.resource.data.authorId == resource.data.authorId
-                    && request.resource.data.roomId == resource.data.roomId;
-
-      // 4. 삭제(Delete): 작성자 정보(authorId)가 확인된 게시글만 삭제 허용
-      allow delete: if resource.data.authorId != null;
+                    && request.resource.data.authorId == resource.data.authorId;
+      allow delete: if isApprovedUser() && (
+        request.resource.data.authorId == request.auth.uid
+        || resource.data.authorId == request.auth.uid
+        || isApprovedAdmin()
+      );
     }
 
-    // 그 외 지정되지 않은 컬렉션은 모두 차단
     match /{document=**} {
       allow read, write: if false;
     }

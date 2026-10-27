@@ -36,7 +36,17 @@ import {
   deletePostInFirestore,
   addCommentInFirestore,
   incrementLikeInFirestore,
+  UserProfileDoc,
+  registerWithEmailAndPassword,
+  loginWithEmailAndPassword,
+  logoutUser,
+  sendPasswordReset,
+  subscribeToAuthStatus,
+  subscribeToAllUsersForAdmin,
+  updateUserApprovalStatusByAdmin,
+  claimInitialAdminRole,
 } from "@/lib/firebase";
+import { User as FirebaseUser } from "firebase/auth";
 
 interface AppContextValue extends PlatformDataState {
   currentUser: User;
@@ -46,12 +56,42 @@ interface AppContextValue extends PlatformDataState {
   toggleDarkMode: () => void;
   resetDemoData: () => void;
 
-  // Firebase Firestore 실시간 연결 상태 및 설정 액션
+  // Firebase 실시간 상태
   isFirestoreConnected: boolean;
   firebaseProjectId: string | null;
   firestoreError: string | null;
   applyFirebaseConfig: (config: FirebaseWebConfig) => void;
   disconnectFirebaseConfig: () => void;
+
+  // Firebase Authentication 상태 및 접근 제어
+  rawFirebaseUser: FirebaseUser | null;
+  authUserProfile: UserProfileDoc | null;
+  isAuthLoading: boolean;
+  isRealAuthActive: boolean;
+  isAccessAllowed: boolean; // 승인된 회원(approved) 또는 데모 모드일 때만 true
+
+  // 실제 인증 액션
+  handleSignUp: (params: {
+    email: string;
+    password: string;
+    name: string;
+    studentIdOrYear: string;
+    role: UserRole;
+    verificationNote?: string;
+  }) => Promise<void>;
+  handleLogin: (email: string, password: string) => Promise<void>;
+  handleLogout: () => Promise<void>;
+  handleResetPassword: (email: string) => Promise<void>;
+  handleClaimInitialAdmin: () => Promise<void>;
+
+  // 실제 관리자 회원 승인 액션
+  realUsersForAdmin: UserProfileDoc[];
+  handleAdminUpdateApproval: (
+    targetUid: string,
+    status: ApprovalStatus,
+    adminComment?: string,
+    role?: UserRole
+  ) => Promise<void>;
 
   // 기능 A. 대화창 액션
   sendMessage: (conversationId: string, content: string) => void;
@@ -108,7 +148,7 @@ interface AppContextValue extends PlatformDataState {
     memo: string
   ) => void;
 
-  // 기능 E. 진로 및 복수전공 공유방 액션 (Firestore 실시간 연동 대상)
+  // 기능 E. 진로 및 복수전공 공유방 액션
   toggleJoinRoom: (roomId: string) => void;
   createCommunityRoom: (payload: {
     name: string;
@@ -160,17 +200,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
-  // Firebase Firestore 상태
+  // Firebase 실시간 상태
   const [firebaseVersionTick, setFirebaseVersionTick] = useState(0);
   const [isFirestoreConnected, setIsFirestoreConnected] = useState(false);
   const [firebaseProjectId, setFirebaseProjectId] = useState<string | null>(null);
   const [firestoreError, setFirestoreError] = useState<string | null>(null);
 
+  // Firebase Authentication 상태
+  const [rawFirebaseUser, setRawFirebaseUser] = useState<FirebaseUser | null>(null);
+  const [authUserProfile, setAuthUserProfile] = useState<UserProfileDoc | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [realUsersForAdmin, setRealUsersForAdmin] = useState<UserProfileDoc[]>([]);
+
   useEffect(() => {
     const loaded = PlatformRepository.loadState();
     setState(loaded);
 
-    // URL 파라미터(?fbProjectId=...&fbApiKey=...)가 있으면 자동으로 저장해 다른 컴퓨터에서도 즉시 연결되게 함
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const urlProjectId = params.get("fbProjectId");
@@ -187,7 +232,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setHydrated(true);
   }, []);
 
-  // Firestore 실시간 구독 (학우들이 쓴 글: communityPosts)
+  // Firebase Auth & 프로필 실시간 감지
   useEffect(() => {
     if (!hydrated) return;
 
@@ -195,32 +240,87 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!activeConfig) {
       setIsFirestoreConnected(false);
       setFirebaseProjectId(null);
-      setFirestoreError(null);
+      setIsAuthLoading(false);
       return;
     }
 
     setFirebaseProjectId(activeConfig.projectId);
-    setFirestoreError(null);
+    setIsAuthLoading(true);
+
+    const unsubAuth = subscribeToAuthStatus(
+      (profile, rawUser) => {
+        setRawFirebaseUser(rawUser);
+        setAuthUserProfile(profile);
+        setIsAuthLoading(false);
+        setIsFirestoreConnected(true);
+
+        if (profile) {
+          setCurrentRole(profile.role);
+        }
+      },
+      (err) => {
+        setFirestoreError(err);
+        setIsAuthLoading(false);
+      }
+    );
+
+    return () => {
+      if (unsubAuth) unsubAuth();
+    };
+  }, [hydrated, firebaseVersionTick]);
+
+  // 관리자용 실시간 회원 가입 신청 목록 감지 (관리자 계정일 때만 활성화)
+  useEffect(() => {
+    if (!authUserProfile || authUserProfile.role !== "admin" || authUserProfile.approvalStatus !== "approved") {
+      setRealUsersForAdmin([]);
+      return;
+    }
+
+    const unsubUsers = subscribeToAllUsersForAdmin(
+      (list) => {
+        setRealUsersForAdmin(list);
+      },
+      (err) => {
+        console.warn(err);
+      }
+    );
+
+    return () => {
+      if (unsubUsers) unsubUsers();
+    };
+  }, [authUserProfile]);
+
+  // Firestore 공유방 실시간 구독
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const activeConfig = getActiveFirebaseConfig();
+    if (!activeConfig) return;
+
+    // 미승인 사용자는 Firestore 보안 규칙 상 글 목록 조회가 차단되므로 승인된 회원 또는 데모 상태에서만 구독
+    if (rawFirebaseUser && authUserProfile && authUserProfile.approvalStatus !== "approved") {
+      return;
+    }
 
     const unsubscribe = subscribeToCommunityPosts(
       (cloudPosts) => {
-        setIsFirestoreConnected(true);
-        setFirestoreError(null);
         setState((prev) => ({
           ...prev,
           communityPosts: cloudPosts,
         }));
       },
       (errMessage) => {
-        setIsFirestoreConnected(false);
-        setFirestoreError(errMessage);
+        // 미승인 회원의 보안 차단인 경우는 정상 동작이므로 불필요한 경고 생략
+        if (!rawFirebaseUser || authUserProfile?.approvalStatus === "approved") {
+          setFirestoreError(errMessage);
+        }
       }
     );
 
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, [hydrated, firebaseVersionTick]);
+  }, [hydrated, firebaseVersionTick, rawFirebaseUser, authUserProfile]);
 
   useEffect(() => {
     if (hydrated) {
@@ -234,9 +334,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isDarkMode]);
 
-  const currentUser =
-    state.users.find((u) => u.id === ROLE_DEFAULT_USER_ID[currentRole]) ||
-    state.users[0];
+  // 실제 Firebase Auth 로그인 여부
+  const isRealAuthActive = Boolean(rawFirebaseUser && authUserProfile);
+
+  // 접근 제어: Firebase 로그인 상태일 때는 'approved' 승인 회원만 접근 허용, 로그인하지 않은 로컬 데모 상태에서는 둘러보기 허용
+  const isAccessAllowed = isRealAuthActive
+    ? authUserProfile?.approvalStatus === "approved"
+    : true;
+
+  const currentUser: User = isRealAuthActive && authUserProfile
+    ? {
+        id: authUserProfile.id,
+        name: authUserProfile.name,
+        email: authUserProfile.email,
+        role: authUserProfile.role,
+        studentIdOrYear: authUserProfile.studentIdOrYear,
+        bio: authUserProfile.bio,
+        avatarInitials: authUserProfile.avatarInitials,
+        approvalStatus: authUserProfile.approvalStatus,
+        joinedAt: authUserProfile.joinedAt,
+      }
+    : state.users.find((u) => u.id === ROLE_DEFAULT_USER_ID[currentRole]) || state.users[0];
 
   const switchRole = (role: UserRole) => {
     setCurrentRole(role);
@@ -261,7 +379,55 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setIsFirestoreConnected(false);
     setFirebaseProjectId(null);
     setFirestoreError(null);
+    setRawFirebaseUser(null);
+    setAuthUserProfile(null);
     setFirebaseVersionTick((v) => v + 1);
+  };
+
+  // --- 실제 Firebase 인증 함수 ---
+  const handleSignUp = async (params: {
+    email: string;
+    password: string;
+    name: string;
+    studentIdOrYear: string;
+    role: UserRole;
+    verificationNote?: string;
+  }) => {
+    await registerWithEmailAndPassword(params);
+  };
+
+  const handleLogin = async (email: string, password: string) => {
+    await loginWithEmailAndPassword(email, password);
+  };
+
+  const handleLogout = async () => {
+    await logoutUser();
+    setRawFirebaseUser(null);
+    setAuthUserProfile(null);
+  };
+
+  const handleResetPassword = async (email: string) => {
+    await sendPasswordReset(email);
+  };
+
+  const handleClaimInitialAdmin = async () => {
+    const updated = await claimInitialAdminRole();
+    setAuthUserProfile(updated);
+    setCurrentRole("admin");
+  };
+
+  const handleAdminUpdateApproval = async (
+    targetUid: string,
+    status: ApprovalStatus,
+    adminComment?: string,
+    role?: UserRole
+  ) => {
+    await updateUserApprovalStatusByAdmin({
+      targetUid,
+      status,
+      adminComment,
+      role,
+    });
   };
 
   // --- 대화창 액션 ---
@@ -368,7 +534,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       id: `msg-sys-${Date.now()}`,
       conversationId: newConvId,
       senderId: currentUser.id,
-      content: `${currentUser.name}님이 ${targetUser?.name || "구성원"}님과의 대화를 시작했습니다. (로컬 데모 상태)`,
+      content: `${currentUser.name}님이 ${targetUser?.name || "구성원"}님과의 대화를 시작했습니다.`,
       createdAt: nowTime,
       isSystemMessage: true,
     };
@@ -669,7 +835,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
-  // --- 진로 및 복수전공 공유방 액션 (학우들이 쓴 글: Firestore 실시간 연동) ---
+  // --- 진로 및 복수전공 공유방 액션 (Firestore 실시간 연동) ---
   const toggleJoinRoom = (roomId: string) => {
     setState((prev) => ({
       ...prev,
@@ -760,12 +926,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       communityPosts: [newPost, ...prev.communityPosts],
     }));
 
-    // Firestore가 연결된 상태라면 클라우드 DB에도 즉시 저장
-    createPostInFirestore(newPost).catch((err) => {
-      setFirestoreError(
-        `글 등록 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
-      );
-    });
+    if (isFirestoreConnected) {
+      createPostInFirestore(newPost).catch((err) => {
+        setFirestoreError(
+          `글 등록 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
+        );
+      });
+    }
   };
 
   const deleteCommunityPost = (postId: string) => {
@@ -774,11 +941,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       communityPosts: prev.communityPosts.filter((p) => p.id !== postId),
     }));
 
-    deletePostInFirestore(postId).catch((err) => {
-      setFirestoreError(
-        `글 삭제 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
-      );
-    });
+    if (isFirestoreConnected) {
+      deletePostInFirestore(postId).catch((err) => {
+        setFirestoreError(
+          `글 삭제 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
+        );
+      });
+    }
   };
 
   const addCommunityComment = (postId: string, content: string) => {
@@ -806,11 +975,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ),
     }));
 
-    addCommentInFirestore(postId, updatedComments).catch((err) => {
-      setFirestoreError(
-        `댓글 등록 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
-      );
-    });
+    if (isFirestoreConnected) {
+      addCommentInFirestore(postId, updatedComments).catch((err) => {
+        setFirestoreError(
+          `댓글 등록 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
+        );
+      });
+    }
   };
 
   const likeCommunityPost = (postId: string) => {
@@ -824,14 +995,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ),
     }));
 
-    incrementLikeInFirestore(postId, nextLikes).catch((err) => {
-      setFirestoreError(
-        `공감 반영 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
-      );
-    });
+    if (isFirestoreConnected) {
+      incrementLikeInFirestore(postId, nextLikes).catch((err) => {
+        setFirestoreError(
+          `공감 반영 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
+        );
+      });
+    }
   };
 
-  // --- 가입 신청 및 관리자 액션 ---
+  // --- 가입 신청 및 관리자 액션 (로컬 데모용) ---
   const submitApprovalRequest = (payload: {
     applicantName: string;
     applicantEmail: string;
@@ -900,6 +1073,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         firestoreError,
         applyFirebaseConfig,
         disconnectFirebaseConfig,
+        rawFirebaseUser,
+        authUserProfile,
+        isAuthLoading,
+        isRealAuthActive,
+        isAccessAllowed,
+        handleSignUp,
+        handleLogin,
+        handleLogout,
+        handleResetPassword,
+        handleClaimInitialAdmin,
+        realUsersForAdmin,
+        handleAdminUpdateApproval,
         sendMessage,
         markConversationRead,
         startOrOpenDirectChat,
