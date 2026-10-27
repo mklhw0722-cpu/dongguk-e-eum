@@ -70,6 +70,8 @@ service cloud.firestore {
           request.auth.uid == userId
           && request.resource.data.approvalStatus == resource.data.approvalStatus
           && request.resource.data.role == resource.data.role
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.email == resource.data.email
         )
       );
       allow delete: if isAuthenticated() && (request.auth.uid == userId || isApprovedAdmin());
@@ -80,12 +82,14 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && !exists(/databases/$(database)/documents/system/admin_bootstrap);
       allow update: if isAuthenticated() && resource.data.adminUid == request.auth.uid;
+      allow delete: if false;
     }
 
     // 3. 학우들이 쓴 글 (승인된 정회원만 조회/작성 가능)
     match /communityPosts/{postId} {
       allow read: if isApprovedUser();
       allow create: if isApprovedUser()
+                    && request.resource.data.authorId == request.auth.uid
                     && request.resource.data.title is string
                     && request.resource.data.title.size() >= 1
                     && request.resource.data.title.size() <= 120
@@ -97,8 +101,42 @@ service cloud.firestore {
                     && request.resource.data.content == resource.data.content
                     && request.resource.data.authorId == resource.data.authorId;
       allow delete: if isApprovedUser() && (
-        request.resource.data.authorId == request.auth.uid
-        || resource.data.authorId == request.auth.uid
+        resource.data.authorId == request.auth.uid
+        || isApprovedAdmin()
+      );
+    }
+
+    // 4. 대화창 (chats 컬렉션 - 참여자 전용 보호)
+    match /chats/{chatId} {
+      allow read: if isApprovedUser() && (
+        request.auth.uid in resource.data.participants
+        || isApprovedAdmin()
+      );
+      allow create: if isApprovedUser() && request.auth.uid in request.resource.data.participants;
+      allow update: if isApprovedUser() && (
+        request.auth.uid in resource.data.participants
+        || isApprovedAdmin()
+      );
+
+      match /messages/{messageId} {
+        allow read: if isApprovedUser() && (
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+          || isApprovedAdmin()
+        );
+        allow create: if isApprovedUser()
+                      && request.resource.data.senderId == request.auth.uid
+                      && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow update, delete: if isApprovedUser() && (
+          resource.data.senderId == request.auth.uid
+          || isApprovedAdmin()
+        );
+      }
+    }
+
+    // 5. 개인별 졸업요건 기록 (graduationRecords 컬렉션 - 개인정보 보호)
+    match /graduationRecords/{userId} {
+      allow read, write: if isApprovedUser() && (
+        request.auth.uid == userId
         || isApprovedAdmin()
       );
     }

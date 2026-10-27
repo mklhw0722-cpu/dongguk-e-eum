@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  ShieldAlert,
   Trash2,
   Plus,
   Database,
@@ -117,6 +118,23 @@ export default function AdminPage() {
     await handleAdminUpdateApproval(targetUid, status, comment, role);
     setCommentInputs((prev) => ({ ...prev, [targetUid]: "" }));
   };
+
+  // 2차 방어: 관리자 권한이 없거나 미승인 사용자인 경우 관리자 콘솔 렌더링 차단
+  if (!authUserProfile || authUserProfile.role !== "admin" || authUserProfile.approvalStatus !== "approved") {
+    return (
+      <div className="max-w-xl mx-auto my-12 p-8 bg-white dark:bg-slate-900 rounded-3xl border border-rose-300 dark:border-rose-900/60 text-center space-y-4 shadow-md">
+        <div className="w-16 h-16 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center mx-auto">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-xl font-black text-slate-900 dark:text-white">
+          관리자 전용 구역 접근 제한 (403 Forbidden)
+        </h2>
+        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+          이 페이지는 동국e음 최고 관리자(Admin) 권한으로 승인된 사용자만 접근할 수 있습니다.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

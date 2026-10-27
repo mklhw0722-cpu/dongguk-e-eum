@@ -297,8 +297,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const activeConfig = getActiveFirebaseConfig();
     if (!activeConfig) return;
 
-    // 미승인 사용자는 Firestore 보안 규칙 상 글 목록 조회가 차단되므로 승인된 회원 또는 데모 상태에서만 구독
-    if (rawFirebaseUser && authUserProfile && authUserProfile.approvalStatus !== "approved") {
+    // 승인된 정회원만 Firestore 실시간 글 목록을 구독하도록 강제 (비로그인, 미승인, 거절 회원 전면 차단)
+    if (!rawFirebaseUser || !authUserProfile || authUserProfile.approvalStatus !== "approved") {
       return;
     }
 
@@ -335,12 +335,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [isDarkMode]);
 
   // 실제 Firebase Auth 로그인 여부
-  const isRealAuthActive = Boolean(rawFirebaseUser && authUserProfile);
+  const isRealAuthActive = Boolean(rawFirebaseUser);
 
-  // 접근 제어: Firebase 로그인 상태일 때는 'approved' 승인 회원만 접근 허용, 로그인하지 않은 로컬 데모 상태에서는 둘러보기 허용
-  const isAccessAllowed = isRealAuthActive
-    ? authUserProfile?.approvalStatus === "approved"
-    : true;
+  // 폐쇄형 학과 플랫폼 접근 제어: 승인 완료(approved)된 정회원만 true, 비로그인/미승인/거절 상태는 기본적으로 모두 차단(false)
+  const isAccessAllowed = Boolean(
+    rawFirebaseUser && authUserProfile && authUserProfile.approvalStatus === "approved"
+  );
 
   const currentUser: User = isRealAuthActive && authUserProfile
     ? {
