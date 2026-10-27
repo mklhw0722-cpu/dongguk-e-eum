@@ -26,6 +26,17 @@ import {
   getInitialDataState,
   PlatformDataState,
 } from "@/services/repository";
+import {
+  FirebaseWebConfig,
+  getActiveFirebaseConfig,
+  saveFirebaseConfigToLocal,
+  clearFirebaseConfigFromLocal,
+  subscribeToCommunityPosts,
+  createPostInFirestore,
+  deletePostInFirestore,
+  addCommentInFirestore,
+  incrementLikeInFirestore,
+} from "@/lib/firebase";
 
 interface AppContextValue extends PlatformDataState {
   currentUser: User;
@@ -34,6 +45,13 @@ interface AppContextValue extends PlatformDataState {
   switchRole: (role: UserRole) => void;
   toggleDarkMode: () => void;
   resetDemoData: () => void;
+
+  // Firebase Firestore 실시간 연결 상태 및 설정 액션
+  isFirestoreConnected: boolean;
+  firebaseProjectId: string | null;
+  firestoreError: string | null;
+  applyFirebaseConfig: (config: FirebaseWebConfig) => void;
+  disconnectFirebaseConfig: () => void;
 
   // 기능 A. 대화창 액션
   sendMessage: (conversationId: string, content: string) => void;
@@ -90,7 +108,7 @@ interface AppContextValue extends PlatformDataState {
     memo: string
   ) => void;
 
-  // 기능 E. 진로 및 복수전공 공유방 액션
+  // 기능 E. 진로 및 복수전공 공유방 액션 (Firestore 실시간 연동 대상)
   toggleJoinRoom: (roomId: string) => void;
   createCommunityRoom: (payload: {
     name: string;
@@ -142,11 +160,67 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [hydrated, setHydrated] = useState(false);
 
+  // Firebase Firestore 상태
+  const [firebaseVersionTick, setFirebaseVersionTick] = useState(0);
+  const [isFirestoreConnected, setIsFirestoreConnected] = useState(false);
+  const [firebaseProjectId, setFirebaseProjectId] = useState<string | null>(null);
+  const [firestoreError, setFirestoreError] = useState<string | null>(null);
+
   useEffect(() => {
     const loaded = PlatformRepository.loadState();
     setState(loaded);
+
+    // URL 파라미터(?fbProjectId=...&fbApiKey=...)가 있으면 자동으로 저장해 다른 컴퓨터에서도 즉시 연결되게 함
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const urlProjectId = params.get("fbProjectId");
+      const urlApiKey = params.get("fbApiKey");
+      if (urlProjectId && urlApiKey) {
+        saveFirebaseConfigToLocal({
+          apiKey: urlApiKey,
+          projectId: urlProjectId,
+          authDomain: `${urlProjectId}.firebaseapp.com`,
+        });
+      }
+    }
+
     setHydrated(true);
   }, []);
+
+  // Firestore 실시간 구독 (학우들이 쓴 글: communityPosts)
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const activeConfig = getActiveFirebaseConfig();
+    if (!activeConfig) {
+      setIsFirestoreConnected(false);
+      setFirebaseProjectId(null);
+      setFirestoreError(null);
+      return;
+    }
+
+    setFirebaseProjectId(activeConfig.projectId);
+    setFirestoreError(null);
+
+    const unsubscribe = subscribeToCommunityPosts(
+      (cloudPosts) => {
+        setIsFirestoreConnected(true);
+        setFirestoreError(null);
+        setState((prev) => ({
+          ...prev,
+          communityPosts: cloudPosts,
+        }));
+      },
+      (errMessage) => {
+        setIsFirestoreConnected(false);
+        setFirestoreError(errMessage);
+      }
+    );
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [hydrated, firebaseVersionTick]);
 
   useEffect(() => {
     if (hydrated) {
@@ -175,6 +249,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const resetDemoData = () => {
     const fresh = PlatformRepository.resetState();
     setState(fresh);
+  };
+
+  const applyFirebaseConfig = (config: FirebaseWebConfig) => {
+    saveFirebaseConfigToLocal(config);
+    setFirebaseVersionTick((v) => v + 1);
+  };
+
+  const disconnectFirebaseConfig = () => {
+    clearFirebaseConfigFromLocal();
+    setIsFirestoreConnected(false);
+    setFirebaseProjectId(null);
+    setFirestoreError(null);
+    setFirebaseVersionTick((v) => v + 1);
   };
 
   // --- 대화창 액션 ---
@@ -582,7 +669,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
-  // --- 진로 및 복수전공 공유방 액션 ---
+  // --- 진로 및 복수전공 공유방 액션 (학우들이 쓴 글: Firestore 실시간 연동) ---
   const toggleJoinRoom = (roomId: string) => {
     setState((prev) => ({
       ...prev,
@@ -672,6 +759,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...prev,
       communityPosts: [newPost, ...prev.communityPosts],
     }));
+
+    // Firestore가 연결된 상태라면 클라우드 DB에도 즉시 저장
+    createPostInFirestore(newPost).catch((err) => {
+      setFirestoreError(
+        `글 등록 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
+      );
+    });
   };
 
   const deleteCommunityPost = (postId: string) => {
@@ -679,6 +773,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...prev,
       communityPosts: prev.communityPosts.filter((p) => p.id !== postId),
     }));
+
+    deletePostInFirestore(postId).catch((err) => {
+      setFirestoreError(
+        `글 삭제 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
+      );
+    });
   };
 
   const addCommunityComment = (postId: string, content: string) => {
@@ -693,23 +793,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       content: trimmed,
       createdAt: new Date().toISOString().slice(0, 10),
     };
+
+    const targetPost = state.communityPosts.find((p) => p.id === postId);
+    const updatedComments = targetPost
+      ? [...targetPost.comments, newComment]
+      : [newComment];
+
     setState((prev) => ({
       ...prev,
       communityPosts: prev.communityPosts.map((p) =>
-        p.id === postId
-          ? { ...p, comments: [...p.comments, newComment] }
-          : p
+        p.id === postId ? { ...p, comments: updatedComments } : p
       ),
     }));
+
+    addCommentInFirestore(postId, updatedComments).catch((err) => {
+      setFirestoreError(
+        `댓글 등록 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
+      );
+    });
   };
 
   const likeCommunityPost = (postId: string) => {
+    const targetPost = state.communityPosts.find((p) => p.id === postId);
+    const nextLikes = (targetPost?.likes ?? 0) + 1;
+
     setState((prev) => ({
       ...prev,
       communityPosts: prev.communityPosts.map((p) =>
-        p.id === postId ? { ...p, likes: p.likes + 1 } : p
+        p.id === postId ? { ...p, likes: nextLikes } : p
       ),
     }));
+
+    incrementLikeInFirestore(postId, nextLikes).catch((err) => {
+      setFirestoreError(
+        `공감 반영 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
+      );
+    });
   };
 
   // --- 가입 신청 및 관리자 액션 ---
@@ -776,6 +895,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         switchRole,
         toggleDarkMode,
         resetDemoData,
+        isFirestoreConnected,
+        firebaseProjectId,
+        firestoreError,
+        applyFirebaseConfig,
+        disconnectFirebaseConfig,
         sendMessage,
         markConversationRead,
         startOrOpenDirectChat,

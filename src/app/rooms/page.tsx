@@ -11,6 +11,7 @@ import {
   DemoInfoBanner,
   ROLE_LABELS,
 } from "@/components/common/Cards";
+import { FirebaseSetupModal } from "@/components/common/FirebaseSetupModal";
 import {
   Compass,
   Users,
@@ -22,6 +23,8 @@ import {
   Sparkles,
   Send,
   X,
+  Database,
+  Trash2,
 } from "lucide-react";
 
 const ROOM_FILTER_TABS = [
@@ -42,6 +45,7 @@ const POST_CATEGORIES: ("전체" | PostCategory)[] = [
 export default function RoomsPage() {
   const {
     currentUser,
+    currentRole,
     users,
     communityRooms,
     communityPosts,
@@ -49,8 +53,11 @@ export default function RoomsPage() {
     toggleJoinRoom,
     createCommunityRoom,
     createCommunityPost,
+    deleteCommunityPost,
     addCommunityComment,
     likeCommunityPost,
+    isFirestoreConnected,
+    firebaseProjectId,
   } = useApp();
 
   const [selectedRoomFilter, setSelectedRoomFilter] =
@@ -58,6 +65,7 @@ export default function RoomsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [selectedPostCat, setSelectedPostCat] = useState<string>("전체");
+  const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState(false);
 
   // 새 게시글 모달 상태
   const [isPostModalOpen, setIsPostModalOpen] = useState(false);
@@ -177,7 +185,21 @@ export default function RoomsPage() {
               <ArrowLeft className="w-4 h-4" /> 전체 공유방 목록으로 돌아가기
             </button>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setIsFirebaseModalOpen(true)}
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 ${
+                  isFirestoreConnected
+                    ? "bg-emerald-100 text-emerald-800"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                }`}
+              >
+                <Database className="w-3.5 h-3.5" />
+                {isFirestoreConnected
+                  ? `실시간 공유 켜짐 (${firebaseProjectId})`
+                  : "Firestore 연결 설정"}
+              </button>
               <button
                 type="button"
                 onClick={() => toggleJoinRoom(activeRoom.id)}
@@ -289,94 +311,113 @@ export default function RoomsPage() {
           />
         ) : (
           <div className="space-y-4">
-            {roomPosts.map((post) => (
-              <div
-                key={post.id}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs"
-              >
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-xs font-bold">
-                      {post.category}
-                    </span>
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                      {post.authorName}
-                    </span>
-                    <span className="text-xs text-slate-400">
-                      ({post.authorBadge})
-                    </span>
-                  </div>
-                  <span className="text-xs text-slate-400">{post.createdAt}</span>
-                </div>
+            {roomPosts.map((post) => {
+              const canDelete =
+                post.authorId === currentUser.id || currentRole === "admin";
 
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
-                  {post.title}
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 whitespace-pre-line leading-relaxed">
-                  {post.content}
-                </p>
-
-                <div className="flex items-center gap-4 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => likeCommunityPost(post.id)}
-                    className="inline-flex items-center gap-1.5 font-bold text-orange-600 hover:underline"
-                  >
-                    <ThumbsUp className="w-4 h-4" /> 도움이 됐어요 ({post.likes})
-                  </button>
-                  <span className="inline-flex items-center gap-1 text-slate-500">
-                    <MessageCircle className="w-4 h-4" /> 댓글 {post.comments.length}개
-                  </span>
-                </div>
-
-                {/* 댓글 영역 */}
-                <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-3.5 space-y-2.5">
-                  {post.comments.map((cmt) => (
-                    <div
-                      key={cmt.id}
-                      className="text-xs border-b border-slate-200/60 dark:border-slate-700/60 last:border-none pb-2 last:pb-0"
-                    >
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className="font-bold text-slate-800 dark:text-slate-200">
-                          {cmt.authorName}{" "}
-                          <span className="text-orange-600">
-                            ({ROLE_LABELS[cmt.authorRole]})
-                          </span>
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          {cmt.createdAt}
-                        </span>
-                      </div>
-                      <p className="text-slate-600 dark:text-slate-300">
-                        {cmt.content}
-                      </p>
+              return (
+                <div
+                  key={post.id}
+                  className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs"
+                >
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <span className="px-2.5 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-xs font-bold">
+                        {post.category}
+                      </span>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        {post.authorName}
+                      </span>
+                      <span className="text-xs text-slate-400">
+                        ({post.authorBadge})
+                      </span>
                     </div>
-                  ))}
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400">
+                        {post.createdAt}
+                      </span>
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => deleteCommunityPost(post.id)}
+                          title="게시글 삭제 (작성자 본인 또는 관리자)"
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
-                  <div className="flex gap-2 pt-1">
-                    <input
-                      type="text"
-                      value={commentInputs[post.id] || ""}
-                      onChange={(e) =>
-                        setCommentInputs((prev) => ({
-                          ...prev,
-                          [post.id]: e.target.value,
-                        }))
-                      }
-                      placeholder="질문에 대한 답변이나 코멘트를 남겨보세요..."
-                      className="flex-1 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"
-                    />
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    {post.title}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 whitespace-pre-line leading-relaxed">
+                    {post.content}
+                  </p>
+
+                  <div className="flex items-center gap-4 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
                     <button
                       type="button"
-                      onClick={() => handleSendComment(post.id)}
-                      className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold inline-flex items-center gap-1"
+                      onClick={() => likeCommunityPost(post.id)}
+                      className="inline-flex items-center gap-1.5 font-bold text-orange-600 hover:underline"
                     >
-                      <Send className="w-3 h-3" /> 등록
+                      <ThumbsUp className="w-4 h-4" /> 도움이 됐어요 ({post.likes})
                     </button>
+                    <span className="inline-flex items-center gap-1 text-slate-500">
+                      <MessageCircle className="w-4 h-4" /> 댓글 {post.comments.length}개
+                    </span>
+                  </div>
+
+                  {/* 댓글 영역 */}
+                  <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-3.5 space-y-2.5">
+                    {post.comments.map((cmt) => (
+                      <div
+                        key={cmt.id}
+                        className="text-xs border-b border-slate-200/60 dark:border-slate-700/60 last:border-none pb-2 last:pb-0"
+                      >
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="font-bold text-slate-800 dark:text-slate-200">
+                            {cmt.authorName}{" "}
+                            <span className="text-orange-600">
+                              ({ROLE_LABELS[cmt.authorRole]})
+                            </span>
+                          </span>
+                          <span className="text-[10px] text-slate-400">
+                            {cmt.createdAt}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 dark:text-slate-300">
+                          {cmt.content}
+                        </p>
+                      </div>
+                    ))}
+
+                    <div className="flex gap-2 pt-1">
+                      <input
+                        type="text"
+                        value={commentInputs[post.id] || ""}
+                        onChange={(e) =>
+                          setCommentInputs((prev) => ({
+                            ...prev,
+                            [post.id]: e.target.value,
+                          }))
+                        }
+                        placeholder="질문에 대한 답변이나 코멘트를 남겨보세요..."
+                        className="flex-1 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSendComment(post.id)}
+                        className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold inline-flex items-center gap-1"
+                      >
+                        <Send className="w-3 h-3" /> 등록
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -457,6 +498,11 @@ export default function RoomsPage() {
             </div>
           </div>
         )}
+
+        <FirebaseSetupModal
+          isOpen={isFirebaseModalOpen}
+          onClose={() => setIsFirebaseModalOpen(false)}
+        />
       </div>
     );
   }
@@ -469,26 +515,51 @@ export default function RoomsPage() {
           <div className="flex items-center gap-2">
             <Compass className="w-6 h-6 text-orange-600" />
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-              진로 트랙 & 복수전공 공유방
+              진로 트랙 & 복수전공 공유방 (학우들이 쓴 글)
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            일반 실시간 채팅방과 달리, 선배들의 복수전공 이수 후기와 진로 준비 경험을 지속적으로 축적하는 아카이브 공간입니다.
+            선배들의 복수전공 이수 후기와 진로 준비 경험을 축적하고, Firebase Firestore로 모든 학우가 실시간으로 함께 볼 수 있는 공간입니다.
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsCreateRoomOpen(true)}
-          className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 self-start sm:self-auto"
-        >
-          <Plus className="w-4 h-4" /> 새 복수전공/진로 공유방 개설
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            type="button"
+            onClick={() => setIsFirebaseModalOpen(true)}
+            className={`px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 transition ${
+              isFirestoreConnected
+                ? "bg-emerald-600 text-white"
+                : "bg-slate-900 dark:bg-slate-700 text-white"
+            }`}
+          >
+            <Database className="w-4 h-4" />
+            {isFirestoreConnected
+              ? `Firestore 실시간 연동 중 (${firebaseProjectId})`
+              : "Firestore 클라우드 공유 연결하기"}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsCreateRoomOpen(true)}
+            className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5"
+          >
+            <Plus className="w-4 h-4" /> 새 공유방 개설
+          </button>
+        </div>
       </div>
 
       <DemoInfoBanner
-        title="일반 대화창 vs 진로·복수전공 공유방 구분 안내"
-        description="빠른 실시간 대화는 [대화창] 메뉴를 이용하고, 이곳 [공유방]에서는 진로 트랙(7종) 및 복수전공별 게시글·질문답변·이수 후기를 체계적으로 모아볼 수 있습니다. 복수전공 목록은 예시이며 관리자가 자유롭게 추가·확장할 수 있습니다."
+        title={
+          isFirestoreConnected
+            ? `🟢 현재 Firebase Firestore (${firebaseProjectId}) 실시간 공유 모드가 켜져 있습니다!`
+            : "⚪ 학우들이 쓴 글을 다른 컴퓨터에서도 함께 보려면 [Firestore 클라우드 공유 연결하기]를 눌러주세요."
+        }
+        description={
+          isFirestoreConnected
+            ? "지금 공유방에 새 글을 쓰거나 댓글·공감을 누르면 다른 컴퓨터나 팀원 스마트폰에서도 새로고침 없이 즉시 똑같이 보입니다."
+            : "Firebase 무료 Spark 요금제(결제 수단 등록 불필요)로 만든 프로젝트의 설정값만 붙여넣으면 모든 컴퓨터가 실시간으로 연결됩니다."
+        }
       />
 
       <SearchAndFilterBar
@@ -532,15 +603,22 @@ export default function RoomsPage() {
 
       {/* 최근 올라온 전체 공유방 인기 후기/질문 미리보기 */}
       <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs">
-        <div className="flex items-center gap-2">
-          <BookOpen className="w-5 h-5 text-orange-600" />
-          <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-            공유방 전체 최신 게시글 · 복수전공 후기
-          </h2>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BookOpen className="w-5 h-5 text-orange-600" />
+            <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
+              공유방 전체 최신 게시글 · 학우들이 쓴 글 ({communityPosts.length}건)
+            </h2>
+          </div>
+          {isFirestoreConnected && (
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
+              실시간 동기화 중
+            </span>
+          )}
         </div>
 
         <div className="space-y-2.5">
-          {communityPosts.slice(0, 5).map((post) => (
+          {communityPosts.slice(0, 8).map((post) => (
             <div
               key={post.id}
               onClick={() => setActiveRoomId(post.roomId)}
@@ -554,10 +632,13 @@ export default function RoomsPage() {
                   <span className="font-bold text-indigo-600 dark:text-indigo-400">
                     [{post.category}]
                   </span>
+                  <span className="text-slate-500">
+                    작성자: {post.authorName}
+                  </span>
                 </div>
                 <span className="text-slate-400">{post.createdAt}</span>
               </div>
-              <h3 className="font-bold text-sm text-slate-900 dark:text-white mb-1">
+              <h3 className="font-bold text-sm text-slate-900 dark:text-slate-white mb-1">
                 {post.title}
               </h3>
               <p className="text-xs text-slate-500 line-clamp-1">
@@ -656,6 +737,11 @@ export default function RoomsPage() {
           </div>
         </div>
       )}
+
+      <FirebaseSetupModal
+        isOpen={isFirebaseModalOpen}
+        onClose={() => setIsFirebaseModalOpen(false)}
+      />
     </div>
   );
 }

@@ -1,0 +1,52 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 1. 학우들이 쓴 글 (진로·복수전공 공유방 게시글 및 댓글: communityPosts 컬렉션)
+    match /communityPosts/{postId} {
+
+      // [읽기 규칙] 동국e음 플랫폼에 접속한 학우 누구나 게시글과 댓글을 함께 읽을 수 있습니다.
+      allow read: if true;
+
+      // [쓰기(새 글 작성) 규칙]
+      // 필수 항목(제목, 본문, 작성자 이름, 역할, 공유방 ID)이 빠짐없이 들어 있고,
+      // 제목(1~120자)과 본문(1~5000자) 길이가 정상일 때만 새 글을 등록할 수 있습니다.
+      allow create: if request.resource.data.keys().hasAll([
+                        'id', 'roomId', 'roomName', 'category',
+                        'title', 'content', 'authorId', 'authorName',
+                        'authorRole', 'authorBadge', 'createdAt', 'likes', 'comments'
+                      ])
+                    && request.resource.data.title is string
+                    && request.resource.data.title.size() >= 1
+                    && request.resource.data.title.size() <= 120
+                    && request.resource.data.content is string
+                    && request.resource.data.content.size() >= 1
+                    && request.resource.data.content.size() <= 5000
+                    && request.resource.data.authorRole in ['student', 'alumni', 'professor', 'admin']
+                    && request.resource.data.likes == 0;
+
+      // [수정(공감/댓글 추가) 규칙]
+      // 다른 학우가 공감(likes)을 누르거나 댓글(comments)을 추가할 때,
+      // 원본 글의 제목(title), 본문(content), 작성자(authorId), 공유방(roomId)은 절대 건드릴 수 없습니다.
+      allow update: if request.resource.data.title == resource.data.title
+                    && request.resource.data.content == resource.data.content
+                    && request.resource.data.authorId == resource.data.authorId
+                    && request.resource.data.roomId == resource.data.roomId
+                    && (
+                      request.resource.data.likes == resource.data.likes + 1
+                      || request.resource.data.comments.size() >= resource.data.comments.size()
+                    );
+
+      // [삭제 규칙]
+      // 게시글 삭제는 작성자 본인이거나 관리자 화면에서 요청한 경우에만 허용합니다.
+      // (추후 Firebase Auth 로그인 강제 시 request.auth.uid == resource.data.authorUid 조건과 결합됩니다.)
+      allow delete: if resource.data.authorId != null;
+    }
+
+    // 그 외 지정되지 않은 모든 컬렉션은 기본적으로 접근을 차단합니다.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

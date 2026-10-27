@@ -1,11 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import { UserRole } from "@/types";
 import { ROLE_LABELS } from "@/components/common/Cards";
+import { FirebaseSetupModal } from "@/components/common/FirebaseSetupModal";
 import {
   Home,
   Megaphone,
@@ -19,6 +20,7 @@ import {
   Sun,
   RotateCcw,
   Sparkles,
+  Database,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -43,7 +45,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     resetDemoData,
     conversations,
     approvalRequests,
+    isFirestoreConnected,
+    firebaseProjectId,
   } = useApp();
+
+  const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState(false);
 
   // 현재 사용자의 읽지 않은 메시지 총합
   const totalUnreadMessages = conversations.reduce((sum, conv) => {
@@ -59,15 +65,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-main)] text-[var(--text-main)]">
-      {/* 상단 개발용 프로토타입 & 역할 전환 안내 바 */}
+      {/* 상단 개발용 프로토타입 & 역할 전환 & Firebase 클라우드 연결 바 */}
       <div className="bg-slate-900 text-white px-3 sm:px-6 py-2 text-xs border-b border-slate-800 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded bg-orange-600 text-white font-bold text-[11px]">
-              1차 프로토타입 데모
-            </span>
-            <span className="text-slate-300 hidden sm:inline">
-              실제 서버/인증 미연결 상태 · 역할별 UI 미리보기 전환 기능 제공 (실제 권한 인증 아님)
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsFirebaseModalOpen(true)}
+              className={`px-2.5 py-1 rounded-md font-bold text-[11px] inline-flex items-center gap-1.5 transition cursor-pointer ${
+                isFirestoreConnected
+                  ? "bg-emerald-600 hover:bg-emerald-500 text-white"
+                  : "bg-orange-600 hover:bg-orange-500 text-white"
+              }`}
+            >
+              <Database className="w-3.5 h-3.5" />
+              {isFirestoreConnected
+                ? `실시간 DB 연결됨 (${firebaseProjectId})`
+                : "Firebase 클라우드 DB 연결 설정"}
+            </button>
+            <span className="text-slate-300 hidden lg:inline">
+              {isFirestoreConnected
+                ? "학우들이 쓴 글이 모든 기기에 실시간 공유됩니다"
+                : "클릭하여 Firebase 설정을 넣으면 모든 컴퓨터에서 글을 함께 볼 수 있습니다"}
             </span>
           </div>
 
@@ -216,7 +235,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Sparkles className="w-3.5 h-3.5 text-orange-500" /> 동국e음 (Dongguk e-eum)
             </p>
             <p>동국대학교 교육학과 폐쇄형 커뮤니티 프로토타입</p>
-            <p className="text-[10px]">※ 모든 데이터는 개발용 가상 데이터입니다.</p>
+            <p className="text-[10px]">
+              {isFirestoreConnected
+                ? "🟢 공유방 게시글: Firestore 실시간 연동 중"
+                : "⚪ 로컬 데모 모드 (상단에서 Firestore 연결 가능)"}
+            </p>
           </div>
         </aside>
 
@@ -237,12 +260,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
 
             <div className="flex items-center gap-2">
-              <Link
-                href="/auth"
-                className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200"
+              <button
+                type="button"
+                onClick={() => setIsFirebaseModalOpen(true)}
+                className="px-2.5 py-1 rounded-lg bg-orange-600 text-white text-xs font-bold"
               >
-                가입/인증
-              </Link>
+                DB연결
+              </button>
               <Link
                 href="/admin"
                 className="px-2.5 py-1 rounded-lg bg-orange-50 dark:bg-orange-950/60 text-xs font-semibold text-orange-700 dark:text-orange-300"
@@ -288,6 +312,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           );
         })}
       </nav>
+
+      {/* Firebase 설정 및 보안규칙 모달 */}
+      <FirebaseSetupModal
+        isOpen={isFirebaseModalOpen}
+        onClose={() => setIsFirebaseModalOpen(false)}
+      />
     </div>
   );
 }
