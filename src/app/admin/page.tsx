@@ -1149,7 +1149,7 @@ export default function AdminPage() {
                   </div>
                   <div>
                     <label className="text-slate-500 block mb-0.5">
-                      교육학과 단일전공 기준 (사범대 일반 {currentCohortRule.generalSingleMajorCredits} + 대체 12)
+                      교육학과 단일전공 기준 (전공필수 36학점 + 전공선택 30학점 = 66학점)
                     </label>
                     <input
                       type="number"
@@ -1164,7 +1164,7 @@ export default function AdminPage() {
                   </div>
                   <div>
                     <label className="text-slate-500 block mb-0.5">
-                      교육학과 복수전공 주전공 기준 (사범대 일반 {currentCohortRule.generalDoublePrimaryCredits} + 대체 12)
+                      교육학과 복수전공 주전공 기준 (전공필수 36학점 필수)
                     </label>
                     <input
                       type="number"
@@ -1234,14 +1234,14 @@ export default function AdminPage() {
                   </div>
                   <div>
                     <label className="text-slate-500 block mb-0.5">
-                      교직 총 이수학점 (이론12 + 소양6 + 실습4~6)
+                      교직 총 이수학점 (교직소양 6 + 교육실습 4 = 10학점)
                     </label>
                     <input
                       type="number"
                       value={currentCohortRule.teachingTotalCredits}
                       onChange={(e) =>
                         updateCurrentCohortField({
-                          teachingTotalCredits: Number(e.target.value) || 22,
+                          teachingTotalCredits: Number(e.target.value) || 10,
                         })
                       }
                       className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"

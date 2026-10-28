@@ -354,7 +354,9 @@ export const OFFICIAL_GRADUATION_CATALOG: OfficialGraduationCatalog = {
       eduDoublePartnerCredits: 50,
       generalDoublePartnerCredits: null,
       subjectEducationCredits: 9,
-      teachingTotalCredits: 22,
+      majorRequiredCredits: 36,
+      teachingTotalCredits: 10,
+      graduationExamRequired: true,
       teachingTheoryCredits: 12,
       teachingTheoryMinSubjects: 6,
       teachingLiteracyCredits: 6,
@@ -397,7 +399,9 @@ export const OFFICIAL_GRADUATION_CATALOG: OfficialGraduationCatalog = {
       eduDoublePartnerCredits: 50,
       generalDoublePartnerCredits: null,
       subjectEducationCredits: 9,
-      teachingTotalCredits: 22,
+      majorRequiredCredits: 36,
+      teachingTotalCredits: 10,
+      graduationExamRequired: true,
       teachingTheoryCredits: 12,
       teachingTheoryMinSubjects: 6,
       teachingLiteracyCredits: 6,
@@ -440,7 +444,9 @@ export const OFFICIAL_GRADUATION_CATALOG: OfficialGraduationCatalog = {
       eduDoublePartnerCredits: 50,
       generalDoublePartnerCredits: null,
       subjectEducationCredits: 9,
-      teachingTotalCredits: 22,
+      majorRequiredCredits: 36,
+      teachingTotalCredits: 10,
+      graduationExamRequired: true,
       teachingTheoryCredits: 12,
       teachingTheoryMinSubjects: 6,
       teachingLiteracyCredits: 6,
@@ -483,7 +489,9 @@ export const OFFICIAL_GRADUATION_CATALOG: OfficialGraduationCatalog = {
       eduDoublePartnerCredits: 50,
       generalDoublePartnerCredits: null,
       subjectEducationCredits: 9,
-      teachingTotalCredits: 22,
+      majorRequiredCredits: 36,
+      teachingTotalCredits: 10,
+      graduationExamRequired: true,
       teachingTheoryCredits: 12,
       teachingTheoryMinSubjects: 6,
       teachingLiteracyCredits: 6,
@@ -526,7 +534,9 @@ export const OFFICIAL_GRADUATION_CATALOG: OfficialGraduationCatalog = {
       eduDoublePartnerCredits: 50,
       generalDoublePartnerCredits: null,
       subjectEducationCredits: 9,
-      teachingTotalCredits: 22,
+      majorRequiredCredits: 36,
+      teachingTotalCredits: 10,
+      graduationExamRequired: true,
       teachingTheoryCredits: 12,
       teachingTheoryMinSubjects: 6,
       teachingLiteracyCredits: 6,
@@ -569,7 +579,9 @@ export const OFFICIAL_GRADUATION_CATALOG: OfficialGraduationCatalog = {
       eduDoublePartnerCredits: 50,
       generalDoublePartnerCredits: null,
       subjectEducationCredits: 9,
-      teachingTotalCredits: 22,
+      majorRequiredCredits: 36,
+      teachingTotalCredits: 10,
+      graduationExamRequired: true,
       teachingTheoryCredits: 12,
       teachingTheoryMinSubjects: 6,
       teachingLiteracyCredits: 6,
@@ -643,7 +655,7 @@ export function deriveLegacyFieldsFromAcademicProfile(profile: StudentAcademicPr
   isTeacherTrack: boolean;
 } {
   const hasDouble = profile.majorPlanType !== "single";
-  const isTeacherTrack = profile.teachingTrackStatus !== "non_teaching";
+  const isTeacherTrack = true; // 사범대학 교육학과는 전원 교직 기본 대상
   let majorType: "단일전공(심화)" | "복수전공 이수" | "교직 이수 병행" = "단일전공(심화)";
   if (hasDouble) {
     majorType = "복수전공 이수";
@@ -937,7 +949,8 @@ export function migrateStudentProgress(
       raw?.teachingChecklist?.teachingGpa !== null
         ? Number(raw.teachingChecklist.teachingGpa)
         : null,
-    graduationThesisCompleted: Boolean(raw?.teachingChecklist?.graduationThesisCompleted),
+    graduationThesisCompleted: Boolean(raw?.teachingChecklist?.graduationExamCompleted ?? raw?.teachingChecklist?.graduationThesisCompleted),
+    graduationExamCompleted: Boolean(raw?.teachingChecklist?.graduationExamCompleted ?? raw?.teachingChecklist?.graduationThesisCompleted),
     disqualificationGuidanceAcknowledged: Boolean(
       raw?.teachingChecklist?.disqualificationGuidanceAcknowledged
     ),
@@ -1068,7 +1081,7 @@ export function resolveApplicableRequirements(
     ? `${cohortRule.commonLiberalArtsRangeLabel} (영어트랙 별도기준 확인 필요)`
     : cohortRule.commonLiberalArtsRangeLabel;
 
-  const teachingRequired = profile.teachingTrackStatus !== "non_teaching";
+  const teachingRequired = true; // 사범대학 교육학과는 전원 교직 기본 대상
   const genderSensitivityRequiredCount =
     profile.admissionYearNumber <= 2020 ? 2 : cohortRule.genderSensitivityMinCount;
 
@@ -1094,7 +1107,7 @@ export function resolveApplicableRequirements(
         ? "교육학과 단일전공 이수학점 (별도 기준)"
         : "교육학과 복수전공 주전공 이수학점 (별도 기준)",
       targetValue: eduMajorTargetCredits,
-      targetDisplay: `${eduMajorTargetCredits}학점 이상 (사범대 일반 ${generalMajorReferenceCredits} + 교직이론 대체 12)`,
+      targetDisplay: isSingleMajor ? "66학점 이상 (전공필수 36학점 + 전공선택 30학점)" : "50학점 이상 (전공필수 36학점 + 전공선택 14학점)",
       unit: "학점",
       reviewStatus: eduMajorTargetStatus,
       applicableTarget: isSingleMajor
@@ -1178,9 +1191,9 @@ export function resolveApplicableRequirements(
       {
         id: "req-teaching-total",
         category: "교직 이수 학점",
-        title: "교직과목 총 이수학점 (교직이론 12 + 교직소양 6 + 교육실습 4~6)",
+        title: "교직과목 총 이수학점 (교직소양 6 + 교육실습 4)",
         targetValue: cohortRule.teachingTotalCredits,
-        targetDisplay: `${cohortRule.teachingTotalCredits}학점 이상 (대체인정 포함)`,
+        targetDisplay: "10학점 이상 (교직소양 6 + 교육실습 4)",
         unit: "학점",
         reviewStatus: "confirmed",
         applicableTarget: "교원자격증 취득 예정자",
@@ -1397,6 +1410,7 @@ export interface GraduationAuditResult {
     teachingGpaCurrent: number | null;
     teachingGpaTarget: number;
     thesisCompleted: boolean;
+    examCompleted: boolean;
     disqualificationGuidanceAcknowledged: boolean;
   };
   categoryCards: CategoryAuditCard[];
@@ -2082,7 +2096,8 @@ export function calculateGraduationAudit(
       teachingGpaPassed,
       teachingGpaCurrent: tc.teachingGpa,
       teachingGpaTarget: cohortRule.teachingGpaMin,
-      thesisCompleted: Boolean(tc.graduationThesisCompleted),
+      thesisCompleted: Boolean(tc.graduationExamCompleted || tc.graduationThesisCompleted),
+      examCompleted: Boolean(tc.graduationExamCompleted || tc.graduationThesisCompleted),
       disqualificationGuidanceAcknowledged: Boolean(
         tc.disqualificationGuidanceAcknowledged
       ),

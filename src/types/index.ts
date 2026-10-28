@@ -271,6 +271,8 @@ export interface GraduationRequirement {
 }
 
 export type CourseCategory =
+  | "전공필수 (교육학과)"
+  | "전공선택 (교육학과)"
   | "전공필수/선택 (교육학과)"
   | "복수전공"
   | "교직이론"
@@ -324,7 +326,8 @@ export interface TeachingChecklistState {
   genderSensitivityCount: number; // 성인지 교육 이수 횟수 (2020 이전 입학: 2회+, 2021 이후 입학: 4회+)
   majorGpa: number | null; // 전공 평점평균 (기준: 2.31 이상)
   teachingGpa: number | null; // 교직 평점평균 (기준: 2.75 이상)
-  graduationThesisCompleted: boolean; // 교육학과 졸업논문 완료 여부
+  graduationThesisCompleted: boolean; // (구) 교육학과 졸업논문 완료 여부 (호환용)
+  graduationExamCompleted: boolean; // 교육학과 졸업시험 합격 여부 (최신)
   disqualificationGuidanceAcknowledged: boolean; // 교원자격 취득 결격사유 안내 확인 여부 (민감 건강·범죄 정보는 저장하지 않음)
   officialVerificationConfirmedByAdmin?: boolean; // 학교 공식 인정 확인 여부 (학생 임의 변경 불가)
 }
@@ -363,7 +366,9 @@ export interface OfficialCohortRuleSet {
   genderSensitivityMinCount: number; // 성인지 교육 (2020 이전: 2회, 2021 이후: 4회)
   majorGpaMin: number; // 전공 평점평균 2.31 이상
   teachingGpaMin: number; // 교직 평점평균 2.75 이상
-  graduationThesisRequired: boolean; // 졸업논문: 교육학과 필수
+  majorRequiredCredits: number; // 전공필수: 36학점 필수
+  graduationThesisRequired: boolean; // (구) 졸업논문: 교육학과 필수 (호환용)
+  graduationExamRequired: boolean; // 교육학과 졸업시험: 필수
   englishLectureExempt: boolean; // 사범대학 영어강의 적용 제외
   sourceUrl: string; // https://edu.dongguk.edu/page/619
   lastVerifiedAt: string; // 예: "2026-10-28"
