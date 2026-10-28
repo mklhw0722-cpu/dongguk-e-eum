@@ -36,6 +36,10 @@ const STATUS_LABELS: Record<ApprovalStatus, { label: string; style: string }> = 
     label: "승인 거절됨",
     style: "bg-rose-100 text-rose-800",
   },
+  suspended: {
+    label: "이용 정지",
+    style: "bg-slate-200 text-slate-800",
+  },
 };
 
 export default function AdminPage() {
@@ -344,7 +348,7 @@ export default function AdminPage() {
               </h2>
 
               {realUsersForAdmin.map((userDoc) => {
-                const st = STATUS_LABELS[userDoc.approvalStatus];
+                const st = STATUS_LABELS[userDoc.approvalStatus] || STATUS_LABELS.pending;
                 return (
                   <div
                     key={userDoc.id}
@@ -439,6 +443,13 @@ export default function AdminPage() {
                           className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold inline-flex items-center gap-1 transition"
                         >
                           <XCircle className="w-3.5 h-3.5" /> 거절
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onProcessRealUser(userDoc.id, "suspended")}
+                          className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold inline-flex items-center gap-1 transition"
+                        >
+                          이용 정지
                         </button>
                       </div>
                     </div>

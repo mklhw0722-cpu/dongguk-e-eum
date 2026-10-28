@@ -262,14 +262,22 @@ export async function sendPasswordReset(email: string): Promise<void> {
   await sendPasswordResetEmail(auth, email);
 }
 
+export interface AuthStatusHandlers {
+  /** 로그인 사용자가 바뀔 때마다(로그인·로그아웃·새로고침 복원) 회원 문서 조회 전에 먼저 호출 */
+  onAuthUserChange: (rawUser: FirebaseUser | null) => void;
+  /** 회원 문서가 조회되면 호출 (문서가 없으면 profile === null) */
+  onProfileUpdate: (profile: UserProfileDoc | null, rawUser: FirebaseUser) => void;
+  /** 회원 문서 조회 실패 (rawUser 가 있으면 로그인은 되어 있으나 문서 조회만 실패한 상태) */
+  onProfileError: (err: string, rawUser: FirebaseUser | null) => void;
+}
+
 /**
  * 로그인 상태 및 내 Firestore 프로필 실시간 감지
- * - 관리자가 승인(approved)하면 실시간으로 내 화면에 즉시 반영됨
+ * - 1단계: onAuthStateChanged 로 로그인 여부를 먼저 확인
+ * - 2단계: 로그인한 경우에만 users/{uid} 문서를 실시간 구독
+ * - 관리자가 승인(approved)하거나 승인을 취소하면 실시간으로 내 화면에 즉시 반영됨
  */
-export function subscribeToAuthStatus(
-  onProfileUpdate: (profile: UserProfileDoc | null, rawUser: FirebaseUser | null) => void,
-  onError: (err: string) => void
-): (() => void) | null {
+export function subscribeToAuthStatus(handlers: AuthStatusHandlers): (() => void) | null {
   const { auth, db } = getFirebaseInstances();
   if (!auth || !db) return null;
 
@@ -283,8 +291,10 @@ export function subscribeToAuthStatus(
         docUnsub = null;
       }
 
+      // 회원 문서 조회 전에 로그인 여부를 먼저 알림 (이전 사용자의 프로필이 남지 않도록)
+      handlers.onAuthUserChange(user);
+
       if (!user) {
-        onProfileUpdate(null, null);
         return;
       }
 
@@ -294,19 +304,19 @@ export function subscribeToAuthStatus(
         (snap) => {
           if (snap.exists()) {
             const d = snap.data();
-            onProfileUpdate({ id: snap.id, uid: snap.id, ...d } as unknown as UserProfileDoc, user);
+            handlers.onProfileUpdate({ id: snap.id, uid: snap.id, ...d } as unknown as UserProfileDoc, user);
           } else {
-            // Auth 계정은 있으나 아직 Firestore 프로필 생성이 지연 중인 경우
-            onProfileUpdate(null, user);
+            // Auth 계정은 있으나 회원 문서가 없음 (가입 직후 생성 지연 또는 문서 누락)
+            handlers.onProfileUpdate(null, user);
           }
         },
         (error) => {
-          onError(`프로필 정보 조회 오류: ${error.message}`);
+          handlers.onProfileError(`프로필 정보 조회 오류: ${error.message}`, user);
         }
       );
     },
     (error) => {
-      onError(`인증 상태 감지 오류: ${error.message}`);
+      handlers.onProfileError(`인증 상태 감지 오류: ${error.message}`, null);
     }
   );
 

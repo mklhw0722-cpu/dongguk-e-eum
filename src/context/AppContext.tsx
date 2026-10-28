@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from "react";
 import {
   User,
   UserRole,
@@ -62,6 +62,16 @@ import {
 } from "@/lib/firebase";
 import { User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+import {
+  AccessGateState,
+  ProfileFetchStatus,
+  resolveAccessGate,
+  canAccessInternal,
+  isGateLoading,
+} from "@/lib/accessGate";
+
+/** 가입 직후 회원 문서 생성이 늦어지는 경우를 기다려 주는 시간 (이 시간이 지나도 없으면 '문서 누락'으로 차단) */
+const PROFILE_MISSING_GRACE_MS = 8000;
 
 interface AppContextValue extends PlatformDataState {
   currentUser: User;
@@ -81,9 +91,10 @@ interface AppContextValue extends PlatformDataState {
   // Firebase Authentication 상태 및 접근 제어
   rawFirebaseUser: FirebaseUser | null;
   authUserProfile: UserProfileDoc | null;
-  isAuthLoading: boolean;
+  isAuthLoading: boolean; // 로그인 확인 또는 회원 문서 조회 중이면 true
   isRealAuthActive: boolean;
-  isAccessAllowed: boolean; // 승인된 회원(approved) 또는 데모 모드일 때만 true
+  isAccessAllowed: boolean; // 로그인 + 회원 문서 approved 일 때만 true
+  accessGate: AccessGateState; // 비로그인 / 승인대기 / 승인완료 등 현재 사용자 상태
 
   // 실제 인증 액션
   handleSignUp: (params: {
@@ -232,7 +243,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Firebase Authentication 상태
   const [rawFirebaseUser, setRawFirebaseUser] = useState<FirebaseUser | null>(null);
   const [authUserProfile, setAuthUserProfile] = useState<UserProfileDoc | null>(null);
-  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [authResolved, setAuthResolved] = useState(false);
+  const [profileStatus, setProfileStatus] = useState<ProfileFetchStatus>("idle");
+  const profileMissingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [realUsersForAdmin, setRealUsersForAdmin] = useState<UserProfileDoc[]>([]);
 
   useEffect(() => {
@@ -248,35 +261,68 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!hydrated) return;
 
+    const clearMissingTimer = () => {
+      if (profileMissingTimerRef.current) {
+        clearTimeout(profileMissingTimerRef.current);
+        profileMissingTimerRef.current = null;
+      }
+    };
+
     const activeConfig = getActiveFirebaseConfig();
-    if (!activeConfig) {
-      setIsFirestoreConnected(false);
-      setFirebaseProjectId(null);
-      setIsAuthLoading(false);
-      return;
-    }
-
     setFirebaseProjectId(activeConfig.projectId);
-    setIsAuthLoading(true);
+    setAuthResolved(false);
+    setProfileStatus("idle");
 
-    const unsubAuth = subscribeToAuthStatus(
-      (profile, rawUser) => {
+    const unsubAuth = subscribeToAuthStatus({
+      // 1단계: 로그인 여부 확인 (회원 문서 조회보다 항상 먼저)
+      onAuthUserChange: (rawUser) => {
+        clearMissingTimer();
         setRawFirebaseUser(rawUser);
-        setAuthUserProfile(profile);
-        setIsAuthLoading(false);
+        setAuthUserProfile(null);
+        setProfileStatus(rawUser ? "loading" : "idle");
+        setAuthResolved(true);
         setIsFirestoreConnected(true);
-
+      },
+      // 2단계: 로그인한 사용자의 회원 문서 확인
+      onProfileUpdate: (profile) => {
         if (profile) {
+          clearMissingTimer();
+          setAuthUserProfile(profile);
+          setProfileStatus("loaded");
           setCurrentRole(profile.role);
+          return;
+        }
+        // 회원 문서가 없음: 가입 직후 생성 지연일 수 있으므로 잠시 로딩을 유지한 뒤 '문서 누락'으로 차단
+        setAuthUserProfile(null);
+        setProfileStatus("loading");
+        if (!profileMissingTimerRef.current) {
+          profileMissingTimerRef.current = setTimeout(() => {
+            profileMissingTimerRef.current = null;
+            setProfileStatus((prev) => (prev === "loading" ? "missing" : prev));
+          }, PROFILE_MISSING_GRACE_MS);
         }
       },
-      (err) => {
+      onProfileError: (err, rawUser) => {
+        clearMissingTimer();
         setFirestoreError(err);
-        setIsAuthLoading(false);
-      }
-    );
+        setAuthUserProfile(null);
+        setRawFirebaseUser(rawUser);
+        // 조회 실패 시 절대 자동 승인하지 않고 오류 상태로 차단
+        setProfileStatus(rawUser ? "error" : "idle");
+        setAuthResolved(true);
+      },
+    });
+
+    if (!unsubAuth) {
+      // Firebase 초기화 실패: 비로그인 상태로 간주 (내부 콘텐츠 차단)
+      setFirestoreError("Firebase 초기화에 실패했습니다. 잠시 후 새로고침해 주세요.");
+      setRawFirebaseUser(null);
+      setAuthUserProfile(null);
+      setAuthResolved(true);
+    }
 
     return () => {
+      clearMissingTimer();
       if (unsubAuth) unsubAuth();
     };
   }, [hydrated, firebaseVersionTick]);
@@ -466,10 +512,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // 실제 Firebase Auth 로그인 여부
   const isRealAuthActive = Boolean(rawFirebaseUser);
 
-  // 폐쇄형 학과 플랫폼 접근 제어: 승인 완료(approved)된 정회원만 true, 비로그인/미승인/거절 상태는 기본적으로 모두 차단(false)
-  const isAccessAllowed = Boolean(
-    rawFirebaseUser && authUserProfile && authUserProfile.approvalStatus === "approved"
-  );
+  // 폐쇄형 학과 플랫폼 접근 제어: 로그인 → 회원 문서 → 승인 상태 순서로 판정
+  const accessGate: AccessGateState = resolveAccessGate({
+    authResolved: hydrated && authResolved,
+    firebaseUser: rawFirebaseUser,
+    profileStatus,
+    profile: authUserProfile,
+  });
+  const isAuthLoading = isGateLoading(accessGate);
+  // 승인 완료(approved)된 정회원만 true, 비로그인/미승인/거절/정지/문서누락 상태는 모두 차단(false)
+  const isAccessAllowed = canAccessInternal(accessGate);
 
   const currentUser: User = isRealAuthActive && authUserProfile
     ? {
@@ -482,7 +534,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         avatarInitials:
           authUserProfile.avatarInitials ||
           (authUserProfile.name ? authUserProfile.name.slice(0, 2) : authUserProfile.role === "admin" ? "이혜" : "학"),
-        approvalStatus: authUserProfile.approvalStatus || "approved",
+        approvalStatus: authUserProfile.approvalStatus || "pending",
         joinedAt: authUserProfile.joinedAt || new Date().toISOString().slice(0, 10),
       }
     : state.users.find((u) => u.id === ROLE_DEFAULT_USER_ID[currentRole]) || state.users[0];
@@ -560,7 +612,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     role: UserRole;
     verificationNote?: string;
   }) => {
-    await registerWithEmailAndPassword(params);
+    const createdProfile = await registerWithEmailAndPassword(params);
+    setAuthUserProfile(createdProfile);
+    setProfileStatus("loaded");
   };
 
   const handleLogin = async (email: string, password: string) => {
@@ -571,6 +625,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await logoutUser();
     setRawFirebaseUser(null);
     setAuthUserProfile(null);
+    setProfileStatus("idle");
   };
 
   const handleResetPassword = async (email: string) => {
@@ -1348,6 +1403,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isAuthLoading,
         isRealAuthActive,
         isAccessAllowed,
+    accessGate,
         handleSignUp,
         handleLogin,
         handleLogout,

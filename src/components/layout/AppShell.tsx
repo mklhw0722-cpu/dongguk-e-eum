@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { AccessGateScreen } from "@/components/layout/AccessGateScreen";
+import { canAccessAdmin, classifyRoute, resolveRouteView } from "@/lib/accessGate";
 import { useApp } from "@/context/AppContext";
 import { UserRole } from "@/types";
 import { ROLE_LABELS } from "@/components/common/Cards";
@@ -57,8 +59,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     authUserProfile,
     isAuthLoading,
     isAccessAllowed,
+    accessGate,
+    firestoreError,
     handleLogout,
   } = useApp();
+  const router = useRouter();
 
   const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState(false);
 
@@ -73,18 +78,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   ).length;
 
   // 관리자 권한 검증: 승인 완료(approved)이고 역할이 admin인 경우만 관리자 인정
-  const isApprovedAdminUser = Boolean(
-    rawFirebaseUser &&
-    authUserProfile &&
-    authUserProfile.approvalStatus === "approved" &&
-    authUserProfile.role === "admin"
-  );
+  const isApprovedAdminUser = Boolean(rawFirebaseUser) && canAccessAdmin(accessGate, authUserProfile);
 
-  // 일반 회원에게는 관리자 센터 메뉴 자체를 노출하지 않음
+  // 메뉴 노출: 비로그인은 로그인·가입 메뉴만, 미승인은 메뉴 없음, 승인 회원은 내부 메뉴(관리자 메뉴는 관리자만)
   const visibleNavItems = NAV_ITEMS.filter((item) => {
-    if (item.href === "/admin") {
-      return isApprovedAdminUser;
-    }
+    if (accessGate === "signed_out") return item.href === "/auth";
+    if (!isAccessAllowed) return false;
+    if (item.href === "/auth") return false;
+    if (item.href === "/admin") return isApprovedAdminUser;
     return true;
   });
 
@@ -93,16 +94,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     .replace(/^\/dongguk-e-eum/, "")
     .replace(/\/+$/, "") || "/";
 
-  // 가입 및 로그인 화면 (/auth) 여부 판정 - 어떤 URL 형식에서도 무조건 100% 접근 보장!
-  const isAuthPage =
-    normalizedPath === "/auth" ||
-    normalizedPath.startsWith("/auth/") ||
-    (Boolean(pathname) && (pathname.includes("/auth") || pathname.endsWith("/auth/")));
+  // 현재 주소 종류(로그인 화면 / 관리자 화면 / 내부 화면)와 사용자 상태로 표시할 화면 결정
+  const routeKind = classifyRoute(pathname);
+  const routeView = resolveRouteView(accessGate, routeKind, isApprovedAdminUser);
 
-  const isAdminPage =
-    normalizedPath === "/admin" ||
-    normalizedPath.startsWith("/admin/") ||
-    (Boolean(pathname) && (pathname.includes("/admin") || pathname.endsWith("/admin/")));
+  // 비로그인 사용자가 내부 주소로 직접 들어오면 로그인 화면으로, 승인 회원이 로그인 화면에 오면 홈으로 이동
+  useEffect(() => {
+    if (routeView === "redirect_auth") {
+      router.replace("/auth");
+    } else if (routeView === "redirect_home") {
+      router.replace("/");
+    }
+  }, [routeView, router]);
 
   const isItemActive = (href: string) => {
     const itemNorm = href.replace(/\/+$/, "") || "/";
@@ -163,7 +166,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     ? "가입반려"
                     : authUserProfile.approvalStatus === "supplement_requested"
                     ? "보완요청"
-                    : "승인대기중"}
+                    : authUserProfile.approvalStatus === "suspended"
+                    ? "이용정지"
+                    : authUserProfile.approvalStatus === "pending"
+                    ? "승인대기중"
+                    : "상태확인필요"}
                 </span>
                 <button
                   type="button"
@@ -173,6 +180,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   <LogOut className="w-3 h-3" /> 로그아웃
                 </button>
               </span>
+            ) : rawFirebaseUser ? (
+              <button
+                type="button"
+                onClick={() => handleLogout()}
+                className="text-slate-300 hover:text-white underline text-[11px] inline-flex items-center gap-1 cursor-pointer"
+              >
+                <LogOut className="w-3 h-3" /> {rawFirebaseUser.email} 로그아웃
+              </button>
             ) : (
               <Link
                 href="/auth"
@@ -194,14 +209,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               {isDarkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
             </button>
 
-            <button
-              type="button"
-              onClick={resetDemoData}
-              title="데모 데이터 초기화"
-              className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 inline-flex items-center gap-1 text-[11px] transition"
-            >
-              <RotateCcw className="w-3 h-3" /> 초기화
-            </button>
+            {isAccessAllowed && (
+              <button
+                type="button"
+                onClick={resetDemoData}
+                title="데모 데이터 초기화"
+                className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 inline-flex items-center gap-1 text-[11px] transition"
+              >
+                <RotateCcw className="w-3 h-3" /> 초기화
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -232,7 +249,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             </Link>
 
-            {/* 현재 접속 프로필 카드 */}
+            {/* 현재 접속 프로필 카드 (승인 회원만 표시, 그 외에는 데모 사용자 정보가 보이지 않도록 안내만 표시) */}
+            {!isAccessAllowed ? (
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 space-y-1">
+                <p className="font-bold flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-orange-600" />
+                  {accessGate === "signed_out"
+                    ? "로그인이 필요합니다"
+                    : isAuthLoading
+                    ? "계정 확인 중..."
+                    : "승인 완료 후 이용 가능"}
+                </p>
+                {rawFirebaseUser && (
+                  <p className="truncate text-[11px] text-slate-500">{rawFirebaseUser.email}</p>
+                )}
+              </div>
+            ) : (
             <div className="p-3.5 rounded-2xl bg-orange-50/70 dark:bg-slate-800/80 border border-orange-200/70 dark:border-slate-700">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-orange-600 text-white font-bold text-sm flex items-center justify-center shrink-0">
@@ -270,6 +302,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
               )}
             </div>
+            )}
 
             {/* 내비게이션 메뉴 */}
             <nav className="space-y-1">
@@ -351,182 +384,57 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
 
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setIsFirebaseModalOpen(true)}
-                className="px-2.5 py-1 rounded-lg bg-orange-600 text-white text-xs font-bold"
-              >
-                DB연결
-              </button>
-              <Link
-                href="/auth"
-                className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold"
-              >
-                로그인
-              </Link>
+              {isApprovedAdminUser && (
+                <button
+                  type="button"
+                  onClick={() => setIsFirebaseModalOpen(true)}
+                  className="px-2.5 py-1 rounded-lg bg-orange-600 text-white text-xs font-bold"
+                >
+                  DB연결
+                </button>
+              )}
+              {!rawFirebaseUser ? (
+                <Link
+                  href="/auth"
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold"
+                >
+                  로그인
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleLogout()}
+                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold"
+                >
+                  로그아웃
+                </button>
+              )}
             </div>
           </header>
 
           <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-5xl w-full mx-auto">
-            {isAuthPage ? (
-              // 1. 인증/가입 화면은 항상 접근 허용
+            {routeView === "content" || routeView === "show_auth_page" ? (
+              // 승인 완료 회원의 내부 화면, 또는 비로그인 사용자의 로그인·회원가입 화면
               children
-            ) : isAuthLoading ? (
-              // 2. 인증 및 승인 상태 확인 중에는 로딩 화면 표시 (내부 콘텐츠 노출 원천 차단)
+            ) : routeView === "loading" || routeView === "redirect_auth" || routeView === "redirect_home" ? (
+              // 로그인·회원 문서 확인 중이거나 다른 화면으로 이동 중: 내부 콘텐츠를 절대 노출하지 않음
               <div className="max-w-md mx-auto my-20 p-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-4 shadow-sm">
                 <div className="w-14 h-14 rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-orange-600 flex items-center justify-center mx-auto">
                   <Loader2 className="w-7 h-7 animate-spin" />
                 </div>
                 <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                  동국e음 보안 인증 확인 중...
+                  {routeView === "redirect_auth"
+                    ? "로그인 화면으로 이동 중..."
+                    : routeView === "redirect_home"
+                    ? "홈 화면으로 이동 중..."
+                    : "동국e음 보안 인증 확인 중..."}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  폐쇄형 학과 플랫폼 보안 정책에 따라 소속 승인 여부와 권한을 안전하게 검증하고 있습니다.
+                  폐쇄형 학과 플랫폼 보안 정책에 따라 로그인 여부와 소속 승인 상태를 순서대로 확인하고 있습니다.
                 </p>
               </div>
-            ) : !rawFirebaseUser ? (
-              // 3. 비로그인 사용자: 내부 화면 전면 차단 및 로그인 유도
-              <div className="max-w-xl mx-auto my-14 bg-white dark:bg-slate-900 rounded-3xl border border-orange-200 dark:border-orange-900/60 p-8 text-center space-y-4 shadow-md">
-                <div className="w-16 h-16 rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-orange-600 flex items-center justify-center mx-auto">
-                  <Lock className="w-8 h-8" />
-                </div>
-                <h2 className="text-xl font-black text-slate-900 dark:text-white">
-                  동국대학교 교육학과 구성원 전용 서비스
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md mx-auto">
-                  동국e음은 교육학과 재학생, 졸업생, 교수진을 위한 폐쇄형 네트워크 플랫폼입니다.<br />
-                  외부인의 무단 열람을 방지하기 위해 <strong>로그인 및 관리자 승인 완료 후</strong> 내부 콘텐츠가 열립니다.
-                </p>
-                <div className="p-4 rounded-2xl bg-orange-50 dark:bg-orange-950/30 text-left text-xs text-orange-900 dark:text-orange-200 border border-orange-200 dark:border-orange-800 space-y-1">
-                  <p className="font-bold flex items-center gap-1.5">
-                    <ShieldAlert className="w-4 h-4 text-orange-600" />
-                    접근 제한 안내
-                  </p>
-                  <p className="text-orange-800 dark:text-orange-300">
-                    공유방, 선후배 멘토링, 학과 공지, 대화창 및 졸업요건 정보는 승인된 정회원에게만 제공됩니다.
-                  </p>
-                </div>
-                <div className="pt-2 flex flex-wrap justify-center gap-2.5">
-                  <Link
-                    href="/auth"
-                    className="px-6 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs sm:text-sm font-bold transition shadow-xs inline-flex items-center gap-1.5"
-                  >
-                    로그인 및 회원가입 신청하기 →
-                  </Link>
-                </div>
-              </div>
-            ) : authUserProfile?.approvalStatus === "rejected" ? (
-              // 4. 가입 승인 거절된 사용자 전용 안내
-              <div className="max-w-xl mx-auto my-14 bg-white dark:bg-slate-900 rounded-3xl border border-rose-300 dark:border-rose-900/60 p-8 text-center space-y-4 shadow-md">
-                <div className="w-16 h-16 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto">
-                  <XCircle className="w-8 h-8" />
-                </div>
-                <h2 className="text-xl font-black text-slate-900 dark:text-white">
-                  가입 승인이 거절되었습니다
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md mx-auto">
-                  제출하신 정보의 교육학과 소속 여부가 확인되지 않아 관리자에 의해 가입 승인이 반려되었습니다.
-                </p>
-                {authUserProfile?.adminComment && (
-                  <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/30 text-left text-xs border border-rose-200 dark:border-rose-900/60 space-y-1">
-                    <p className="font-bold text-rose-900 dark:text-rose-200">관리자 안내 사유:</p>
-                    <p className="text-rose-800 dark:text-rose-300">{authUserProfile.adminComment}</p>
-                  </div>
-                )}
-                <div className="pt-2 flex flex-wrap justify-center gap-2.5">
-                  <Link
-                    href="/auth"
-                    className="px-5 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold transition"
-                  >
-                    소속 정보 재확인 및 문의하기
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => handleLogout()}
-                    className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold transition cursor-pointer"
-                  >
-                    다른 계정으로 로그인
-                  </button>
-                </div>
-              </div>
-            ) : authUserProfile?.approvalStatus === "supplement_requested" ? (
-              // 5. 소속 정보 보완 요청 안내
-              <div className="max-w-xl mx-auto my-14 bg-white dark:bg-slate-900 rounded-3xl border border-blue-300 dark:border-blue-900/60 p-8 text-center space-y-4 shadow-md">
-                <div className="w-16 h-16 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center mx-auto">
-                  <FileWarning className="w-8 h-8" />
-                </div>
-                <h2 className="text-xl font-black text-slate-900 dark:text-white">
-                  소속 확인 정보 보완이 필요합니다
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md mx-auto">
-                  관리자가 학번 또는 재학/졸업 증빙 메모의 보완을 요청했습니다. 정보를 보완하시면 빠른 승인이 가능합니다.
-                </p>
-                {authUserProfile?.adminComment && (
-                  <div className="p-4 rounded-2xl bg-blue-50 dark:bg-blue-950/30 text-left text-xs border border-blue-200 dark:border-blue-900/60 space-y-1">
-                    <p className="font-bold text-blue-900 dark:text-blue-200">관리자 요청 사항:</p>
-                    <p className="text-blue-800 dark:text-blue-300">{authUserProfile.adminComment}</p>
-                  </div>
-                )}
-                <div className="pt-2 flex flex-wrap justify-center gap-2.5">
-                  <Link
-                    href="/auth"
-                    className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-xs"
-                  >
-                    가입 정보 수정 및 보완하기 →
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => handleLogout()}
-                    className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-bold transition cursor-pointer"
-                  >
-                    로그아웃
-                  </button>
-                </div>
-              </div>
-            ) : authUserProfile?.approvalStatus !== "approved" ? (
-              // 6. 승인 대기 중(pending 또는 프로필 확인 실패) 전용 화면
-              <div className="max-w-xl mx-auto my-14 bg-white dark:bg-slate-900 rounded-3xl border border-amber-300 dark:border-amber-800 p-8 text-center space-y-4 shadow-lg">
-                <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto">
-                  <Clock className="w-8 h-8" />
-                </div>
-                <h2 className="text-xl font-black text-slate-900 dark:text-white">
-                  관리자 가입 승인 대기 중입니다
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md mx-auto">
-                  <strong>{authUserProfile?.name || rawFirebaseUser.email}</strong>님, 계정 가입은 정상 완료되었으나
-                  동국대학교 교육학과 폐쇄형 플랫폼 보안 정책에 따라 학과 관리자의 소속 승인 전까지는 내부 콘텐츠 이용이 제한됩니다.
-                </p>
-                <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-left text-xs space-y-1.5 border border-amber-200 dark:border-amber-900/50">
-                  <p className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
-                    <ShieldAlert className="w-4 h-4" /> 승인 처리 상태 안내
-                  </p>
-                  <p className="text-amber-800 dark:text-amber-300">
-                    - 등록 이메일: <strong>{authUserProfile?.email || rawFirebaseUser.email}</strong><br />
-                    - 신청 신분: <strong>{ROLE_LABELS[authUserProfile?.role || "student"]}</strong> ({authUserProfile?.studentIdOrYear || "학번 미기재"})<br />
-                    - 현재 승인 상태: <strong>승인 대기중 (pending)</strong>
-                  </p>
-                  <p className="text-[11px] text-amber-700 dark:text-amber-400 pt-1 border-t border-amber-200 dark:border-amber-900/60">
-                    ※ 관리자가 승인을 완료하면 새로고침 없이도 즉시 플랫폼의 모든 게시판과 대화창이 실시간으로 열립니다.
-                  </p>
-                </div>
-                <div className="flex flex-wrap justify-center gap-2.5 pt-2">
-                  <Link
-                    href="/auth"
-                    className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition shadow-xs inline-flex items-center gap-1.5"
-                  >
-                    👑 내가 관리자라면? 최초 관리자로 즉시 등록하기
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => handleLogout()}
-                    className="px-4 py-2 rounded-xl border border-slate-300 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition cursor-pointer"
-                  >
-                    로그아웃
-                  </button>
-                </div>
-              </div>
-            ) : isAdminPage && authUserProfile?.role !== "admin" ? (
-              // 7. 일반 승인 회원이 URL로 /admin 직접 접근 시 403 차단
+            ) : routeView === "forbidden" ? (
+              // 일반 승인 회원이 URL로 /admin 직접 접근 시 403 차단
               <div className="max-w-xl mx-auto my-14 bg-white dark:bg-slate-900 rounded-3xl border border-rose-300 dark:border-rose-900/60 p-8 text-center space-y-4 shadow-lg">
                 <div className="w-16 h-16 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto">
                   <ShieldAlert className="w-8 h-8" />
@@ -548,24 +456,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
               </div>
             ) : (
-              // 8. 모든 검증을 통과한 승인 회원에게만 정상 콘텐츠 렌더링
-              children
+              // 로그인했지만 승인되지 않은 모든 상태: 어떤 주소로 들어와도 상태별 안내 화면만 표시
+              <AccessGateScreen
+                state={accessGate}
+                name={authUserProfile?.name || rawFirebaseUser?.email || "회원"}
+                email={authUserProfile?.email || rawFirebaseUser?.email || ""}
+                roleLabel={ROLE_LABELS[authUserProfile?.role || "student"]}
+                studentIdOrYear={authUserProfile?.studentIdOrYear}
+                adminComment={authUserProfile?.adminComment}
+                errorMessage={firestoreError}
+                onLogout={() => handleLogout()}
+              />
             )}
           </main>
         </div>
       </div>
 
       {/* 모바일 하단 내비게이션 바 */}
+      {(isAccessAllowed || accessGate === "signed_out") && (
       <nav
         className={`md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-2 py-1.5 grid gap-1 ${
-          !isAccessAllowed ? "grid-cols-4" : "grid-cols-6"
+          !isAccessAllowed ? "grid-cols-1" : "grid-cols-6"
         }`}
       >
         {(!isAccessAllowed
           ? [
-              { href: "/", shortLabel: "홈", icon: Home },
-              { href: "/notices", shortLabel: "공지", icon: Megaphone },
-              { href: "/rooms", shortLabel: "공유방", icon: Compass },
               { href: "/auth", shortLabel: "로그인/가입", icon: UserCheck },
             ]
           : [
@@ -576,7 +491,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               { href: "/graduation", shortLabel: "졸업요건", icon: CheckSquare },
               isApprovedAdminUser
                 ? { href: "/admin", shortLabel: "관리자", icon: ShieldCheck }
-                : { href: "/auth", shortLabel: "내정보", icon: UserCheck },
+                : { href: "/alumni", shortLabel: "졸업생", icon: Users },
             ]
         ).map((item) => {
           const Icon = item.icon;
@@ -603,6 +518,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           );
         })}
       </nav>
+      )}
 
       {/* Firebase 설정 및 보안규칙 모달 */}
       <FirebaseSetupModal

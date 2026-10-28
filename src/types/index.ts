@@ -3,7 +3,7 @@
 
 export type UserRole = "student" | "alumni" | "professor" | "admin";
 
-export type ApprovalStatus = "pending" | "approved" | "rejected" | "supplement_requested";
+export type ApprovalStatus = "pending" | "approved" | "rejected" | "supplement_requested" | "suspended";
 
 export type CareerTrack =
   | "교직"

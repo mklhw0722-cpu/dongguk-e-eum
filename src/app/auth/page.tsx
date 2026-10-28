@@ -127,7 +127,6 @@ export default function AuthPage() {
         verificationNote: signupNote.trim() || "소속 확인 신청",
       });
       setSignupPassword("");
-      setActiveTab("pending");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("email-already-in-use")) {
@@ -169,13 +168,7 @@ export default function AuthPage() {
           </p>
         </div>
 
-        <Link
-          href="/admin"
-          className="px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 self-start sm:self-auto"
-        >
-          관리자 센터 (회원 승인 관리)
-          <ArrowRight className="w-4 h-4" />
-        </Link>
+
       </div>
 
       <DemoInfoBanner
@@ -224,12 +217,11 @@ export default function AuthPage() {
 
       {/* 단계별 화면 전환 탭 */}
       <div className="flex flex-wrap gap-2 bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800">
+        {/* 이 화면은 비로그인 사용자에게만 보이므로 로그인·회원가입 탭만 노출합니다.
+            (승인 대기·거절 안내는 로그인 후 상태에 맞춰 AppShell 이 자동으로 보여줍니다) */}
         {[
-          { key: "login", label: "1. 실제 로그인 (이메일/비번)" },
+          { key: "login", label: "1. 로그인 (이메일/비번)" },
           { key: "signup", label: "2. 신규 회원가입" },
-          { key: "pending", label: "3. 내 승인 대기 상태 확인" },
-          { key: "bootstrap_admin", label: "4. 최초 관리자 안전 등록" },
-          { key: "rejected_or_supplement", label: "5. 승인 거절·보완 안내" },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -332,13 +324,7 @@ export default function AuthPage() {
             >
               계정이 없으신가요? 신규 회원가입 신청 →
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("bootstrap_admin")}
-              className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline block mx-auto"
-            >
-              최초 시스템 관리자 등록이 필요하신가요?
-            </button>
+
           </div>
         </div>
       )}

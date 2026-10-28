@@ -72,10 +72,8 @@ service cloud.firestore {
         )
         || (
           request.auth.uid == userId
-          && request.resource.data.approvalStatus == resource.data.approvalStatus
-          && request.resource.data.role == resource.data.role
-          && request.resource.data.uid == resource.data.uid
-          && request.resource.data.email == resource.data.email
+          && !request.resource.data.diff(resource.data).affectedKeys()
+                .hasAny(['approvalStatus', 'role', 'uid', 'id', 'email', 'adminComment'])
         )
       );
       allow delete: if isAuthenticated() && (request.auth.uid == userId || isApprovedAdmin());
