@@ -1,0 +1,63 @@
+name: Sync Official Dongguk Notices & Deploy
+
+on:
+  schedule:
+    # 하루 3회 자동 수집 (한국시간 09:00, 14:00, 20:00 = UTC 00:00, 05:00, 11:00)
+    - cron: "0 0,5,11 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch & parse official Dongguk notices
+        run: node scripts/sync-official-notices.mjs
+
+      - name: Commit updated officialNotices.json if changed
+        id: commit_check
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet src/data/officialNotices.json; then
+            git add src/data/officialNotices.json
+            git commit -m "chore(notices): 동국대학교·사범대학·교육학과 공식 공지 자동 동기화"
+            git push origin HEAD:main
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build static site for GitHub Pages
+        if: steps.commit_check.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_PAGES: "true"
+        run: |
+          npm run build
+          touch out/.nojekyll
+          cp out/index.html out/404.html
+
+      - name: Deploy to gh-pages branch
+        if: steps.commit_check.outputs.changed == 'true' || github.event_name == 'workflow_dispatch'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./out
+          publish_branch: gh-pages
+          keep_files: false
