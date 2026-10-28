@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import {
   User,
   UserRole,
@@ -45,6 +45,15 @@ import {
   subscribeToAllUsersForAdmin,
   updateUserApprovalStatusByAdmin,
   claimInitialAdminRole,
+  FirestoreChatRoom,
+  FirestoreChatMessage,
+  subscribeToUserChats,
+  getOrCreateDirectChatInFirestore,
+  createGroupChatInFirestore,
+  sendChatMessageInFirestore,
+  inviteUsersToChatInFirestore,
+  leaveChatInFirestore,
+  searchApprovedUsersInFirestore,
 } from "@/lib/firebase";
 import { User as FirebaseUser } from "firebase/auth";
 
@@ -94,10 +103,15 @@ interface AppContextValue extends PlatformDataState {
   ) => Promise<void>;
 
   // 기능 A. 대화창 액션
-  sendMessage: (conversationId: string, content: string) => void;
+  sendMessage: (conversationId: string, content: string) => Promise<void> | void;
   markConversationRead: (conversationId: string) => void;
-  startOrOpenDirectChat: (targetUserId: string, categoryTag?: string) => string;
-  createGroupConversation: (title: string, memberIds: string[], categoryTag?: string) => string;
+  startOrOpenDirectChat: (targetUserId: string, categoryTag?: string) => Promise<string> | string;
+  createGroupConversation: (title: string, memberIds: string[], categoryTag?: string) => Promise<string> | string;
+  firestoreRooms: FirestoreChatRoom[];
+  approvedMembers: UserProfileDoc[];
+  refreshApprovedMembers: () => Promise<UserProfileDoc[]>;
+  inviteUsersToChat: (chatId: string, users: UserProfileDoc[]) => Promise<void>;
+  leaveChat: (chatId: string) => Promise<void>;
 
   // 기능 B. 공지사항 액션
   createNotice: (payload: {
@@ -322,6 +336,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [hydrated, firebaseVersionTick, rawFirebaseUser, authUserProfile]);
 
+  // Firestore 실시간 대화방 목록 및 승인 회원 상태
+  const [firestoreRooms, setFirestoreRooms] = useState<FirestoreChatRoom[]>([]);
+  const [approvedMembers, setApprovedMembers] = useState<UserProfileDoc[]>([]);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    const activeConfig = getActiveFirebaseConfig();
+    if (!activeConfig) return;
+
+    if (!rawFirebaseUser || !authUserProfile || authUserProfile.approvalStatus !== "approved") {
+      setFirestoreRooms([]);
+      return;
+    }
+
+    const unsubChats = subscribeToUserChats(
+      authUserProfile.id,
+      (rooms) => {
+        setFirestoreRooms(rooms);
+      },
+      (err) => {
+        console.warn("대화방 구독 안내:", err);
+      }
+    );
+
+    searchApprovedUsersInFirestore(authUserProfile.id).then((users) => {
+      setApprovedMembers(users);
+    });
+
+    return () => {
+      if (unsubChats) unsubChats();
+    };
+  }, [hydrated, firebaseVersionTick, rawFirebaseUser, authUserProfile]);
+
+  const refreshApprovedMembers = async () => {
+    if (authUserProfile) {
+      const users = await searchApprovedUsersInFirestore(authUserProfile.id);
+      setApprovedMembers(users);
+      return users;
+    }
+    return [];
+  };
+
   useEffect(() => {
     if (hydrated) {
       PlatformRepository.saveState(state);
@@ -355,6 +411,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         joinedAt: authUserProfile.joinedAt,
       }
     : state.users.find((u) => u.id === ROLE_DEFAULT_USER_ID[currentRole]) || state.users[0];
+
+  // 대화방 목록 계산 (Firestore 연결 시 실제 대화방 동기화, 데모 모드 시 로컬 상태)
+  const conversations: Conversation[] = useMemo(() => {
+    if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
+      return firestoreRooms.map((room) => {
+        let displayTitle = room.title;
+
+        // 1:1 대화방의 경우 상대방 이름과 학번으로 제목 동적 설정
+        if (!room.isGroup) {
+          const partnerUid = room.participants.find((uid) => uid !== authUserProfile.id);
+          if (partnerUid && room.participantDetails?.[partnerUid]) {
+            const partner = room.participantDetails[partnerUid];
+            displayTitle = `${partner.name} (${partner.studentIdOrYear})`;
+          }
+        }
+
+        return {
+          id: room.id,
+          title: displayTitle,
+          isGroup: room.isGroup,
+          categoryTag: room.categoryTag || (room.isGroup ? "단체 대화방" : "1:1 대화"),
+          memberIds: room.participants,
+          members: room.participants.map((uid) => ({
+            conversationId: room.id,
+            userId: uid,
+            joinedAt: room.createdAt,
+            unreadCount: 0,
+          })),
+          lastMessageText: room.lastMessageText || "",
+          lastMessageAt: room.lastMessageAt || "",
+          createdBy: room.createdBy,
+        };
+      });
+    }
+    return state.conversations;
+  }, [isRealAuthActive, authUserProfile, firestoreRooms, state.conversations]);
 
   const switchRole = (role: UserRole) => {
     setCurrentRole(role);
@@ -431,9 +523,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // --- 대화창 액션 ---
-  const sendMessage = (conversationId: string, content: string) => {
+  const sendMessage = async (conversationId: string, content: string) => {
     const trimmed = content.trim();
     if (!trimmed) return;
+
+    if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
+      try {
+        await sendChatMessageInFirestore(conversationId, currentUser, trimmed);
+      } catch (err: any) {
+        setFirestoreError(err?.message || "메시지 전송 중 오류가 발생했습니다.");
+      }
+      return;
+    }
+
     const nowTime = new Date().toLocaleTimeString("ko-KR", {
       hour: "2-digit",
       minute: "2-digit",
@@ -481,10 +583,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
-  const startOrOpenDirectChat = (
+  const startOrOpenDirectChat = async (
     targetUserId: string,
     categoryTag = "1:1 대화"
-  ): string => {
+  ): Promise<string> => {
+    if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
+      const targetUser =
+        approvedMembers.find((u) => u.id === targetUserId) ||
+        realUsersForAdmin.find((u) => u.id === targetUserId);
+
+      if (targetUser) {
+        return await getOrCreateDirectChatInFirestore(
+          currentUser,
+          targetUser,
+          categoryTag
+        );
+      }
+    }
+
     const existing = state.conversations.find(
       (c) =>
         !c.isGroup &&
@@ -548,11 +664,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return newConvId;
   };
 
-  const createGroupConversation = (
+  const createGroupConversation = async (
     title: string,
     memberIds: string[],
     categoryTag = "단체 대화방"
-  ): string => {
+  ): Promise<string> => {
+    if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
+      const invitedUsers = approvedMembers.filter((u) => memberIds.includes(u.id));
+      return await createGroupChatInFirestore(
+        currentUser,
+        title,
+        invitedUsers,
+        categoryTag
+      );
+    }
+
     const uniqueMembers = Array.from(new Set([currentUser.id, ...memberIds]));
     const newConvId = `conv-grp-${Date.now()}`;
     const nowDate = new Date().toISOString().slice(0, 10);
@@ -594,6 +720,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
 
     return newConvId;
+  };
+
+  const inviteUsersToChat = async (chatId: string, users: UserProfileDoc[]) => {
+    if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
+      await inviteUsersToChatInFirestore(chatId, currentUser, users);
+    }
+  };
+
+  const leaveChat = async (chatId: string) => {
+    if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
+      await leaveChatInFirestore(chatId, currentUser);
+    }
   };
 
   // --- 공지사항 액션 ---
@@ -1062,6 +1200,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider
       value={{
         ...state,
+        conversations,
+        firestoreRooms,
+        approvedMembers,
+        refreshApprovedMembers,
+        inviteUsersToChat,
+        leaveChat,
         currentUser,
         currentRole,
         isDarkMode,

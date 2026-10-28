@@ -38,7 +38,11 @@ service cloud.firestore {
 
     // 1. 회원 프로필 및 가입 신청
     match /users/{userId} {
-      allow read: if isAuthenticated() && (request.auth.uid == userId || isApprovedAdmin());
+      allow read: if isAuthenticated() && (
+        request.auth.uid == userId
+        || isApprovedUser()
+        || isApprovedAdmin()
+      );
       allow create: if isAuthenticated()
                     && request.auth.uid == userId
                     && (

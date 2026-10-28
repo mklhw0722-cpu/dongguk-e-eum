@@ -13,6 +13,11 @@ import {
   query,
   where,
   writeBatch,
+  orderBy,
+  limit,
+  arrayUnion,
+  arrayRemove,
+  serverTimestamp,
 } from "firebase/firestore";
 import {
   getAuth,
@@ -46,6 +51,7 @@ const CONFIG_STORAGE_KEY = "dongguk_e_eum_firebase_config_v1";
 const POSTS_COLLECTION = "communityPosts";
 const USERS_COLLECTION = "users";
 const SYSTEM_COLLECTION = "system";
+const CHATS_COLLECTION = "chats";
 
 /**
  * 환경변수 또는 브라우저에 저장된 Firebase 설정을 반환합니다.
@@ -526,4 +532,434 @@ export async function incrementLikeInFirestore(
   if (!db) return;
   const postRef = doc(db, POSTS_COLLECTION, postId);
   await updateDoc(postRef, { likes: newLikesCount });
+}
+
+// ==========================================
+// 4. 실시간 채팅(1:1 & 단체) Firestore 통신 로직
+// ==========================================
+
+export interface FirestoreChatParticipantInfo {
+  uid: string;
+  name: string;
+  role: UserRole;
+  studentIdOrYear: string;
+  avatarInitials: string;
+}
+
+export interface FirestoreChatRoom {
+  id: string;
+  title: string;
+  isGroup: boolean;
+  categoryTag?: string;
+  participants: string[];
+  participantDetails?: Record<string, FirestoreChatParticipantInfo>;
+  lastMessageText: string;
+  lastMessageAt: string;
+  lastSenderId?: string;
+  createdBy: string;
+  createdAt: string;
+}
+
+export interface FirestoreChatMessage {
+  id: string;
+  chatId: string;
+  senderId: string;
+  senderName: string;
+  senderRole: UserRole;
+  content: string;
+  createdAt: string;
+  timestamp?: any;
+  isSystemMessage?: boolean;
+}
+
+/**
+ * 대화 상대 검색용: 관리자 승인을 받은 정회원 목록을 Firestore에서 조회합니다.
+ */
+export async function searchApprovedUsersInFirestore(
+  excludeUid?: string
+): Promise<UserProfileDoc[]> {
+  const { db } = getFirestoreInstance();
+  if (!db) return [];
+
+  try {
+    const q = query(
+      collection(db, USERS_COLLECTION),
+      where("approvalStatus", "==", "approved")
+    );
+    const snap = await getDocs(q);
+    const list: UserProfileDoc[] = [];
+    snap.forEach((d) => {
+      if (!excludeUid || d.id !== excludeUid) {
+        list.push({ id: d.id, ...(d.data() as any) });
+      }
+    });
+    list.sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
+    return list;
+  } catch (err) {
+    console.warn("승인 회원 검색 오류:", err);
+    return [];
+  }
+}
+
+/**
+ * 로그인한 사용자가 참여 중인 대화방 목록을 실시간 구독합니다.
+ */
+export function subscribeToUserChats(
+  currentUid: string,
+  onUpdate: (chats: FirestoreChatRoom[]) => void,
+  onError: (err: string) => void
+): () => void {
+  const { db } = getFirestoreInstance();
+  if (!db) {
+    return () => {};
+  }
+
+  const q = query(
+    collection(db, CHATS_COLLECTION),
+    where("participants", "array-contains", currentUid)
+  );
+
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const list: FirestoreChatRoom[] = [];
+      snapshot.forEach((d) => {
+        list.push({ id: d.id, ...(d.data() as any) });
+      });
+
+      list.sort((a, b) => {
+        const timeA = a.lastMessageAt || a.createdAt || "";
+        const timeB = b.lastMessageAt || b.createdAt || "";
+        return timeB.localeCompare(timeA);
+      });
+
+      onUpdate(list);
+    },
+    (err) => {
+      onError(`대화방 목록 동기화 오류: ${err.message}`);
+    }
+  );
+
+  return unsubscribe;
+}
+
+/**
+ * 특정 대화방의 메시지 내역을 실시간 구독합니다. (최근 50개 제한으로 Firestore 비용 절약)
+ */
+export function subscribeToChatMessages(
+  chatId: string,
+  limitCount = 50,
+  onUpdate: (messages: FirestoreChatMessage[]) => void,
+  onError: (err: string) => void
+): () => void {
+  const { db } = getFirestoreInstance();
+  if (!db || !chatId) {
+    return () => {};
+  }
+
+  const msgsRef = collection(db, CHATS_COLLECTION, chatId, "messages");
+  const q = query(msgsRef, orderBy("timestamp", "desc"), limit(limitCount));
+
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const msgs: FirestoreChatMessage[] = [];
+      snapshot.forEach((d) => {
+        msgs.push({ id: d.id, ...(d.data() as any) });
+      });
+
+      // 오래된 메시지부터 최신 메시지 순서로 정렬
+      msgs.sort((a, b) => {
+        const tA = a.timestamp?.toMillis ? a.timestamp.toMillis() : 0;
+        const tB = b.timestamp?.toMillis ? b.timestamp.toMillis() : 0;
+        if (tA && tB && tA !== tB) return tA - tB;
+        return (
+          (a.createdAt || "").localeCompare(b.createdAt || "") ||
+          a.id.localeCompare(b.id)
+        );
+      });
+
+      onUpdate(msgs);
+    },
+    (err) => {
+      onError(`메시지 동기화 오류: ${err.message}`);
+    }
+  );
+
+  return unsubscribe;
+}
+
+/**
+ * 1:1 대화방을 조회하거나 없으면 새로 생성합니다.
+ * 두 사용자의 UID를 조합한 고유 ID(direct_UID1_UID2)를 부여하여 중복 생성을 방지합니다.
+ */
+export async function getOrCreateDirectChatInFirestore(
+  currentUser: PlatformUser,
+  targetUser: UserProfileDoc,
+  categoryTag?: string
+): Promise<string> {
+  const { db } = getFirestoreInstance();
+  if (!db) throw new Error("Firestore 데이터베이스에 연결되어 있지 않습니다.");
+
+  const [uid1, uid2] = [currentUser.id, targetUser.id].sort();
+  const chatId = `direct_${uid1}_${uid2}`;
+  const chatDocRef = doc(db, CHATS_COLLECTION, chatId);
+
+  const snap = await getDoc(chatDocRef);
+  if (snap.exists()) {
+    return chatId;
+  }
+
+  const nowTime = new Date().toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const nowDate = new Date().toISOString().slice(0, 10);
+
+  const newChat: FirestoreChatRoom = {
+    id: chatId,
+    title: `${targetUser.name} (${targetUser.studentIdOrYear})`,
+    isGroup: false,
+    categoryTag:
+      categoryTag ||
+      (currentUser.role === "professor" ? "교수-학생 면담" : "1:1 대화"),
+    participants: [currentUser.id, targetUser.id],
+    participantDetails: {
+      [currentUser.id]: {
+        uid: currentUser.id,
+        name: currentUser.name,
+        role: currentUser.role,
+        studentIdOrYear: currentUser.studentIdOrYear,
+        avatarInitials: currentUser.avatarInitials,
+      },
+      [targetUser.id]: {
+        uid: targetUser.id,
+        name: targetUser.name,
+        role: targetUser.role,
+        studentIdOrYear: targetUser.studentIdOrYear,
+        avatarInitials: targetUser.avatarInitials,
+      },
+    },
+    lastMessageText: "대화가 시작되었습니다. 첫 인사를 건네보세요!",
+    lastMessageAt: nowTime,
+    lastSenderId: currentUser.id,
+    createdBy: currentUser.id,
+    createdAt: nowDate,
+  };
+
+  await setDoc(chatDocRef, newChat);
+
+  // 초기 시스템 안내 메시지 생성
+  const initMsgRef = doc(collection(db, CHATS_COLLECTION, chatId, "messages"));
+  await setDoc(initMsgRef, {
+    id: initMsgRef.id,
+    chatId,
+    senderId: currentUser.id,
+    senderName: currentUser.name,
+    senderRole: currentUser.role,
+    content: `${currentUser.name}님이 ${targetUser.name}님과의 대화를 시작했습니다.`,
+    createdAt: nowTime,
+    timestamp: serverTimestamp(),
+    isSystemMessage: true,
+  });
+
+  return chatId;
+}
+
+/**
+ * 여러 명을 초대하여 새로운 단체 대화방을 생성합니다.
+ */
+export async function createGroupChatInFirestore(
+  currentUser: PlatformUser,
+  title: string,
+  invitedUsers: UserProfileDoc[],
+  categoryTag = "단체 대화방"
+): Promise<string> {
+  const { db } = getFirestoreInstance();
+  if (!db) throw new Error("Firestore 데이터베이스에 연결되어 있지 않습니다.");
+
+  const chatId = `group_${Date.now()}_${Math.random()
+    .toString(36)
+    .substring(2, 7)}`;
+  const chatDocRef = doc(db, CHATS_COLLECTION, chatId);
+
+  const allUsers = [
+    {
+      uid: currentUser.id,
+      name: currentUser.name,
+      role: currentUser.role,
+      studentIdOrYear: currentUser.studentIdOrYear,
+      avatarInitials: currentUser.avatarInitials,
+    },
+    ...invitedUsers.map((u) => ({
+      uid: u.id,
+      name: u.name,
+      role: u.role,
+      studentIdOrYear: u.studentIdOrYear,
+      avatarInitials: u.avatarInitials,
+    })),
+  ];
+
+  const participants = Array.from(new Set(allUsers.map((u) => u.uid)));
+  const participantDetails: Record<string, FirestoreChatParticipantInfo> = {};
+  allUsers.forEach((u) => {
+    participantDetails[u.uid] = u;
+  });
+
+  const nowTime = new Date().toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const nowDate = new Date().toISOString().slice(0, 10);
+
+  const newChat: FirestoreChatRoom = {
+    id: chatId,
+    title: title.trim() || "새 단체 대화방",
+    isGroup: true,
+    categoryTag,
+    participants,
+    participantDetails,
+    lastMessageText: `${currentUser.name}님이 방을 개설했습니다.`,
+    lastMessageAt: nowTime,
+    lastSenderId: currentUser.id,
+    createdBy: currentUser.id,
+    createdAt: nowDate,
+  };
+
+  await setDoc(chatDocRef, newChat);
+
+  const initMsgRef = doc(collection(db, CHATS_COLLECTION, chatId, "messages"));
+  await setDoc(initMsgRef, {
+    id: initMsgRef.id,
+    chatId,
+    senderId: currentUser.id,
+    senderName: currentUser.name,
+    senderRole: currentUser.role,
+    content: `${currentUser.name}님이 '${newChat.title}' 대화방을 만들었습니다.`,
+    createdAt: nowTime,
+    timestamp: serverTimestamp(),
+    isSystemMessage: true,
+  });
+
+  return chatId;
+}
+
+/**
+ * 대화방에 새 메시지를 전송하고 방의 마지막 메시지 정보를 갱신합니다.
+ */
+export async function sendChatMessageInFirestore(
+  chatId: string,
+  currentUser: PlatformUser,
+  content: string
+): Promise<void> {
+  const { db } = getFirestoreInstance();
+  if (!db) throw new Error("Firestore 데이터베이스에 연결되어 있지 않습니다.");
+
+  const trimmed = content.trim();
+  if (!trimmed) return;
+
+  const nowTime = new Date().toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const msgRef = doc(collection(db, CHATS_COLLECTION, chatId, "messages"));
+  await setDoc(msgRef, {
+    id: msgRef.id,
+    chatId,
+    senderId: currentUser.id,
+    senderName: currentUser.name,
+    senderRole: currentUser.role,
+    content: trimmed,
+    createdAt: nowTime,
+    timestamp: serverTimestamp(),
+    isSystemMessage: false,
+  });
+
+  await updateDoc(doc(db, CHATS_COLLECTION, chatId), {
+    lastMessageText: trimmed,
+    lastMessageAt: nowTime,
+    lastSenderId: currentUser.id,
+  });
+}
+
+/**
+ * 기존 대화방에 새로운 사용자를 초대합니다.
+ */
+export async function inviteUsersToChatInFirestore(
+  chatId: string,
+  currentUser: PlatformUser,
+  newUsers: UserProfileDoc[]
+): Promise<void> {
+  const { db } = getFirestoreInstance();
+  if (!db) return;
+
+  const newUids = newUsers.map((u) => u.id);
+  if (newUids.length === 0) return;
+
+  const detailsUpdate: Record<string, any> = {};
+  newUsers.forEach((u) => {
+    detailsUpdate[`participantDetails.${u.id}`] = {
+      uid: u.id,
+      name: u.name,
+      role: u.role,
+      studentIdOrYear: u.studentIdOrYear,
+      avatarInitials: u.avatarInitials,
+    };
+  });
+
+  await updateDoc(doc(db, CHATS_COLLECTION, chatId), {
+    participants: arrayUnion(...newUids),
+    ...detailsUpdate,
+  });
+
+  const nowTime = new Date().toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const names = newUsers.map((u) => u.name).join(", ");
+  const sysMsgRef = doc(collection(db, CHATS_COLLECTION, chatId, "messages"));
+  await setDoc(sysMsgRef, {
+    id: sysMsgRef.id,
+    chatId,
+    senderId: currentUser.id,
+    senderName: currentUser.name,
+    senderRole: currentUser.role,
+    content: `${currentUser.name}님이 ${names}님을 초대했습니다.`,
+    createdAt: nowTime,
+    timestamp: serverTimestamp(),
+    isSystemMessage: true,
+  });
+}
+
+/**
+ * 사용자가 대화방을 나갑니다.
+ */
+export async function leaveChatInFirestore(
+  chatId: string,
+  currentUser: PlatformUser
+): Promise<void> {
+  const { db } = getFirestoreInstance();
+  if (!db) return;
+
+  await updateDoc(doc(db, CHATS_COLLECTION, chatId), {
+    participants: arrayRemove(currentUser.id),
+  });
+
+  const nowTime = new Date().toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const sysMsgRef = doc(collection(db, CHATS_COLLECTION, chatId, "messages"));
+  await setDoc(sysMsgRef, {
+    id: sysMsgRef.id,
+    chatId,
+    senderId: currentUser.id,
+    senderName: currentUser.name,
+    senderRole: currentUser.role,
+    content: `${currentUser.name}님이 대화방을 나갔습니다.`,
+    createdAt: nowTime,
+    timestamp: serverTimestamp(),
+    isSystemMessage: true,
+  });
 }
