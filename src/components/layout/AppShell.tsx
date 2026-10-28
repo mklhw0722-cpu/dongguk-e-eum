@@ -9,6 +9,7 @@ import { useApp } from "@/context/AppContext";
 import { UserRole } from "@/types";
 import { ROLE_LABELS } from "@/components/common/Cards";
 import { FirebaseSetupModal } from "@/components/common/FirebaseSetupModal";
+import { DONGGUK_SYMBOL_DATA_URL } from "@/lib/donggukSymbol";
 import {
   Home,
   Megaphone,
@@ -207,8 +208,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="space-y-6">
             <Link href="/" className="block group">
               <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-orange-600 text-white flex items-center justify-center font-black text-xl shadow-xs group-hover:bg-orange-700 transition">
-                  e
+                <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200/80 p-1 flex items-center justify-center shadow-xs group-hover:border-orange-400 group-hover:shadow-sm transition shrink-0">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={DONGGUK_SYMBOL_DATA_URL}
+                    alt="동국대학교 심볼"
+                    className="w-full h-full object-contain"
+                  />
                 </div>
                 <div>
                   <div className="flex items-center gap-1.5">
@@ -349,8 +355,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {/* 모바일 상단 브랜드 헤더 */}
           <header className="md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-orange-600 text-white flex items-center justify-center font-black text-base">
-                e
+              <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-200/80 p-0.5 flex items-center justify-center shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={DONGGUK_SYMBOL_DATA_URL}
+                  alt="동국대학교 심볼"
+                  className="w-full h-full object-contain"
+                />
               </div>
               <div>
                 <span className="font-black text-base text-slate-900 dark:text-white">
