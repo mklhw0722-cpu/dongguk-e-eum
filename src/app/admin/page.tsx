@@ -2,7 +2,14 @@
 
 import React, { useState } from "react";
 import { useApp } from "@/context/AppContext";
-import { ApprovalStatus, UserRole } from "@/types";
+import {
+  ApprovalStatus,
+  CohortBandId,
+  OfficialCohortRuleSet,
+  RuleReviewStatus,
+  UserRole,
+} from "@/types";
+import { OFFICIAL_GRADUATION_CATALOG } from "@/lib/graduationCurriculum";
 import { ROLE_LABELS, DemoInfoBanner } from "@/components/common/Cards";
 import {
   ShieldCheck,
@@ -17,6 +24,9 @@ import {
   Trash2,
   Plus,
   Database,
+  GraduationCap,
+  ExternalLink,
+  RotateCcw,
 } from "lucide-react";
 
 const STATUS_LABELS: Record<ApprovalStatus, { label: string; style: string }> = {
@@ -60,11 +70,19 @@ export default function AdminPage() {
     handleUpdateUserName,
     isFirestoreConnected,
     authUserProfile,
+    graduationCatalog,
+    updateGraduationCatalogByAdmin,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
-    "approvals" | "users" | "rooms_posts" | "reports"
+    "approvals" | "users" | "rooms_posts" | "reports" | "graduation_rules"
   >("approvals");
+
+  // 공통 졸업요건 관리자 편집 상태
+  const [selectedCohortId, setSelectedCohortId] =
+    useState<CohortBandId>("2024-2025");
+  const [catalogSaving, setCatalogSaving] = useState(false);
+  const [catalogFeedback, setCatalogFeedback] = useState<string | null>(null);
 
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>(
     {}
@@ -287,7 +305,7 @@ export default function AdminPage() {
       </div>
 
       {/* 탭 메뉴 */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800">
         <button
           type="button"
           onClick={() => setActiveTab("approvals")}
@@ -311,6 +329,17 @@ export default function AdminPage() {
         >
           <Users className="w-4 h-4" /> 전체 회원 관리 (
           {realUsersForAdmin.length > 0 ? realUsersForAdmin.length : users.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("graduation_rules")}
+          className={`p-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition ${
+            activeTab === "graduation_rules"
+              ? "bg-orange-600 text-white"
+              : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+          }`}
+        >
+          <GraduationCap className="w-4 h-4" /> 공통 졸업요건 관리
         </button>
         <button
           type="button"
@@ -930,6 +959,436 @@ export default function AdminPage() {
           ))}
         </div>
       )}
+
+      {/* 탭 5: 공통 졸업요건 관리 (관리자 전용 설정, 학생 직접 수정 불가) */}
+      {activeTab === "graduation_rules" && (() => {
+        const currentCohortRule: OfficialCohortRuleSet =
+          graduationCatalog.cohorts[selectedCohortId] ||
+          OFFICIAL_GRADUATION_CATALOG.cohorts["2024-2025"];
+
+        const updateCurrentCohortField = async (
+          patch: Partial<OfficialCohortRuleSet>
+        ) => {
+          setCatalogSaving(true);
+          setCatalogFeedback(null);
+          try {
+            const today = new Date().toISOString().slice(0, 10);
+            const nextCohort: OfficialCohortRuleSet = {
+              ...currentCohortRule,
+              ...patch,
+              lastVerifiedAt: patch.lastVerifiedAt || today,
+            };
+            await updateGraduationCatalogByAdmin({
+              ...graduationCatalog,
+              lastVerifiedAt: today,
+              cohorts: {
+                ...graduationCatalog.cohorts,
+                [selectedCohortId]: nextCohort,
+              },
+            });
+            setCatalogFeedback(
+              `✔ [${nextCohort.cohortLabel}] 공통 졸업요건 기준이 저장 및 동기화되었습니다.`
+            );
+          } catch (err: any) {
+            setCatalogFeedback(`오류: ${err?.message || err}`);
+          } finally {
+            setCatalogSaving(false);
+          }
+        };
+
+        const handleResetToOfficialPage619 = async () => {
+          setCatalogSaving(true);
+          setCatalogFeedback(null);
+          try {
+            await updateGraduationCatalogByAdmin(OFFICIAL_GRADUATION_CATALOG);
+            setCatalogFeedback(
+              "✔ 공식 학업이수 가이드(https://edu.dongguk.edu/page/619) 초기 기준값으로 복원되었습니다."
+            );
+          } catch (err: any) {
+            setCatalogFeedback(`오류: ${err?.message || err}`);
+          } finally {
+            setCatalogSaving(false);
+          }
+        };
+
+        return (
+          <div className="space-y-5">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                    <GraduationCap className="w-5 h-5 text-orange-600" />
+                    동국대학교 교육학과 공통 졸업요건 관리 (신입학 재학생 기준)
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    공통요건은 학생이 직접 수정할 수 없으며(Firestore 보안 규칙 차단), 관리자가 공식 학업이수 가이드(
+                    <a
+                      href={graduationCatalog.sourceUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-orange-600 font-bold underline inline-flex items-center gap-0.5"
+                    >
+                      {graduationCatalog.sourceUrl} <ExternalLink className="w-3 h-3" />
+                    </a>
+                    )를 근거로 관리합니다.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  disabled={catalogSaving}
+                  onClick={handleResetToOfficialPage619}
+                  className="px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-bold inline-flex items-center gap-1.5 self-start"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" /> 공식 기준(page/619) 초기값 복원
+                </button>
+              </div>
+
+              {/* 카탈로그 메타데이터 요약 */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 text-xs">
+                <div>
+                  <span className="text-slate-400 block">기준 버전</span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    {currentCohortRule.version}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">최종 확인일</span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    {currentCohortRule.lastVerifiedAt}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">관리자 검토 상태</span>
+                  <span
+                    className={`font-bold ${
+                      currentCohortRule.reviewStatus === "confirmed"
+                        ? "text-emerald-600"
+                        : "text-amber-600"
+                    }`}
+                  >
+                    {currentCohortRule.reviewStatus === "confirmed"
+                      ? "공식 기준 확인 완료"
+                      : "관리자 확인 필요"}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">공식 출처 URL</span>
+                  <a
+                    href={currentCohortRule.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="font-bold text-orange-600 hover:underline truncate block"
+                  >
+                    {currentCohortRule.sourceUrl}
+                  </a>
+                </div>
+              </div>
+
+              {catalogFeedback && (
+                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold">
+                  {catalogFeedback}
+                </div>
+              )}
+
+              {/* 입학 연도 구간 선택 탭 */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-600">
+                  입학 연도 구간(적용 교육과정) 선택
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      "2014-2015",
+                      "2016-2020",
+                      "2021-2022",
+                      "2023",
+                      "2024-2025",
+                      "2026",
+                    ] as CohortBandId[]
+                  ).map((cid) => {
+                    const c = graduationCatalog.cohorts[cid];
+                    return (
+                      <button
+                        key={cid}
+                        type="button"
+                        onClick={() => setSelectedCohortId(cid)}
+                        className={`px-3.5 py-2 rounded-xl text-xs font-bold border transition ${
+                          selectedCohortId === cid
+                            ? "bg-orange-600 text-white border-orange-600"
+                            : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300"
+                        }`}
+                      >
+                        {c?.cohortLabel || cid}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 선택된 입학연도 구간 상세 설정 폼 */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 text-xs">
+                <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+                  <span className="font-extrabold text-slate-900 dark:text-white block">
+                    1. 졸업·전공 이수학점 기준
+                  </span>
+                  <div>
+                    <label className="text-slate-500 block mb-0.5">
+                      총 졸업학점 (신입학)
+                    </label>
+                    <input
+                      type="number"
+                      value={currentCohortRule.totalGraduationCredits}
+                      onChange={(e) =>
+                        updateCurrentCohortField({
+                          totalGraduationCredits: Number(e.target.value) || 130,
+                        })
+                      }
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-500 block mb-0.5">
+                      교육학과 단일전공 기준 (사범대 일반 {currentCohortRule.generalSingleMajorCredits} + 대체 12)
+                    </label>
+                    <input
+                      type="number"
+                      value={currentCohortRule.eduSingleMajorCredits}
+                      onChange={(e) =>
+                        updateCurrentCohortField({
+                          eduSingleMajorCredits: Number(e.target.value) || 66,
+                        })
+                      }
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-500 block mb-0.5">
+                      교육학과 복수전공 주전공 기준 (사범대 일반 {currentCohortRule.generalDoublePrimaryCredits} + 대체 12)
+                    </label>
+                    <input
+                      type="number"
+                      value={currentCohortRule.eduDoublePrimaryCredits}
+                      onChange={(e) =>
+                        updateCurrentCohortField({
+                          eduDoublePrimaryCredits: Number(e.target.value) || 62,
+                        })
+                      }
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-500 block mb-0.5">
+                      사범대 내 타 학과 복수전공 학점
+                    </label>
+                    <input
+                      type="number"
+                      value={currentCohortRule.eduDoublePartnerCredits}
+                      onChange={(e) =>
+                        updateCurrentCohortField({
+                          eduDoublePartnerCredits: Number(e.target.value) || 50,
+                        })
+                      }
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+                  <span className="font-extrabold text-slate-900 dark:text-white block">
+                    2. 교양·학문기초·교직·실습 기준
+                  </span>
+                  <div>
+                    <label className="text-slate-500 block mb-0.5">
+                      공통교양(기초교양) 표시 기준 ({currentCohortRule.commonLiberalArtsRangeLabel})
+                    </label>
+                    <select
+                      value={currentCohortRule.commonLiberalArtsStatus}
+                      onChange={(e) =>
+                        updateCurrentCohortField({
+                          commonLiberalArtsStatus: e.target.value as RuleReviewStatus,
+                        })
+                      }
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                    >
+                      <option value="confirmed">공식 단일 수치 확정 (confirmed)</option>
+                      <option value="needs_admin_review">
+                        관리자/요람 확인 필요 (needs_admin_review)
+                      </option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-slate-500 block mb-0.5">
+                      교육학과 학문기초(외국어영역) 학점
+                    </label>
+                    <input
+                      type="number"
+                      value={currentCohortRule.academicFoundationCredits}
+                      onChange={(e) =>
+                        updateCurrentCohortField({
+                          academicFoundationCredits: Number(e.target.value) || 6,
+                        })
+                      }
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-500 block mb-0.5">
+                      교직 총 이수학점 (이론12 + 소양6 + 실습4~6)
+                    </label>
+                    <input
+                      type="number"
+                      value={currentCohortRule.teachingTotalCredits}
+                      onChange={(e) =>
+                        updateCurrentCohortField({
+                          teachingTotalCredits: Number(e.target.value) || 22,
+                        })
+                      }
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-slate-500 block mb-0.5">
+                      교육봉사 기준 시간 (교육봉사1·2 합산)
+                    </label>
+                    <input
+                      type="number"
+                      value={currentCohortRule.volunteeringHours}
+                      onChange={(e) =>
+                        updateCurrentCohortField({
+                          volunteeringHours: Number(e.target.value) || 60,
+                        })
+                      }
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
+                  <span className="font-extrabold text-slate-900 dark:text-white block">
+                    3. 검사·교육·평점 및 메타데이터
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-slate-500 block mb-0.5">
+                        인성검사(회)
+                      </label>
+                      <input
+                        type="number"
+                        value={currentCohortRule.personalityTestMinCount}
+                        onChange={(e) =>
+                          updateCurrentCohortField({
+                            personalityTestMinCount: Number(e.target.value) || 2,
+                          })
+                        }
+                        className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 block mb-0.5">
+                        심폐소생(회)
+                      </label>
+                      <input
+                        type="number"
+                        value={currentCohortRule.cprMinCount}
+                        onChange={(e) =>
+                          updateCurrentCohortField({
+                            cprMinCount: Number(e.target.value) || 2,
+                          })
+                        }
+                        className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 block mb-0.5">
+                        성인지(회)
+                      </label>
+                      <input
+                        type="number"
+                        value={currentCohortRule.genderSensitivityMinCount}
+                        onChange={(e) =>
+                          updateCurrentCohortField({
+                            genderSensitivityMinCount: Number(e.target.value) || 2,
+                          })
+                        }
+                        className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-slate-500 block mb-0.5">
+                        전공 최저평점
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={currentCohortRule.majorGpaMin}
+                        onChange={(e) =>
+                          updateCurrentCohortField({
+                            majorGpaMin: Number(e.target.value) || 2.31,
+                          })
+                        }
+                        className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-slate-500 block mb-0.5">
+                        교직 최저평점
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={currentCohortRule.teachingGpaMin}
+                        onChange={(e) =>
+                          updateCurrentCohortField({
+                            teachingGpaMin: Number(e.target.value) || 2.75,
+                          })
+                        }
+                        className="w-full px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-slate-500 block mb-0.5">
+                      관리자 검토 상태
+                    </label>
+                    <select
+                      value={currentCohortRule.reviewStatus}
+                      onChange={(e) =>
+                        updateCurrentCohortField({
+                          reviewStatus: e.target.value as RuleReviewStatus,
+                        })
+                      }
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-bold"
+                    >
+                      <option value="confirmed">공식 기준 확인 완료 (confirmed)</option>
+                      <option value="needs_admin_review">
+                        관리자 확인 필요 (needs_admin_review)
+                      </option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-slate-500 block mb-0.5">
+                      관리자 검토 메모
+                    </label>
+                    <input
+                      type="text"
+                      value={currentCohortRule.adminMemo}
+                      onChange={(e) =>
+                        updateCurrentCohortField({
+                          adminMemo: e.target.value,
+                        })
+                      }
+                      className="w-full px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

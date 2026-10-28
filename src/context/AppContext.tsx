@@ -21,7 +21,21 @@ import {
   ReportItem,
   RequirementCategory,
   CareerTrack,
+  OfficialGraduationCatalog,
+  StudentAcademicProfile,
+  EnrolledCourse,
+  VolunteeringCourseState,
+  SchoolPracticumState,
+  TeachingChecklistState,
 } from "@/types";
+import {
+  OFFICIAL_GRADUATION_CATALOG,
+  migrateStudentProgress,
+  deriveLegacyFieldsFromAcademicProfile,
+  matchTeachingSubstitution,
+  sortCoursesBySemester,
+  buildLegacyGraduationRequirementsFromCatalog,
+} from "@/lib/graduationCurriculum";
 import {
   PlatformRepository,
   getInitialDataState,
@@ -64,6 +78,11 @@ import {
   subscribeToNoticesInFirestore,
   upsertNoticeInFirestore,
   syncOfficialNoticesToFirestore,
+  subscribeToGraduationCatalogInFirestore,
+  saveGraduationCatalogInFirestore,
+  subscribeToStudentGraduationRecordInFirestore,
+  saveStudentGraduationRecordInFirestore,
+  updateUserAcademicProfileInFirestore,
 } from "@/lib/firebase";
 import { unreadCountForUser, effectiveReadSeq } from "@/lib/chatReadReceipts";
 import officialNoticesJson from "@/data/officialNotices.json";
@@ -112,6 +131,8 @@ interface AppContextValue extends PlatformDataState {
     studentIdOrYear: string;
     role: UserRole;
     verificationNote?: string;
+    academicProfile?: StudentAcademicProfile;
+    doubleMajor?: string;
   }) => Promise<void>;
   handleLogin: (email: string, password: string) => Promise<void>;
   handleLogout: () => Promise<void>;
@@ -175,7 +196,16 @@ interface AppContextValue extends PlatformDataState {
   ) => void;
   upsertAlumniProfile: (profile: Omit<AlumniProfile, "id" | "userId">) => void;
 
-  // 기능 D. 졸업요건 자가점검 액션
+  // 기능 D. 졸업요건 자가점검 및 공식 학업이수 기준 관리 액션
+  graduationCatalog: OfficialGraduationCatalog;
+  updateGraduationCatalogByAdmin: (catalog: OfficialGraduationCatalog) => Promise<void>;
+  updateStudentAcademicProfile: (profile: StudentAcademicProfile) => Promise<void>;
+  addEnrolledCourse: (course: Omit<EnrolledCourse, "id" | "createdAt">) => void;
+  updateEnrolledCourse: (courseId: string, patch: Partial<EnrolledCourse>) => void;
+  removeEnrolledCourse: (courseId: string) => void;
+  updateVolunteeringCourseState: (patch: Partial<VolunteeringCourseState>) => void;
+  updateSchoolPracticumState: (patch: Partial<SchoolPracticumState>) => void;
+  updateTeachingChecklistState: (patch: Partial<TeachingChecklistState>) => void;
   updateStudentCredit: (
     category: RequirementCategory,
     completedValue: number,
@@ -267,10 +297,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profileStatus, setProfileStatus] = useState<ProfileFetchStatus>("idle");
   const profileMissingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [realUsersForAdmin, setRealUsersForAdmin] = useState<UserProfileDoc[]>([]);
+  const [graduationCatalog, setGraduationCatalog] = useState<OfficialGraduationCatalog>(
+    OFFICIAL_GRADUATION_CATALOG
+  );
 
   useEffect(() => {
     const loaded = PlatformRepository.loadState();
-    setState(loaded);
+    setState({
+      ...loaded,
+      studentProgress: migrateStudentProgress(loaded.studentProgress),
+    });
+
+    if (typeof window !== "undefined") {
+      const savedCatalogRaw = window.localStorage.getItem(
+        "dongguk_e_eum_graduation_catalog_v1"
+      );
+      if (savedCatalogRaw) {
+        try {
+          const parsedCatalog = JSON.parse(savedCatalogRaw) as OfficialGraduationCatalog;
+          if (parsedCatalog && parsedCatalog.cohorts) {
+            setGraduationCatalog(parsedCatalog);
+          }
+        } catch {
+          // ignore
+        }
+      }
+    }
 
     // Firebase config is now statically fixed to Dongguk E-Eum spark project
 
@@ -464,10 +516,58 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
+    // 4. 공식 공통 졸업요건 카탈로그(graduationRulesCatalog/current) 실시간 구독
+    const unsubGradCatalog = subscribeToGraduationCatalogInFirestore(
+      (cloudCatalog) => {
+        if (cloudCatalog && cloudCatalog.cohorts) {
+          setGraduationCatalog(cloudCatalog);
+          if (typeof window !== "undefined") {
+            window.localStorage.setItem(
+              "dongguk_e_eum_graduation_catalog_v1",
+              JSON.stringify(cloudCatalog)
+            );
+          }
+        }
+      },
+      () => {
+        // 초기 문서 미생성 시 기본 공식 카탈로그(page/619) 유지
+      }
+    );
+
+    // 5. 학생 개인별 졸업요건·이수 강좌 기록(graduationRecords/{uid}) 실시간 구독
+    const unsubGradRecord = subscribeToStudentGraduationRecordInFirestore(
+      currentUid,
+      (cloudRecord) => {
+        if (cloudRecord) {
+          setState((prev) => ({
+            ...prev,
+            studentProgress: migrateStudentProgress(
+              {
+                ...prev.studentProgress,
+                ...cloudRecord,
+              },
+              authUserProfile
+            ),
+          }));
+        } else {
+          // 클라우드 기록이 아직 없다면 가입 시 입력한 프로필(authUserProfile)과 기존 로컬 기록을 합쳐 마이그레이션
+          setState((prev) => ({
+            ...prev,
+            studentProgress: migrateStudentProgress(prev.studentProgress, authUserProfile),
+          }));
+        }
+      },
+      () => {
+        // 보안 규칙 적용 전이거나 초기 빈 상태인 경우 로컬 상태 유지
+      }
+    );
+
     return () => {
       if (unsubChats) unsubChats();
       if (unsubApprovedUsers) unsubApprovedUsers();
       if (unsubNotices) unsubNotices();
+      if (unsubGradCatalog) unsubGradCatalog();
+      if (unsubGradRecord) unsubGradRecord();
     };
   }, [hydrated, firebaseVersionTick, rawFirebaseUser, authUserProfile]);
 
@@ -564,6 +664,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         email: authUserProfile.email || rawFirebaseUser?.email || "",
         role: authUserProfile.role || "student",
         studentIdOrYear: authUserProfile.studentIdOrYear || "",
+        doubleMajor: authUserProfile.doubleMajor,
+        careerTrack: authUserProfile.careerTrack,
+        academicProfile: authUserProfile.academicProfile,
         bio: authUserProfile.bio || "",
         avatarInitials:
           authUserProfile.avatarInitials ||
@@ -671,10 +774,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     studentIdOrYear: string;
     role: UserRole;
     verificationNote?: string;
+    academicProfile?: StudentAcademicProfile;
+    doubleMajor?: string;
   }) => {
     const createdProfile = await registerWithEmailAndPassword(params);
     setAuthUserProfile(createdProfile);
     setProfileStatus("loaded");
+    if (params.academicProfile) {
+      setState((prev) => ({
+        ...prev,
+        studentProgress: migrateStudentProgress(
+          {
+            ...prev.studentProgress,
+            userId: createdProfile.id,
+            academicProfile: params.academicProfile,
+            isProfileComplete: true,
+          },
+          createdProfile
+        ),
+      }));
+    }
   };
 
   const handleLogin = async (email: string, password: string) => {
@@ -1411,7 +1530,290 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  // --- 졸업요건 자가점검 액션 ---
+  // --- 졸업요건 자가점검 및 공식 학업이수 기준 관리 액션 ---
+  const syncStudentProgressToCloud = (nextProgress: StudentProgress) => {
+    if (
+      isRealAuthActive &&
+      authUserProfile &&
+      authUserProfile.approvalStatus === "approved"
+    ) {
+      const uid = authUserProfile.id || rawFirebaseUser?.uid || nextProgress.userId;
+      if (uid) {
+        saveStudentGraduationRecordInFirestore(uid, nextProgress).catch((err) => {
+          console.warn("졸업요건 기록 클라우드 동기화 안내:", err);
+        });
+      }
+    }
+  };
+
+  const updateGraduationCatalogByAdmin = async (
+    nextCatalog: OfficialGraduationCatalog
+  ): Promise<void> => {
+    if (isRealAuthActive) {
+      if (
+        !authUserProfile ||
+        authUserProfile.role !== "admin" ||
+        authUserProfile.approvalStatus !== "approved"
+      ) {
+        throw new Error(
+          "공통 졸업요건 기준은 승인된 관리자만 등록·수정할 수 있습니다."
+        );
+      }
+    }
+
+    const stampedCatalog: OfficialGraduationCatalog = {
+      ...nextCatalog,
+      updatedByAdminName: currentUser.name,
+    };
+
+    setGraduationCatalog(stampedCatalog);
+    setState((prev) => ({
+      ...prev,
+      graduationRequirements:
+        buildLegacyGraduationRequirementsFromCatalog(stampedCatalog),
+    }));
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        "dongguk_e_eum_graduation_catalog_v1",
+        JSON.stringify(stampedCatalog)
+      );
+    }
+
+    if (
+      isRealAuthActive &&
+      authUserProfile?.role === "admin" &&
+      authUserProfile?.approvalStatus === "approved"
+    ) {
+      await saveGraduationCatalogInFirestore(stampedCatalog);
+    }
+  };
+
+  const updateStudentAcademicProfile = async (
+    profile: StudentAcademicProfile
+  ): Promise<void> => {
+    const safeProfile: StudentAcademicProfile = {
+      ...profile,
+      hasDoubleMajor: profile.majorPlanType !== "single",
+      doubleMajorDepartment:
+        profile.majorPlanType === "single"
+          ? ""
+          : profile.doubleMajorDepartment.trim(),
+      adminVerifiedSpecialCondition: Boolean(
+        state.studentProgress.academicProfile?.adminVerifiedSpecialCondition
+      ),
+      updatedAt: new Date().toISOString().slice(0, 10),
+    };
+    const legacyFields = deriveLegacyFieldsFromAcademicProfile(safeProfile);
+
+    let nextSnapshot: StudentProgress | null = null;
+    setState((prev) => {
+      const migrated = migrateStudentProgress(prev.studentProgress, currentUser);
+      const nextProgress: StudentProgress = {
+        ...migrated,
+        ...legacyFields,
+        academicProfile: safeProfile,
+        isProfileComplete: true,
+        officialAdminVerified: false,
+      };
+      nextSnapshot = nextProgress;
+      return {
+        ...prev,
+        studentProgress: nextProgress,
+      };
+    });
+
+    if (nextSnapshot) {
+      syncStudentProgressToCloud(nextSnapshot);
+    }
+
+    if (isRealAuthActive && authUserProfile) {
+      const uid = authUserProfile.id || rawFirebaseUser?.uid || "";
+      setAuthUserProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              studentIdOrYear: safeProfile.admissionYearLabel,
+              doubleMajor: safeProfile.hasDoubleMajor
+                ? safeProfile.doubleMajorDepartment || "복수전공"
+                : "단일전공(교육학)",
+              academicProfile: safeProfile,
+            }
+          : null
+      );
+      if (uid) {
+        updateUserAcademicProfileInFirestore(uid, safeProfile).catch((err) =>
+          console.warn("프로필 학사정보 동기화 안내:", err)
+        );
+      }
+    }
+  };
+
+  const addEnrolledCourse = (
+    coursePayload: Omit<EnrolledCourse, "id" | "createdAt">
+  ) => {
+    const subMatch = matchTeachingSubstitution(coursePayload);
+    const newCourse: EnrolledCourse = {
+      ...coursePayload,
+      id: `course-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      credits: Math.max(0, Number(coursePayload.credits) || 0),
+      yearTaken: Number(coursePayload.yearTaken) || 2024,
+      recognitionStatus: coursePayload.recognitionStatus || "confirmed",
+      substitutedTeachingSubjectCode:
+        coursePayload.substitutedTeachingSubjectCode ||
+        (subMatch ? subMatch.ercCourseCodes[0] : undefined),
+      createdAt: new Date().toISOString().slice(0, 10),
+    };
+
+    let nextSnapshot: StudentProgress | null = null;
+    setState((prev) => {
+      const migrated = migrateStudentProgress(prev.studentProgress, currentUser);
+      const nextCourses = sortCoursesBySemester([
+        ...(migrated.courses || []),
+        newCourse,
+      ]);
+      const nextProgress: StudentProgress = {
+        ...migrated,
+        courses: nextCourses,
+      };
+      nextSnapshot = nextProgress;
+      return {
+        ...prev,
+        studentProgress: nextProgress,
+      };
+    });
+
+    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+  };
+
+  const updateEnrolledCourse = (
+    courseId: string,
+    patch: Partial<EnrolledCourse>
+  ) => {
+    let nextSnapshot: StudentProgress | null = null;
+    setState((prev) => {
+      const migrated = migrateStudentProgress(prev.studentProgress, currentUser);
+      const nextCourses = sortCoursesBySemester(
+        (migrated.courses || []).map((c) => {
+          if (c.id !== courseId) return c;
+          const merged = { ...c, ...patch };
+          const subMatch = matchTeachingSubstitution(merged);
+          return {
+            ...merged,
+            credits: Math.max(0, Number(merged.credits) || 0),
+            yearTaken: Number(merged.yearTaken) || c.yearTaken,
+            substitutedTeachingSubjectCode: subMatch
+              ? subMatch.ercCourseCodes[0]
+              : undefined,
+          };
+        })
+      );
+      const nextProgress: StudentProgress = {
+        ...migrated,
+        courses: nextCourses,
+      };
+      nextSnapshot = nextProgress;
+      return {
+        ...prev,
+        studentProgress: nextProgress,
+      };
+    });
+
+    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+  };
+
+  const removeEnrolledCourse = (courseId: string) => {
+    let nextSnapshot: StudentProgress | null = null;
+    setState((prev) => {
+      const migrated = migrateStudentProgress(prev.studentProgress, currentUser);
+      const nextCourses = (migrated.courses || []).filter(
+        (c) => c.id !== courseId
+      );
+      const nextProgress: StudentProgress = {
+        ...migrated,
+        courses: nextCourses,
+      };
+      nextSnapshot = nextProgress;
+      return {
+        ...prev,
+        studentProgress: nextProgress,
+      };
+    });
+
+    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+  };
+
+  const updateVolunteeringCourseState = (
+    patch: Partial<VolunteeringCourseState>
+  ) => {
+    let nextSnapshot: StudentProgress | null = null;
+    setState((prev) => {
+      const migrated = migrateStudentProgress(prev.studentProgress, currentUser);
+      const nextProgress: StudentProgress = {
+        ...migrated,
+        volunteeringState: {
+          ...migrated.volunteeringState!,
+          ...patch,
+        },
+      };
+      nextSnapshot = nextProgress;
+      return {
+        ...prev,
+        studentProgress: nextProgress,
+      };
+    });
+
+    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+  };
+
+  const updateSchoolPracticumState = (patch: Partial<SchoolPracticumState>) => {
+    let nextSnapshot: StudentProgress | null = null;
+    setState((prev) => {
+      const migrated = migrateStudentProgress(prev.studentProgress, currentUser);
+      const nextProgress: StudentProgress = {
+        ...migrated,
+        practicumState: {
+          ...migrated.practicumState!,
+          ...patch,
+        },
+      };
+      nextSnapshot = nextProgress;
+      return {
+        ...prev,
+        studentProgress: nextProgress,
+      };
+    });
+
+    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+  };
+
+  const updateTeachingChecklistState = (
+    patch: Partial<TeachingChecklistState>
+  ) => {
+    let nextSnapshot: StudentProgress | null = null;
+    setState((prev) => {
+      const migrated = migrateStudentProgress(prev.studentProgress, currentUser);
+      const nextProgress: StudentProgress = {
+        ...migrated,
+        teachingChecklist: {
+          ...migrated.teachingChecklist!,
+          ...patch,
+          // 학생이 임의로 학교 공식 인정 확인 상태를 변경할 수 없도록 보존
+          officialVerificationConfirmedByAdmin: Boolean(
+            migrated.teachingChecklist?.officialVerificationConfirmedByAdmin
+          ),
+        },
+      };
+      nextSnapshot = nextProgress;
+      return {
+        ...prev,
+        studentProgress: nextProgress,
+      };
+    });
+
+    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+  };
+
   const updateStudentCredit = (
     category: RequirementCategory,
     completedValue: number,
@@ -1419,9 +1821,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     isCompletedBoolean?: boolean
   ) => {
     const today = new Date().toISOString().slice(0, 10);
-    setState((prev) => ({
-      ...prev,
-      studentProgress: {
+    let nextSnapshot: StudentProgress | null = null;
+    setState((prev) => {
+      const nextProgress: StudentProgress = {
         ...prev.studentProgress,
         credits: {
           ...prev.studentProgress.credits,
@@ -1432,8 +1834,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             lastUpdated: today,
           },
         },
-      },
-    }));
+      };
+      nextSnapshot = nextProgress;
+      return {
+        ...prev,
+        studentProgress: nextProgress,
+      };
+    });
+    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
   };
 
   const updateStudentProfileMeta = (
@@ -1442,16 +1850,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     doubleMajorName: string,
     isTeacherTrack: boolean
   ) => {
-    setState((prev) => ({
-      ...prev,
-      studentProgress: {
-        ...prev.studentProgress,
-        admissionYear,
-        majorType,
-        doubleMajorName,
-        isTeacherTrack,
-      },
-    }));
+    let nextSnapshot: StudentProgress | null = null;
+    setState((prev) => {
+      const nextProgress = migrateStudentProgress(
+        {
+          ...prev.studentProgress,
+          admissionYear,
+          majorType,
+          doubleMajorName,
+          isTeacherTrack,
+        },
+        currentUser
+      );
+      nextSnapshot = nextProgress;
+      return {
+        ...prev,
+        studentProgress: nextProgress,
+      };
+    });
+    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
   };
 
   const addVolunteeringRecord = (
@@ -1468,6 +1885,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       verifiedBySelf: true,
       note,
     };
+    let nextSnapshot: StudentProgress | null = null;
     setState((prev) => {
       const updatedRecords = [
         newRec,
@@ -1475,59 +1893,72 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ];
       const totalHours = updatedRecords.reduce((acc, r) => acc + r.hours, 0);
       const prevVolCredit = prev.studentProgress.credits["교육봉사 시간"];
-      return {
-        ...prev,
-        studentProgress: {
-          ...prev.studentProgress,
-          volunteeringRecords: updatedRecords,
-          credits: {
-            ...prev.studentProgress.credits,
-            "교육봉사 시간": {
-              completedValue: totalHours,
-              userCustomTarget: prevVolCredit?.userCustomTarget ?? null,
-              lastUpdated: new Date().toISOString().slice(0, 10),
-            },
+      const nextProgress: StudentProgress = {
+        ...prev.studentProgress,
+        volunteeringRecords: updatedRecords,
+        credits: {
+          ...prev.studentProgress.credits,
+          "교육봉사 시간": {
+            completedValue: totalHours,
+            userCustomTarget: prevVolCredit?.userCustomTarget ?? null,
+            lastUpdated: new Date().toISOString().slice(0, 10),
           },
         },
       };
+      nextSnapshot = nextProgress;
+      return {
+        ...prev,
+        studentProgress: nextProgress,
+      };
     });
+    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
   };
 
   const removeVolunteeringRecord = (id: string) => {
+    let nextSnapshot: StudentProgress | null = null;
     setState((prev) => {
       const updatedRecords = prev.studentProgress.volunteeringRecords.filter(
         (r) => r.id !== id
       );
       const totalHours = updatedRecords.reduce((acc, r) => acc + r.hours, 0);
       const prevVolCredit = prev.studentProgress.credits["교육봉사 시간"];
-      return {
-        ...prev,
-        studentProgress: {
-          ...prev.studentProgress,
-          volunteeringRecords: updatedRecords,
-          credits: {
-            ...prev.studentProgress.credits,
-            "교육봉사 시간": {
-              completedValue: totalHours,
-              userCustomTarget: prevVolCredit?.userCustomTarget ?? null,
-              lastUpdated: new Date().toISOString().slice(0, 10),
-            },
+      const nextProgress: StudentProgress = {
+        ...prev.studentProgress,
+        volunteeringRecords: updatedRecords,
+        credits: {
+          ...prev.studentProgress.credits,
+          "교육봉사 시간": {
+            completedValue: totalHours,
+            userCustomTarget: prevVolCredit?.userCustomTarget ?? null,
+            lastUpdated: new Date().toISOString().slice(0, 10),
           },
         },
       };
+      nextSnapshot = nextProgress;
+      return {
+        ...prev,
+        studentProgress: nextProgress,
+      };
     });
+    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
   };
 
   const toggleChecklistItem = (id: string) => {
-    setState((prev) => ({
-      ...prev,
-      studentProgress: {
+    let nextSnapshot: StudentProgress | null = null;
+    setState((prev) => {
+      const nextProgress: StudentProgress = {
         ...prev.studentProgress,
         checklist: prev.studentProgress.checklist.map((item) =>
           item.id === id ? { ...item, completed: !item.completed } : item
         ),
-      },
-    }));
+      };
+      nextSnapshot = nextProgress;
+      return {
+        ...prev,
+        studentProgress: nextProgress,
+      };
+    });
+    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
   };
 
   const addChecklistItem = (
@@ -1542,13 +1973,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       completed: false,
       memo,
     };
-    setState((prev) => ({
-      ...prev,
-      studentProgress: {
+    let nextSnapshot: StudentProgress | null = null;
+    setState((prev) => {
+      const nextProgress: StudentProgress = {
         ...prev.studentProgress,
         checklist: [...prev.studentProgress.checklist, newItem],
-      },
-    }));
+      };
+      nextSnapshot = nextProgress;
+      return {
+        ...prev,
+        studentProgress: nextProgress,
+      };
+    });
+    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
   };
 
   // --- 진로 및 복수전공 공유방 액션 (Firestore 실시간 연동) ---
@@ -1823,6 +2260,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         createMentoringRequest,
         updateMentoringStatus,
         upsertAlumniProfile,
+        graduationCatalog,
+        updateGraduationCatalogByAdmin,
+        updateStudentAcademicProfile,
+        addEnrolledCourse,
+        updateEnrolledCourse,
+        removeEnrolledCourse,
+        updateVolunteeringCourseState,
+        updateSchoolPracticumState,
+        updateTeachingChecklistState,
         updateStudentCredit,
         updateStudentProfileMeta,
         addVolunteeringRecord,

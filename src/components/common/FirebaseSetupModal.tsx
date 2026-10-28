@@ -157,10 +157,22 @@ service cloud.firestore {
       }
     }
 
-    // 5. 개인별 졸업요건 기록 (graduationRecords 컬렉션 - 개인정보 보호)
+    // 5. 공통 졸업요건 카탈로그 (관리자 전용 등록·수정, 승인된 정회원 조회)
+    match /graduationRulesCatalog/{docId} {
+      allow read: if isApprovedUser();
+      allow write: if isApprovedAdmin();
+    }
+
+    // 5-1. 개인별 졸업요건·이수 기록 (본인 또는 관리자만 접근 가능, 공식 인정 상태 임의 변경 차단)
     match /graduationRecords/{userId} {
       allow read, write: if isApprovedUser() && (
         request.auth.uid == userId
+        && (
+          request.resource == null
+          || !('officialAdminVerified' in request.resource.data)
+          || request.resource.data.officialAdminVerified == false
+          || (resource != null && request.resource.data.officialAdminVerified == resource.data.get('officialAdminVerified', false))
+        )
         || isApprovedAdmin()
       );
     }
@@ -381,7 +393,7 @@ export function FirebaseSetupModal({
               <input
                 type="text"
                 required
-                value={manualProjectId}
+                value={manualApiKey ? manualProjectId : manualProjectId}
                 onChange={(e) => setManualProjectId(e.target.value)}
                 placeholder="예: dongguk-e-eum-12345"
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"

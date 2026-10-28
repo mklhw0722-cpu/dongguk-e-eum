@@ -40,6 +40,9 @@ import {
   CommunityComment,
   Notice,
   NoticeSyncMetadata,
+  OfficialGraduationCatalog,
+  StudentAcademicProfile,
+  StudentProgress,
 } from "@/types";
 import { MOCK_COMMUNITY_POSTS } from "@/data/mockData";
 
@@ -58,6 +61,8 @@ const USERS_COLLECTION = "users";
 const SYSTEM_COLLECTION = "system";
 const CHATS_COLLECTION = "chats";
 const NOTICES_COLLECTION = "notices";
+const GRADUATION_CATALOG_COLLECTION = "graduationRulesCatalog";
+const GRADUATION_RECORDS_COLLECTION = "graduationRecords";
 
 /**
  * 환경변수 또는 브라우저에 저장된 Firebase 설정을 반환합니다.
@@ -202,6 +207,8 @@ export async function registerWithEmailAndPassword(params: {
   studentIdOrYear: string;
   role: UserRole;
   verificationNote?: string;
+  academicProfile?: StudentAcademicProfile;
+  doubleMajor?: string;
 }): Promise<PlatformUser> {
   const { auth, db } = getFirebaseInstances();
   if (!auth || !db) {
@@ -219,6 +226,15 @@ export async function registerWithEmailAndPassword(params: {
     email: params.email.trim(),
     role: params.role === "admin" ? "student" : params.role, // 가입 시 임의 admin 방지
     studentIdOrYear: params.studentIdOrYear.trim(),
+    ...(params.doubleMajor ? { doubleMajor: params.doubleMajor.trim() } : {}),
+    ...(params.academicProfile
+      ? {
+          academicProfile: {
+            ...params.academicProfile,
+            adminVerifiedSpecialCondition: false,
+          },
+        }
+      : {}),
     bio: `${params.studentIdOrYear.trim()} ${params.name.trim()}님의 프로필입니다.`,
     avatarInitials: params.name.trim().slice(0, 2),
     approvalStatus: "pending",
@@ -1513,4 +1529,133 @@ export async function syncOfficialNoticesToFirestore(
 
   await batch.commit();
   return officialItems.length;
+}
+
+// ==========================================
+// 6. 졸업요건 공통 카탈로그 및 학생별 이수기록 Firestore 연동
+// ==========================================
+
+/**
+ * 승인된 정회원용: 공통 졸업요건 카탈로그(graduationRulesCatalog/current) 실시간 구독
+ */
+export function subscribeToGraduationCatalogInFirestore(
+  onUpdate: (catalog: OfficialGraduationCatalog | null) => void,
+  onError: (errMessage: string) => void
+): (() => void) | null {
+  const { db } = getFirestoreInstance();
+  if (!db) return null;
+
+  const docRef = doc(db, GRADUATION_CATALOG_COLLECTION, "current");
+  return onSnapshot(
+    docRef,
+    (snap) => {
+      if (snap.exists()) {
+        onUpdate(snap.data() as OfficialGraduationCatalog);
+      } else {
+        onUpdate(null);
+      }
+    },
+    (err) => {
+      onError(err.message);
+    }
+  );
+}
+
+/**
+ * 관리자 전용: 공통 졸업요건 카탈로그(graduationRulesCatalog/current) 등록/수정
+ */
+export async function saveGraduationCatalogInFirestore(
+  catalog: OfficialGraduationCatalog
+): Promise<void> {
+  const { db } = getFirestoreInstance();
+  if (!db) throw new Error("Firestore 데이터베이스에 연결되어 있지 않습니다.");
+
+  const docRef = doc(db, GRADUATION_CATALOG_COLLECTION, "current");
+  await setDoc(
+    docRef,
+    {
+      ...JSON.parse(JSON.stringify(catalog)),
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+}
+
+/**
+ * 학생 본인(또는 관리자)용: 개인별 졸업요건·강좌·체크리스트 기록(graduationRecords/{uid}) 실시간 구독
+ */
+export function subscribeToStudentGraduationRecordInFirestore(
+  uid: string,
+  onUpdate: (record: Partial<StudentProgress> | null) => void,
+  onError: (errMessage: string) => void
+): (() => void) | null {
+  const { db } = getFirestoreInstance();
+  if (!db || !uid) return null;
+
+  const docRef = doc(db, GRADUATION_RECORDS_COLLECTION, uid);
+  return onSnapshot(
+    docRef,
+    (snap) => {
+      if (snap.exists()) {
+        onUpdate({ userId: snap.id, ...(snap.data() as Partial<StudentProgress>) });
+      } else {
+        onUpdate(null);
+      }
+    },
+    (err) => {
+      onError(err.message);
+    }
+  );
+}
+
+/**
+ * 학생 본인용: 개인별 졸업요건·이수 강좌·체크리스트 기록(graduationRecords/{uid}) 저장
+ * - 보안 원칙: 학생이 직접 저장할 때 officialAdminVerified 필드는 false로 고정하여 공식 인정 사칭을 방지합니다.
+ */
+export async function saveStudentGraduationRecordInFirestore(
+  uid: string,
+  progress: StudentProgress
+): Promise<void> {
+  const { db } = getFirestoreInstance();
+  if (!db || !uid) return;
+
+  const docRef = doc(db, GRADUATION_RECORDS_COLLECTION, uid);
+  const safePayload = JSON.parse(
+    JSON.stringify({
+      ...progress,
+      userId: uid,
+      officialAdminVerified: false,
+      updatedAt: new Date().toISOString(),
+    })
+  );
+
+  await setDoc(docRef, safePayload, { merge: true });
+}
+
+/**
+ * 학생 본인용: users/{uid} 프로필 내 학사정보(academicProfile, doubleMajor, studentIdOrYear) 동기화
+ * - 승인 상태(approvalStatus), 역할(role) 등 보호 필드는 절대 건드리지 않습니다.
+ */
+export async function updateUserAcademicProfileInFirestore(
+  uid: string,
+  academicProfile: StudentAcademicProfile
+): Promise<void> {
+  const { db } = getFirestoreInstance();
+  if (!db || !uid) return;
+
+  const userRef = doc(db, USERS_COLLECTION, uid);
+  const safeProfile: StudentAcademicProfile = {
+    ...academicProfile,
+    adminVerifiedSpecialCondition: false,
+    updatedAt: new Date().toISOString().slice(0, 10),
+  };
+
+  await updateDoc(userRef, {
+    academicProfile: JSON.parse(JSON.stringify(safeProfile)),
+    doubleMajor: safeProfile.hasDoubleMajor
+      ? safeProfile.doubleMajorDepartment || "복수전공"
+      : "단일전공(교육학)",
+    studentIdOrYear: safeProfile.admissionYearLabel,
+    updatedAt: new Date().toISOString(),
+  });
 }

@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/accessGate.test.mjs tests/officialNotice.test.mjs tests/chatReadReceipts.test.mjs",
+    "test": "node --test tests/accessGate.test.mjs tests/officialNotice.test.mjs tests/chatReadReceipts.test.mjs tests/graduationSystem.test.mjs",
     "sync:notices": "node scripts/sync-official-notices.mjs"
   },
   "dependencies": {
