@@ -986,14 +986,16 @@ export async function getOrCreateDirectChatInFirestore(
     participantDetails: {
       [currentUser.id]: {
         uid: currentUser.id,
-        name: currentUser.name,
-        role: currentUser.role,
-        avatarInitials: currentUser.avatarInitials,
+        name: currentUser.name || "사용자",
+        role: currentUser.role || "student",
+        avatarInitials:
+          currentUser.avatarInitials ||
+          (currentUser.name ? currentUser.name.slice(0, 2) : "학"),
       },
       [targetUser.id]: {
         uid: targetUser.id,
-        name: targetUser.name,
-        role: targetUser.role,
+        name: targetUser.name || "상대방",
+        role: targetUser.role || "student",
         avatarInitials:
           targetUser.avatarInitials ||
           (targetUser.name ? targetUser.name.slice(0, 2) : "학"),
@@ -1045,9 +1047,11 @@ export async function createGroupChatInFirestore(
   const allUsers = [
     {
       uid: currentUser.id,
-      name: currentUser.name,
-      role: currentUser.role,
-      avatarInitials: currentUser.avatarInitials,
+      name: currentUser.name || "사용자",
+      role: currentUser.role || "student",
+      avatarInitials:
+        currentUser.avatarInitials ||
+        (currentUser.name ? currentUser.name.slice(0, 2) : "학"),
     },
     ...invitedUsers.map((u) => ({
       uid: u.id,

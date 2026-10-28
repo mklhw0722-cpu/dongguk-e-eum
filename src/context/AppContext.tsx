@@ -483,14 +483,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const currentUser: User = isRealAuthActive && authUserProfile
     ? {
         id: authUserProfile.id || (rawFirebaseUser ? rawFirebaseUser.uid : ""),
-        name: authUserProfile.name,
-        email: authUserProfile.email,
-        role: authUserProfile.role,
-        studentIdOrYear: authUserProfile.studentIdOrYear,
-        bio: authUserProfile.bio,
-        avatarInitials: authUserProfile.avatarInitials,
-        approvalStatus: authUserProfile.approvalStatus,
-        joinedAt: authUserProfile.joinedAt,
+        name: authUserProfile.name || (rawFirebaseUser?.email ? rawFirebaseUser.email.split("@")[0] : "사용자"),
+        email: authUserProfile.email || rawFirebaseUser?.email || "",
+        role: authUserProfile.role || "student",
+        studentIdOrYear: authUserProfile.studentIdOrYear || "",
+        bio: authUserProfile.bio || "",
+        avatarInitials:
+          authUserProfile.avatarInitials ||
+          (authUserProfile.name ? authUserProfile.name.slice(0, 2) : "학"),
+        approvalStatus: authUserProfile.approvalStatus || "approved",
+        joinedAt: authUserProfile.joinedAt || new Date().toISOString().slice(0, 10),
       }
     : state.users.find((u) => u.id === ROLE_DEFAULT_USER_ID[currentRole]) || state.users[0];
 
