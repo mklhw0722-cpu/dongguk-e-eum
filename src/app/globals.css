@@ -1,6 +1,14 @@
 @import "tailwindcss";
 
+/* 
+ * Tailwind v4 다크모드 변형자를 클래스 기반(.dark)으로 명시합니다.
+ * 이 설정이 없으면 Tailwind v4는 모바일 OS의 다크모드(@media prefers-color-scheme: dark)를 자동으로 따르게 됩니다.
+ * 클래스 기반으로 고정함으로써 모바일 시스템이 다크모드여도 화면이 네이비색으로 변하지 않고 컴퓨터와 동일한 깔끔한 흰색(라이트모드)을 유지합니다.
+ */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
+  color-scheme: light;
   /* 라이트모드 기본 테마 (선명하고 편안한 고대비 가독성 확보) */
   --bg-main: #f8fafc;
   --bg-surface: #ffffff;
@@ -29,6 +37,12 @@
   --brand-primary-soft: #431407;
   --brand-primary-border: #7c2d12;
   --brand-secondary: #f8fafc;
+}
+
+html {
+  color-scheme: light;
+  background-color: var(--bg-main);
+  color: var(--text-main);
 }
 
 body {
