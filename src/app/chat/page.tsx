@@ -642,13 +642,23 @@ export default function ChatPage() {
                   교수님의 특정 학생 면담 요청, 재학생과 졸업생 간 멘토링 대화를 바로 시작할 수 있습니다.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setModalMode(null)}
-                className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => refreshApprovedMembers()}
+                  title="회원 목록 새로고침"
+                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-orange-600 transition"
+                >
+                  <RefreshCw className={`w-4 h-4 ${approvedMembersLoading ? "animate-spin text-orange-600" : ""}`} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalMode(null)}
+                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -695,10 +705,20 @@ export default function ChatPage() {
                   <p>승인된 학과 구성원 목록을 실시간으로 불러오는 중입니다...</p>
                 </div>
               ) : availableUsers.filter((u) => u.id !== currentUser.id).length === 0 ? (
-                <div className="p-8 text-center text-xs text-slate-400 space-y-1">
+                <div className="p-8 text-center text-xs text-slate-400 space-y-2">
                   <Users className="w-6 h-6 mx-auto text-slate-300 mb-1" />
                   <p className="font-semibold text-slate-600 dark:text-slate-300">대화 가능한 다른 승인 회원이 아직 없습니다.</p>
-                  <p className="text-[11px]">관리자가 가입을 승인하면 이곳에 자동으로 즉시 나타납니다.</p>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">
+                    본인 계정({currentUser.name} 님)은 자기 자신에게 대화할 수 없어 목록에서 제외됩니다.<br />
+                    관리자가 다른 회원의 가입을 승인하거나, 관리자 계정과 1:1 대화를 진행할 수 있습니다.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => refreshApprovedMembers()}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold transition mt-1"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> 목록 다시 불러오기
+                  </button>
                 </div>
               ) : searchableUsers.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-400">
@@ -755,13 +775,23 @@ export default function ChatPage() {
                   여러 명의 재학생·졸업생·교수진을 선택해 스터디나 프로젝트 단체방을 만드세요.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setModalMode(null)}
-                className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => refreshApprovedMembers()}
+                  title="회원 목록 새로고침"
+                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-orange-600 transition"
+                >
+                  <RefreshCw className={`w-4 h-4 ${approvedMembersLoading ? "animate-spin text-orange-600" : ""}`} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalMode(null)}
+                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <form onSubmit={handleCreateGroup} className="space-y-3 text-xs sm:text-sm">
@@ -805,8 +835,16 @@ export default function ChatPage() {
                       승인 회원 목록을 불러오는 중...
                     </div>
                   ) : availableUsers.filter((u) => u.id !== currentUser.id).length === 0 ? (
-                    <div className="p-6 text-center text-xs text-slate-400">
-                      초대 가능한 다른 승인 회원이 아직 없습니다.
+                    <div className="p-6 text-center text-xs text-slate-400 space-y-1.5">
+                      <p className="font-semibold text-slate-600 dark:text-slate-300">초대 가능한 다른 승인 회원이 아직 없습니다.</p>
+                      <p className="text-[11px] text-slate-500">본인 계정을 제외한 다른 정회원이 승인되면 선택할 수 있습니다.</p>
+                      <button
+                        type="button"
+                        onClick={() => refreshApprovedMembers()}
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] text-slate-700 dark:text-slate-200 hover:bg-slate-200 font-semibold"
+                      >
+                        <RefreshCw className="w-3 h-3" /> 다시 조회
+                      </button>
                     </div>
                   ) : (
                     availableUsers
@@ -883,13 +921,23 @@ export default function ChatPage() {
                   '{activeConversation.title}' 대화방에 학과 구성원을 추가로 초대합니다.
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setModalMode(null)}
-                className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => refreshApprovedMembers()}
+                  title="회원 목록 새로고침"
+                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-orange-600 transition"
+                >
+                  <RefreshCw className={`w-4 h-4 ${approvedMembersLoading ? "animate-spin text-orange-600" : ""}`} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalMode(null)}
+                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
 
             <form onSubmit={handleInviteSubmit} className="space-y-3 text-xs sm:text-sm">

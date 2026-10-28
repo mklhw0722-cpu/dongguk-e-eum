@@ -57,6 +57,7 @@ import {
   subscribeToApprovedUsers,
   PublicChatUser,
   getFirebaseInstances,
+  syncApprovedUsersToPublicProfiles,
 } from "@/lib/firebase";
 import { User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -299,6 +300,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const unsubUsers = subscribeToAllUsersForAdmin(
       (list) => {
         setRealUsersForAdmin(list);
+        // 과거 승인자를 포함하여 모든 승인 회원을 publicProfiles에 자동 동기화
+        syncApprovedUsersToPublicProfiles(list).catch((e) =>
+          console.warn("공개 프로필 백그라운드 동기화 경고:", e)
+        );
       },
       (err) => {
         console.warn(err);
@@ -344,7 +349,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Firestore 실시간 대화방 목록 및 승인 회원 상태
   const [firestoreRooms, setFirestoreRooms] = useState<FirestoreChatRoom[]>([]);
-  const [approvedMembers, setApprovedMembers] = useState<PublicChatUser[]>([]);
+  const [approvedMembersRaw, setApprovedMembersRaw] = useState<PublicChatUser[]>([]);
   const [approvedMembersLoading, setApprovedMembersLoading] = useState(false);
   const [approvedMembersError, setApprovedMembersError] = useState<string | null>(null);
 
@@ -355,7 +360,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     if (!rawFirebaseUser || !authUserProfile || authUserProfile.approvalStatus !== "approved") {
       setFirestoreRooms([]);
-      setApprovedMembers([]);
+      setApprovedMembersRaw([]);
       setApprovedMembersLoading(false);
       setApprovedMembersError(null);
       return;
@@ -365,8 +370,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setApprovedMembersError(null);
 
     // 1. 대화방 목록 실시간 구독
+    const currentUid = authUserProfile.id || (rawFirebaseUser ? rawFirebaseUser.uid : "");
     const unsubChats = subscribeToUserChats(
-      authUserProfile.id,
+      currentUid,
       (rooms) => {
         setFirestoreRooms(rooms);
       },
@@ -377,9 +383,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // 2. 승인된 정회원 실시간 목록 구독 (관리자가 승인/거절 시 즉시 자동 반영)
     const unsubApprovedUsers = subscribeToApprovedUsers(
-      authUserProfile.id,
+      currentUid,
       (users) => {
-        setApprovedMembers(users);
+        setApprovedMembersRaw(users);
         setApprovedMembersLoading(false);
         setApprovedMembersError(null);
       },
@@ -395,12 +401,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
   }, [hydrated, firebaseVersionTick, rawFirebaseUser, authUserProfile]);
 
+  // 승인된 정회원 통합 목록 (Firestore 구독 결과 + 관리자의 경우 실시간 관리자 회원 목록의 승인자 자동 병합)
+  const approvedMembers = useMemo(() => {
+    const map = new Map<string, PublicChatUser>();
+    const currentUid = authUserProfile?.id || (rawFirebaseUser ? rawFirebaseUser.uid : "");
+
+    // 1. 일반 승인 목록 쿼리 결과 추가
+    approvedMembersRaw.forEach((u) => {
+      const uid = u.id || u.uid;
+      if (uid && (!currentUid || uid !== currentUid)) {
+        map.set(uid, { ...u, id: uid, uid });
+      }
+    });
+
+    // 2. 관리자 계정인 경우, realUsersForAdmin에서 승인 완료된 회원을 즉시 병합 (과거 승인자 누락 방지)
+    if (authUserProfile?.role === "admin" && Array.isArray(realUsersForAdmin)) {
+      realUsersForAdmin.forEach((u) => {
+        const uStatus = (u.approvalStatus || "").toString().trim().toLowerCase();
+        const uid = u.id || (u as any).uid;
+        if (uStatus === "approved" && uid && (!currentUid || uid !== currentUid)) {
+          if (!map.has(uid)) {
+            map.set(uid, {
+              id: uid,
+              uid,
+              name: u.name || "구성원",
+              role: u.role || "student",
+              avatarInitials:
+                u.avatarInitials || (u.name ? u.name.slice(0, 2) : "학"),
+              approvalStatus: "approved",
+              careerTrack: u.careerTrack || "",
+              doubleMajor: u.doubleMajor || "",
+              bio: u.bio || "",
+            });
+          }
+        }
+      });
+    }
+
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
+  }, [approvedMembersRaw, realUsersForAdmin, authUserProfile, rawFirebaseUser]);
+
   const refreshApprovedMembers = async () => {
-    if (authUserProfile) {
+    const currentUid = authUserProfile?.id || (rawFirebaseUser ? rawFirebaseUser.uid : "");
+    if (currentUid) {
       try {
         setApprovedMembersLoading(true);
-        const users = await searchApprovedUsersInFirestore(authUserProfile.id);
-        setApprovedMembers(users);
+        const users = await searchApprovedUsersInFirestore(currentUid);
+        setApprovedMembersRaw(users);
         setApprovedMembersError(null);
         return users;
       } catch (err: any) {
@@ -435,7 +482,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const currentUser: User = isRealAuthActive && authUserProfile
     ? {
-        id: authUserProfile.id,
+        id: authUserProfile.id || (rawFirebaseUser ? rawFirebaseUser.uid : ""),
         name: authUserProfile.name,
         email: authUserProfile.email,
         role: authUserProfile.role,

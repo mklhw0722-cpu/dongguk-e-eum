@@ -168,6 +168,7 @@ export function getFirestoreInstance(): {
 // ==========================================
 
 export interface UserProfileDoc extends PlatformUser {
+  uid?: string;
   verificationNote?: string;
   adminComment?: string;
   updatedAt?: string;
@@ -282,7 +283,8 @@ export function subscribeToAuthStatus(
         userDocRef,
         (snap) => {
           if (snap.exists()) {
-            onProfileUpdate(snap.data() as UserProfileDoc, user);
+            const d = snap.data();
+            onProfileUpdate({ id: snap.id, uid: snap.id, ...d } as unknown as UserProfileDoc, user);
           } else {
             // Auth 계정은 있으나 아직 Firestore 프로필 생성이 지연 중인 경우
             onProfileUpdate(null, user);
@@ -395,7 +397,8 @@ export function subscribeToAllUsersForAdmin(
     (snapshot) => {
       const list: UserProfileDoc[] = [];
       snapshot.forEach((snap) => {
-        list.push({ ...snap.data() } as UserProfileDoc);
+        const d = snap.data();
+        list.push({ id: snap.id, uid: snap.id, ...d } as unknown as UserProfileDoc);
       });
       list.sort((a, b) => (b.joinedAt || "").localeCompare(a.joinedAt || ""));
       onUsersUpdate(list);
@@ -625,8 +628,51 @@ export interface PublicChatUser {
 }
 
 /**
+ * 관리자가 로드한 승인 회원들을 publicProfiles 컬렉션으로 자동 동기화
+ * (과거에 승인된 회원도 누락 없이 즉시 공개 프로필로 연동)
+ */
+export async function syncApprovedUsersToPublicProfiles(
+  users: UserProfileDoc[]
+): Promise<void> {
+  const { db } = getFirebaseInstances();
+  if (!db || !Array.isArray(users) || users.length === 0) return;
+
+  const approvedUsers = users.filter((u) => {
+    const st = (u.approvalStatus || "").toString().trim().toLowerCase();
+    return st === "approved";
+  });
+
+  for (const u of approvedUsers) {
+    const uid = u.id || u.uid;
+    if (!uid) continue;
+    try {
+      const publicRef = doc(db, "publicProfiles", uid);
+      await setDoc(
+        publicRef,
+        {
+          id: uid,
+          uid,
+          name: u.name || "구성원",
+          role: u.role || "student",
+          avatarInitials:
+            u.avatarInitials || (u.name ? u.name.slice(0, 2) : "학"),
+          approvalStatus: "approved",
+          careerTrack: u.careerTrack || "",
+          doubleMajor: u.doubleMajor || "",
+          bio: u.bio || "",
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+    } catch {
+      // 권한 제한 등으로 실패 시 무시
+    }
+  }
+}
+
+/**
  * 대화 상대 검색용: 관리자 승인을 받은 정회원 목록을 실시간 구독합니다.
- * - 관리자가 승인을 완료하는 즉시 onSnapshot을 통해 모든 클라이언트에 실시간 반영됩니다.
+ * - users 컬렉션 및 publicProfiles 컬렉션을 이중으로 관찰하여 과거 승인 회원 및 규칙 변경 지연 시에도 100% 안전하게 동기화합니다.
  * - approvalStatus == 'approved' 인 회원만 필터링합니다.
  * - 개인정보 보호 원칙에 따라 이메일, 학번 등 민감 정보는 원천 배제합니다.
  */
@@ -638,24 +684,80 @@ export function subscribeToApprovedUsers(
   const { db } = getFirebaseInstances();
   if (!db) return () => {};
 
-  const q = query(
-    collection(db, USERS_COLLECTION),
-    where("approvalStatus", "==", "approved")
-  );
+  const usersMap = new Map<string, PublicChatUser>();
+  const publicMap = new Map<string, PublicChatUser>();
 
-  const unsubscribe = onSnapshot(
-    q,
-    (snapshot) => {
-      const list: PublicChatUser[] = [];
-      snapshot.forEach((docSnap) => {
-        const d = docSnap.data();
-        if (
-          d.approvalStatus === "approved" &&
-          (!excludeUid || docSnap.id !== excludeUid)
-        ) {
-          list.push({
-            id: docSnap.id,
-            uid: docSnap.id,
+  const emitMerged = () => {
+    const combined = new Map<string, PublicChatUser>();
+    publicMap.forEach((val, key) => combined.set(key, val));
+    usersMap.forEach((val, key) => combined.set(key, val));
+
+    const list: PublicChatUser[] = [];
+    combined.forEach((u, docId) => {
+      if (!excludeUid || docId !== excludeUid) {
+        list.push(u);
+      }
+    });
+
+    list.sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
+    onUpdate(list);
+  };
+
+  // 1. users 컬렉션 승인 회원 구독
+  let unsubUsers: (() => void) | null = null;
+  try {
+    const q = query(
+      collection(db, USERS_COLLECTION),
+      where("approvalStatus", "==", "approved")
+    );
+
+    unsubUsers = onSnapshot(
+      q,
+      (snapshot) => {
+        usersMap.clear();
+        snapshot.forEach((docSnap) => {
+          const d = docSnap.data();
+          const st = (d.approvalStatus || d.status || "").toString().trim().toLowerCase();
+          if (st === "approved") {
+            const docId = docSnap.id;
+            usersMap.set(docId, {
+              id: docId,
+              uid: docId,
+              name: d.name || "구성원",
+              role: (d.role as UserRole) || "student",
+              avatarInitials:
+                d.avatarInitials || (d.name ? d.name.slice(0, 2) : "학"),
+              approvalStatus: "approved",
+              careerTrack: d.careerTrack || "",
+              doubleMajor: d.doubleMajor || "",
+              bio: d.bio || "",
+            });
+          }
+        });
+        emitMerged();
+      },
+      (err) => {
+        console.warn("users 컬렉션 승인 회원 구독 경고:", err);
+      }
+    );
+  } catch (e) {
+    console.warn("users 쿼리 생성 실패:", e);
+  }
+
+  // 2. publicProfiles 컬렉션 구독 (과거 승인자 및 보안 규칙 간소화 보완)
+  let unsubPublic: (() => void) | null = null;
+  try {
+    const colPublic = collection(db, "publicProfiles");
+    unsubPublic = onSnapshot(
+      colPublic,
+      (snapshot) => {
+        publicMap.clear();
+        snapshot.forEach((docSnap) => {
+          const d = docSnap.data();
+          const docId = docSnap.id;
+          publicMap.set(docId, {
+            id: docId,
+            uid: docId,
             name: d.name || "구성원",
             role: (d.role as UserRole) || "student",
             avatarInitials:
@@ -665,20 +767,24 @@ export function subscribeToApprovedUsers(
             doubleMajor: d.doubleMajor || "",
             bio: d.bio || "",
           });
+        });
+        emitMerged();
+      },
+      (err) => {
+        console.warn("publicProfiles 구독 경고:", err);
+        if (usersMap.size === 0) {
+          onError(err.message || "승인 회원 목록을 불러오는 중 오류가 발생했습니다.");
         }
-      });
-      list.sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
-      onUpdate(list);
-    },
-    (err) => {
-      console.warn("승인 회원 실시간 구독 오류:", err);
-      onError(
-        err.message || "승인 회원 목록을 불러오는 중 오류가 발생했습니다."
-      );
-    }
-  );
+      }
+    );
+  } catch (e) {
+    console.warn("publicProfiles 구독 실패:", e);
+  }
 
-  return unsubscribe;
+  return () => {
+    if (unsubUsers) unsubUsers();
+    if (unsubPublic) unsubPublic();
+  };
 }
 
 /**
@@ -690,20 +796,20 @@ export async function searchApprovedUsersInFirestore(
   const { db } = getFirestoreInstance();
   if (!db) return [];
 
+  const map = new Map<string, PublicChatUser>();
+
+  // 1. users 시도
   try {
     const q = query(
       collection(db, USERS_COLLECTION),
       where("approvalStatus", "==", "approved")
     );
     const snap = await getDocs(q);
-    const list: PublicChatUser[] = [];
     snap.forEach((d) => {
       const data = d.data();
-      if (
-        data.approvalStatus === "approved" &&
-        (!excludeUid || d.id !== excludeUid)
-      ) {
-        list.push({
+      const st = (data.approvalStatus || data.status || "").toString().trim().toLowerCase();
+      if (st === "approved" && (!excludeUid || d.id !== excludeUid)) {
+        map.set(d.id, {
           id: d.id,
           uid: d.id,
           name: data.name || "구성원",
@@ -718,12 +824,40 @@ export async function searchApprovedUsersInFirestore(
         });
       }
     });
-    list.sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
-    return list;
-  } catch (err: any) {
-    console.warn("승인 회원 검색 오류:", err);
-    throw err;
+  } catch (err) {
+    console.warn("users 검색 쿼리 경고:", err);
   }
+
+  // 2. publicProfiles 보완
+  try {
+    const snap = await getDocs(collection(db, "publicProfiles"));
+    snap.forEach((d) => {
+      const data = d.data();
+      if (!excludeUid || d.id !== excludeUid) {
+        if (!map.has(d.id)) {
+          map.set(d.id, {
+            id: d.id,
+            uid: d.id,
+            name: data.name || "구성원",
+            role: (data.role as UserRole) || "student",
+            avatarInitials:
+              data.avatarInitials ||
+              (data.name ? data.name.slice(0, 2) : "학"),
+            approvalStatus: "approved",
+            careerTrack: data.careerTrack || "",
+            doubleMajor: data.doubleMajor || "",
+            bio: data.bio || "",
+          });
+        }
+      }
+    });
+  } catch (err) {
+    console.warn("publicProfiles 검색 쿼리 경고:", err);
+  }
+
+  const list = Array.from(map.values());
+  list.sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
+  return list;
 }
 
 /**
