@@ -335,7 +335,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <p className="font-semibold text-slate-500 dark:text-slate-300 flex items-center gap-1">
               <Sparkles className="w-3.5 h-3.5 text-orange-500" /> 동국e음 (Dongguk e-eum)
             </p>
-            <p>동국대학교 교육학과 폐쇄형 커뮤니티</p>
+            <p>동국대학교 교육학과 전용 플랫폼</p>
             <p className="text-[10px]">
               {isFirestoreConnected
                 ? "🟢 Firebase Auth & Firestore 실시간 보안 연동"
