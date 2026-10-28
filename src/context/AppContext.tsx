@@ -6,6 +6,7 @@ import {
   UserRole,
   Notice,
   NoticeCategory,
+  NoticeSyncMetadata,
   AlumniProfile,
   MentoringRequest,
   Conversation,
@@ -59,7 +60,12 @@ import {
   getFirebaseInstances,
   syncApprovedUsersToPublicProfiles,
   updateUserDisplayName,
+  subscribeToNoticesInFirestore,
+  upsertNoticeInFirestore,
+  syncOfficialNoticesToFirestore,
 } from "@/lib/firebase";
+import officialNoticesJson from "@/data/officialNotices.json";
+import { extractScheduleFromTitle } from "@/lib/officialNoticeParser";
 import { User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import {
@@ -133,7 +139,8 @@ interface AppContextValue extends PlatformDataState {
   inviteUsersToChat: (chatId: string, users: (PublicChatUser | UserProfileDoc)[]) => Promise<void>;
   leaveChat: (chatId: string) => Promise<void>;
 
-  // 기능 B. 공지사항 액션
+  // 기능 B. 공지사항 액션 (공식 홈페이지 자동 연동 + 관리자 공지 작성 + 캘린더 일정 확정)
+  noticeSyncMeta: NoticeSyncMetadata;
   createNotice: (payload: {
     title: string;
     category: NoticeCategory;
@@ -141,7 +148,18 @@ interface AppContextValue extends PlatformDataState {
     content: string;
     isPinned: boolean;
     officialUrl: string;
-  }) => void;
+    eventStartDate?: string;
+    eventEndDate?: string;
+  }) => Promise<void> | void;
+  syncOfficialNoticesToCloud: () => Promise<number>;
+  updateNoticeSchedule: (
+    noticeId: string,
+    schedule: {
+      scheduleStatus: "confirmed" | "needs_review" | "none";
+      eventStartDate?: string;
+      eventEndDate?: string;
+    }
+  ) => Promise<void>;
 
   // 기능 C. 졸업생 연결 액션
   createMentoringRequest: (
@@ -386,6 +404,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Firestore 실시간 대화방 목록 및 승인 회원 상태
   const [firestoreRooms, setFirestoreRooms] = useState<FirestoreChatRoom[]>([]);
+  const [firestoreNotices, setFirestoreNotices] = useState<Notice[]>([]);
   const [approvedMembersRaw, setApprovedMembersRaw] = useState<PublicChatUser[]>([]);
   const [approvedMembersLoading, setApprovedMembersLoading] = useState(false);
   const [approvedMembersError, setApprovedMembersError] = useState<string | null>(null);
@@ -397,6 +416,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     if (!rawFirebaseUser || !authUserProfile || authUserProfile.approvalStatus !== "approved") {
       setFirestoreRooms([]);
+      setFirestoreNotices([]);
       setApprovedMembersRaw([]);
       setApprovedMembersLoading(false);
       setApprovedMembersError(null);
@@ -432,9 +452,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
+    // 3. 공식 연동 공지 및 학과 관리자 공지 실시간 구독 (승인된 회원만 조회 가능)
+    const unsubNotices = subscribeToNoticesInFirestore(
+      (cloudNotices) => {
+        setFirestoreNotices(cloudNotices);
+      },
+      () => {
+        // 규칙 게시 전이거나 초기 빈 상태인 경우 정적 수집 데이터 및 로컬 상태로 안전하게 폴백
+      }
+    );
+
     return () => {
       if (unsubChats) unsubChats();
       if (unsubApprovedUsers) unsubApprovedUsers();
+      if (unsubNotices) unsubNotices();
     };
   }, [hydrated, firebaseVersionTick, rawFirebaseUser, authUserProfile]);
 
@@ -915,35 +946,200 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // --- 공지사항 액션 ---
-  const createNotice = (payload: {
+  // --- 공지사항 통합 데이터 & 액션 (공식 홈페이지 자동 연동 + 관리자 직접 작성 + 캘린더 일정 관리) ---
+  const noticeSyncMeta: NoticeSyncMetadata = useMemo(() => {
+    return {
+      lastAttemptAt: officialNoticesJson.lastAttemptAt,
+      lastSuccessAt: officialNoticesJson.lastSuccessAt,
+      scheduleNote: officialNoticesJson.scheduleNote,
+      sources: officialNoticesJson.sources as NoticeSyncMetadata["sources"],
+    };
+  }, []);
+
+  const mergedNotices: Notice[] = useMemo(() => {
+    const byId = new Map<string, Notice>();
+    const urlToId = new Map<string, string>();
+
+    // 1. 기존 로컬/예시 공지 보존 (삭제 금지 원칙 준수)
+    state.notices.forEach((n) => {
+      byId.set(n.id, n);
+      if (n.officialUrl && n.officialUrl !== "https://www.dongguk.edu") {
+        urlToId.set(n.officialUrl, n.id);
+      }
+    });
+
+    // 2. 공식 홈페이지 자동 수집 공지 병합 (본문 무단 복제 없이 제목·메타데이터·원문 링크만 제공)
+    (officialNoticesJson.notices as any[]).forEach((raw) => {
+      const existingId = byId.has(raw.id) ? raw.id : urlToId.get(raw.officialUrl);
+      const prev = existingId ? byId.get(existingId) : undefined;
+
+      const officialItem: Notice = {
+        id: raw.id,
+        articleSeq: raw.articleSeq,
+        sourceId: raw.sourceId,
+        organization: raw.organization,
+        subCategoryTag: raw.subCategoryTag,
+        category: raw.category as NoticeCategory,
+        title: raw.title,
+        summary: raw.summary,
+        content: [
+          `[동국대학교 공식 홈페이지 자동 연동 안내]`,
+          `• 작성 기관: ${raw.organization}`,
+          `• 공지 분류: ${raw.category}${raw.subCategoryTag ? ` (${raw.subCategoryTag})` : ""}`,
+          `• 작성일: ${raw.createdAt} / 작성자: ${raw.authorName}`,
+          `• 첨부파일 여부: ${raw.hasAttachment ? "첨부파일 있음 (원문에서 다운로드 가능)" : "없음"}`,
+          ``,
+          `※ 동국e음은 저작권 및 학교 홈페이지 운영 정책을 준수하기 위해 공지 본문이나 첨부파일 전체를 무단 복제하지 않습니다.`,
+          `아래 [공식 홈페이지 원문 이동] 버튼을 누르시면 해당 게시글(${raw.officialUrl})의 상세 본문과 첨부파일을 즉시 확인하실 수 있습니다.`,
+        ].join("\n"),
+        authorName: raw.authorName || raw.organization,
+        createdAt: raw.createdAt,
+        isPinned: Boolean(raw.isPinned),
+        isSampleData: false,
+        officialUrl: raw.officialUrl,
+        viewCount: Number(raw.viewCount) || 0,
+        hasAttachment: Boolean(raw.hasAttachment),
+        isOfficialSynced: true,
+        isNew: Boolean(raw.isNew),
+        collectedAt: raw.collectedAt,
+        lastVerifiedAt: raw.lastVerifiedAt,
+        syncState: raw.syncState || "active",
+        // 로컬에서 관리자가 이미 확정/수정한 일정이 있으면 우선 유지
+        scheduleStatus: prev?.scheduleStatus || raw.scheduleStatus || "none",
+        eventStartDate: prev?.eventStartDate || raw.eventStartDate,
+        eventEndDate: prev?.eventEndDate || raw.eventEndDate,
+        extractedDateText: prev?.extractedDateText || raw.extractedDateText,
+      };
+
+      byId.set(officialItem.id, officialItem);
+      urlToId.set(officialItem.officialUrl, officialItem.id);
+    });
+
+    // 3. Firestore 실시간 공지 병합 (관리자가 작성했거나 캘린더 일정을 확정한 내역 최우선 반영)
+    firestoreNotices.forEach((cloudNotice) => {
+      const prev = byId.get(cloudNotice.id);
+      byId.set(cloudNotice.id, {
+        ...prev,
+        ...cloudNotice,
+      });
+    });
+
+    return Array.from(byId.values()).sort((a, b) => {
+      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+      const dateCmp = (b.createdAt || "").localeCompare(a.createdAt || "");
+      if (dateCmp !== 0) return dateCmp;
+      return b.id.localeCompare(a.id);
+    });
+  }, [state.notices, firestoreNotices]);
+
+  const createNotice = async (payload: {
     title: string;
     category: NoticeCategory;
     summary: string;
     content: string;
     isPinned: boolean;
     officialUrl: string;
+    eventStartDate?: string;
+    eventEndDate?: string;
   }) => {
-    const formattedTitle = payload.title.startsWith("[예시 데이터]")
-      ? payload.title
-      : `[예시 데이터] ${payload.title}`;
+    // 실제 인증 모드에서는 오직 승인된 관리자만 공지를 등록할 수 있음 (일반 사용자 권한 차단)
+    if (isRealAuthActive) {
+      if (!authUserProfile || authUserProfile.role !== "admin" || authUserProfile.approvalStatus !== "approved") {
+        throw new Error("공지사항 등록 권한이 없습니다. 승인된 학과 관리자만 공지를 작성할 수 있습니다.");
+      }
+    }
+
+    const isAdminReal =
+      isRealAuthActive &&
+      authUserProfile?.role === "admin" &&
+      authUserProfile?.approvalStatus === "approved";
+
+    const today = new Date().toISOString().slice(0, 10);
+    const hasExplicitSchedule = Boolean(payload.eventStartDate);
+    const extracted = hasExplicitSchedule
+      ? {
+          scheduleStatus: "confirmed" as const,
+          eventStartDate: payload.eventStartDate,
+          eventEndDate: payload.eventEndDate || payload.eventStartDate,
+        }
+      : extractScheduleFromTitle(payload.title, today);
+
     const newNotice: Notice = {
-      id: `notice-${Date.now()}`,
-      title: formattedTitle,
+      id: `notice-admin-${Date.now()}`,
+      title: payload.title.trim(),
       category: payload.category,
-      summary: payload.summary,
-      content: `※ 본 게시물은 프로토타입 시연을 위한 [예시 데이터]이며 실제 동국대학교 공식 공지가 아닙니다.\n\n${payload.content}`,
-      authorName: `${currentUser.name} (데모 작성)`,
-      createdAt: new Date().toISOString().slice(0, 10),
+      organization: "동국대학교 교육학과 (동국e음 관리자)",
+      summary: payload.summary.trim() || payload.content.trim().slice(0, 90),
+      content: payload.content.trim(),
+      authorName: `${currentUser.name} (학과 관리자)`,
+      createdAt: today,
       isPinned: payload.isPinned,
-      isSampleData: true,
-      officialUrl: payload.officialUrl || "https://www.dongguk.edu",
+      isSampleData: !isAdminReal,
+      isOfficialSynced: false,
+      isNew: true,
+      officialUrl: payload.officialUrl.trim() || "https://education.dongguk.edu",
       viewCount: 1,
+      ...extracted,
     };
+
     setState((prev) => ({
       ...prev,
       notices: [newNotice, ...prev.notices],
     }));
+
+    if (isAdminReal) {
+      await upsertNoticeInFirestore(newNotice);
+    }
+  };
+
+  const syncOfficialNoticesToCloud = async (): Promise<number> => {
+    if (!authUserProfile || authUserProfile.role !== "admin" || authUserProfile.approvalStatus !== "approved") {
+      throw new Error("승인된 관리자만 Firestore에 공식 공지를 동기화할 수 있습니다.");
+    }
+    return await syncOfficialNoticesToFirestore(mergedNotices, noticeSyncMeta);
+  };
+
+  const updateNoticeSchedule = async (
+    noticeId: string,
+    schedule: {
+      scheduleStatus: "confirmed" | "needs_review" | "none";
+      eventStartDate?: string;
+      eventEndDate?: string;
+    }
+  ): Promise<void> => {
+    if (isRealAuthActive) {
+      if (!authUserProfile || authUserProfile.role !== "admin" || authUserProfile.approvalStatus !== "approved") {
+        throw new Error("승인된 관리자만 캘린더 일정을 확정·수정할 수 있습니다.");
+      }
+    }
+
+    const target = mergedNotices.find((n) => n.id === noticeId);
+    if (!target) return;
+
+    const updatedNotice: Notice = {
+      ...target,
+      scheduleStatus: schedule.scheduleStatus,
+      eventStartDate: schedule.eventStartDate,
+      eventEndDate: schedule.eventEndDate || schedule.eventStartDate,
+    };
+
+    setState((prev) => {
+      const exists = prev.notices.some((n) => n.id === noticeId);
+      return {
+        ...prev,
+        notices: exists
+          ? prev.notices.map((n) => (n.id === noticeId ? updatedNotice : n))
+          : [updatedNotice, ...prev.notices],
+      };
+    });
+
+    if (
+      isRealAuthActive &&
+      authUserProfile?.role === "admin" &&
+      authUserProfile?.approvalStatus === "approved"
+    ) {
+      await upsertNoticeInFirestore(updatedNotice);
+    }
   };
 
   // --- 졸업생 연결 액션 ---
@@ -1381,6 +1577,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider
       value={{
         ...state,
+        notices: mergedNotices,
+        noticeSyncMeta,
         conversations,
         firestoreRooms,
         approvedMembers,
@@ -1405,7 +1603,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isAuthLoading,
         isRealAuthActive,
         isAccessAllowed,
-    accessGate,
+        accessGate,
         handleSignUp,
         handleLogin,
         handleLogout,
@@ -1419,6 +1617,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         startOrOpenDirectChat,
         createGroupConversation,
         createNotice,
+        syncOfficialNoticesToCloud,
+        updateNoticeSchedule,
         createMentoringRequest,
         updateMentoringStatus,
         upsertAlumniProfile,

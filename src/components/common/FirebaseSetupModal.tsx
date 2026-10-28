@@ -86,12 +86,17 @@ service cloud.firestore {
                    || (isApprovedUser() && request.auth.uid == userId);
     }
 
-    // 2. 최초 관리자 안전 생성
+    // 2. 최초 관리자 안전 생성 및 공지 동기화 상태
     match /system/admin_bootstrap {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && !exists(/databases/$(database)/documents/system/admin_bootstrap);
       allow update: if isAuthenticated() && resource.data.adminUid == request.auth.uid;
       allow delete: if false;
+    }
+
+    match /system/notice_sync_status {
+      allow read: if isApprovedUser();
+      allow write: if isApprovedAdmin();
     }
 
     // 3. 학우들이 쓴 글 (승인된 정회원만 조회/작성 가능)
@@ -148,6 +153,12 @@ service cloud.firestore {
         request.auth.uid == userId
         || isApprovedAdmin()
       );
+    }
+
+    // 6. 학교·교육학과·사범대학 공지사항 (승인된 회원만 조회, 관리자만 등록/수정/동기화)
+    match /notices/{noticeId} {
+      allow read: if isApprovedUser();
+      allow create, update, delete: if isApprovedAdmin();
     }
 
     match /{document=**} {

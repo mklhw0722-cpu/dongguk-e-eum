@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/accessGate.test.mjs tests/officialNotice.test.mjs",
+    "sync:notices": "node scripts/sync-official-notices.mjs"
   },
   "dependencies": {
     "firebase": "^13.1.0",

@@ -110,6 +110,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /system/notice_sync_status {
+      // 승인된 정회원만 공식 공지 동기화 상태(마지막 수집 성공 시각 등)를 조회할 수 있습니다.
+      allow read: if isApprovedUser();
+      // 오직 승인된 관리자만 동기화 상태를 기록/갱신할 수 있습니다.
+      allow write: if isApprovedAdmin();
+    }
+
     // ==============================================================
     // 3. 학우들이 쓴 글 (communityPosts 컬렉션 - 내부 콘텐츠 보호)
     // ==============================================================
@@ -182,6 +189,17 @@ service cloud.firestore {
         request.auth.uid == userId
         || isApprovedAdmin()
       );
+    }
+
+    // ==============================================================
+    // 6. 학교·교육학과·사범대학 공지사항 (notices 컬렉션 - 공식 연동 & 학과 공지)
+    // ==============================================================
+    match /notices/{noticeId} {
+      // 승인된 정회원(approved)만 내부 공지사항을 조회할 수 있습니다 (비로그인/미승인 차단)
+      allow read: if isApprovedUser();
+
+      // 일반 사용자는 공지를 등록·수정·삭제할 수 없으며, 오직 승인된 관리자(isApprovedAdmin)만 가능합니다.
+      allow create, update, delete: if isApprovedAdmin();
     }
 
     // 그 외 지정되지 않은 모든 컬렉션과 문서는 전면 차단

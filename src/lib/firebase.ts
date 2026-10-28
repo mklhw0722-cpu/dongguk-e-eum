@@ -36,6 +36,8 @@ import {
   ApprovalStatus,
   CommunityPost,
   CommunityComment,
+  Notice,
+  NoticeSyncMetadata,
 } from "@/types";
 import { MOCK_COMMUNITY_POSTS } from "@/data/mockData";
 
@@ -53,6 +55,7 @@ const POSTS_COLLECTION = "communityPosts";
 const USERS_COLLECTION = "users";
 const SYSTEM_COLLECTION = "system";
 const CHATS_COLLECTION = "chats";
+const NOTICES_COLLECTION = "notices";
 
 /**
  * 환경변수 또는 브라우저에 저장된 Firebase 설정을 반환합니다.
@@ -1290,4 +1293,112 @@ export async function leaveChatInFirestore(
     timestamp: serverTimestamp(),
     isSystemMessage: true,
   });
+}
+
+// ==========================================
+// 5. 학교·교육학과·사범대학 공식 공지 Firestore 연동
+// ==========================================
+
+function stripUndefinedFields<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const clean: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      clean[k] = v;
+    }
+  }
+  return clean;
+}
+
+/**
+ * 승인된 정회원용: Firestore notices 컬렉션 실시간 구독
+ * - 공식 홈페이지 연동 공지(isOfficialSynced: true)와 관리자가 직접 작성한 공지(isOfficialSynced: false)를 모두 수신합니다.
+ */
+export function subscribeToNoticesInFirestore(
+  onUpdate: (notices: Notice[]) => void,
+  onError: (errMessage: string) => void
+): (() => void) | null {
+  const { db } = getFirestoreInstance();
+  if (!db) return null;
+
+  const colRef = collection(db, NOTICES_COLLECTION);
+  const unsubscribe = onSnapshot(
+    colRef,
+    (snapshot) => {
+      const list: Notice[] = [];
+      snapshot.forEach((docSnap) => {
+        const d = docSnap.data() as Notice;
+        list.push({
+          ...d,
+          id: docSnap.id,
+        });
+      });
+      onUpdate(list);
+    },
+    (err) => {
+      onError(err.message);
+    }
+  );
+
+  return unsubscribe;
+}
+
+/**
+ * 관리자 전용: 단일 공지사항(관리자 직접 작성 또는 캘린더 일정 확정 수정)을 Firestore에 저장/업데이트합니다.
+ */
+export async function upsertNoticeInFirestore(notice: Notice): Promise<void> {
+  const { db } = getFirestoreInstance();
+  if (!db) throw new Error("Firestore 데이터베이스에 연결되어 있지 않습니다.");
+
+  const noticeRef = doc(db, NOTICES_COLLECTION, notice.id);
+  await setDoc(
+    noticeRef,
+    {
+      ...stripUndefinedFields(notice),
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+}
+
+/**
+ * 관리자 전용: 자동 수집된 공식 홈페이지 공지 전체를 Firestore notices 컬렉션과 system/notice_sync_status 문서에 일괄 동기화합니다.
+ */
+export async function syncOfficialNoticesToFirestore(
+  notices: Notice[],
+  syncMeta: NoticeSyncMetadata
+): Promise<number> {
+  const { db } = getFirestoreInstance();
+  if (!db) throw new Error("Firestore 데이터베이스에 연결되어 있지 않습니다.");
+
+  const batch = writeBatch(db);
+  const officialItems = notices.filter((n) => n.isOfficialSynced);
+
+  officialItems.forEach((item) => {
+    const ref = doc(db, NOTICES_COLLECTION, item.id);
+    batch.set(
+      ref,
+      {
+        ...stripUndefinedFields(item),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  });
+
+  const statusRef = doc(db, SYSTEM_COLLECTION, "notice_sync_status");
+  batch.set(
+    statusRef,
+    {
+      lastAttemptAt: syncMeta.lastAttemptAt,
+      lastSuccessAt: syncMeta.lastSuccessAt,
+      scheduleNote: syncMeta.scheduleNote,
+      totalSyncedCount: officialItems.length,
+      sources: syncMeta.sources.map((s) => stripUndefinedFields(s)),
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true }
+  );
+
+  await batch.commit();
+  return officialItems.length;
 }

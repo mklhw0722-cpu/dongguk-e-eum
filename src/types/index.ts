@@ -87,9 +87,44 @@ export interface Notice {
   authorName: string;
   createdAt: string;
   isPinned: boolean;
-  isSampleData: boolean; // 반드시 '예시 데이터' 표시용
+  isSampleData: boolean; // 예시 데이터 여부 (공식 자동 수집 공지나 실제 관리자 공지는 false)
   officialUrl: string;
   viewCount: number;
+  // 공식 홈페이지 자동 연동 및 캘린더 확장 메타데이터
+  articleSeq?: string;
+  sourceId?: string;
+  organization?: string;
+  subCategoryTag?: string;
+  hasAttachment?: boolean;
+  isOfficialSynced?: boolean;
+  isNew?: boolean;
+  collectedAt?: string;
+  lastVerifiedAt?: string;
+  syncState?: "active" | "updated" | "unverified";
+  scheduleStatus?: "confirmed" | "needs_review" | "none";
+  eventStartDate?: string;
+  eventEndDate?: string;
+  extractedDateText?: string;
+}
+
+export interface NoticeSourceSyncStatus {
+  sourceId: string;
+  name: string;
+  organization: string;
+  boardUrl: string;
+  defaultCategory: NoticeCategory;
+  status: "ok" | "failed" | "cached";
+  fetchedCount: number;
+  lastSuccessAt: string | null;
+  lastAttemptAt: string;
+  errorMessage?: string;
+}
+
+export interface NoticeSyncMetadata {
+  lastAttemptAt: string;
+  lastSuccessAt: string;
+  scheduleNote: string;
+  sources: NoticeSourceSyncStatus[];
 }
 
 export interface PrivacySettings {
