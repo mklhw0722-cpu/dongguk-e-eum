@@ -3,7 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { useApp } from "@/context/AppContext";
-import { ROLE_LABELS, DemoInfoBanner } from "@/components/common/Cards";
+import { ROLE_LABELS } from "@/components/common/Cards";
 import {
   Megaphone,
   MessageSquare,
@@ -191,11 +191,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
-      <DemoInfoBanner
-        title="현재 화면은 역할별 맞춤 홈 대시보드(데모)입니다."
-        description="상단 바에서 [재학생 / 졸업생 / 교수 / 관리자] 버튼을 누르면 각 사용자 유형에 맞춰 추천 메뉴와 바로가기가 즉시 전환됩니다."
-      />
 
       {/* 역할별 맞춤 바로가기 3종 */}
       <section className="space-y-3">

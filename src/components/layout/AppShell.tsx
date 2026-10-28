@@ -196,16 +196,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
-{isAccessAllowed && (
-              <button
-                type="button"
-                onClick={resetDemoData}
-                title="데모 데이터 초기화"
-                className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-300 inline-flex items-center gap-1 text-[11px] transition"
-              >
-                <RotateCcw className="w-3 h-3" /> 초기화
-              </button>
-            )}
           </div>
         </div>
       </div>
