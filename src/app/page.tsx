@@ -182,12 +182,6 @@ export default function HomePage() {
                 </span>
               )}
             </Link>
-            <Link
-              href="/auth"
-              className="px-4 py-2 rounded-xl bg-orange-700/60 hover:bg-orange-700/80 text-white font-semibold text-xs text-center transition"
-            >
-              가입·승인 프로세스 보기
-            </Link>
           </div>
         </div>
       </section>
