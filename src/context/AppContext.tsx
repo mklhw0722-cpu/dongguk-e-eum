@@ -485,14 +485,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const currentUser: User = isRealAuthActive && authUserProfile
     ? {
         id: authUserProfile.id || (rawFirebaseUser ? rawFirebaseUser.uid : ""),
-        name: authUserProfile.name || (rawFirebaseUser?.email ? rawFirebaseUser.email.split("@")[0] : "사용자"),
+        name: authUserProfile.name || (authUserProfile.role === "admin" ? "이혜원" : rawFirebaseUser?.email ? rawFirebaseUser.email.split("@")[0] : "사용자"),
         email: authUserProfile.email || rawFirebaseUser?.email || "",
         role: authUserProfile.role || "student",
         studentIdOrYear: authUserProfile.studentIdOrYear || "",
         bio: authUserProfile.bio || "",
         avatarInitials:
           authUserProfile.avatarInitials ||
-          (authUserProfile.name ? authUserProfile.name.slice(0, 2) : "학"),
+          (authUserProfile.name ? authUserProfile.name.slice(0, 2) : authUserProfile.role === "admin" ? "이혜" : "학"),
         approvalStatus: authUserProfile.approvalStatus || "approved",
         joinedAt: authUserProfile.joinedAt || new Date().toISOString().slice(0, 10),
       }

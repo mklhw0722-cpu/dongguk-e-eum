@@ -359,7 +359,7 @@ export async function claimInitialAdminRole(secretPin?: string): Promise<UserPro
     await setDoc(userDocRef, {
       uid: currentUser.uid,
       email: currentUser.email || "admin@dongguk.edu",
-      name: currentUser.displayName || currentUser.email?.split("@")[0] || "시스템 관리자",
+      name: currentUser.displayName || currentUser.email?.split("@")[0] || "이혜원",
       studentIdOrYear: "최고 관리자",
       role: "student" as UserRole,
       approvalStatus: "pending" as ApprovalStatus,
