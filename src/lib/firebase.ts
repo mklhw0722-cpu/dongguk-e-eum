@@ -430,6 +430,42 @@ export async function updateUserApprovalStatusByAdmin(params: {
   }
 
   await updateDoc(userRef, updateData);
+
+  // 채팅용 공개 프로필(publicProfiles) 컬렉션 동기화 (개인정보 보호: 이메일, 학번 등 민감정보 원천 제외)
+  const publicRef = doc(db, "publicProfiles", params.targetUid);
+  if (params.status === "approved") {
+    try {
+      const snap = await getDoc(userRef);
+      if (snap.exists()) {
+        const u = snap.data();
+        await setDoc(
+          publicRef,
+          {
+            id: params.targetUid,
+            uid: params.targetUid,
+            name: u.name || "구성원",
+            role: params.role || u.role || "student",
+            avatarInitials:
+              u.avatarInitials || (u.name ? u.name.slice(0, 2) : "학"),
+            approvalStatus: "approved",
+            careerTrack: u.careerTrack || "",
+            doubleMajor: u.doubleMajor || "",
+            bio: u.bio || "",
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      }
+    } catch (e) {
+      console.warn("공개 프로필 동기화 경고:", e);
+    }
+  } else {
+    try {
+      await deleteDoc(publicRef);
+    } catch {
+      // ignore
+    }
+  }
 }
 
 // ==========================================
@@ -542,7 +578,7 @@ export interface FirestoreChatParticipantInfo {
   uid: string;
   name: string;
   role: UserRole;
-  studentIdOrYear: string;
+  studentIdOrYear?: string;
   avatarInitials: string;
 }
 
@@ -573,11 +609,84 @@ export interface FirestoreChatMessage {
 }
 
 /**
- * 대화 상대 검색용: 관리자 승인을 받은 정회원 목록을 Firestore에서 조회합니다.
+ * 채팅 상대 검색 및 초대용 공개 프로필 모델
+ * 개인정보 보호를 위해 이메일, 학번, 관리자 코멘트 등 비공개 정보는 원천 배제합니다.
+ */
+export interface PublicChatUser {
+  id: string;
+  uid: string;
+  name: string;
+  role: UserRole;
+  avatarInitials: string;
+  approvalStatus: "approved";
+  careerTrack?: string;
+  doubleMajor?: string;
+  bio?: string;
+}
+
+/**
+ * 대화 상대 검색용: 관리자 승인을 받은 정회원 목록을 실시간 구독합니다.
+ * - 관리자가 승인을 완료하는 즉시 onSnapshot을 통해 모든 클라이언트에 실시간 반영됩니다.
+ * - approvalStatus == 'approved' 인 회원만 필터링합니다.
+ * - 개인정보 보호 원칙에 따라 이메일, 학번 등 민감 정보는 원천 배제합니다.
+ */
+export function subscribeToApprovedUsers(
+  excludeUid: string | undefined,
+  onUpdate: (users: PublicChatUser[]) => void,
+  onError: (errMessage: string) => void
+): () => void {
+  const { db } = getFirebaseInstances();
+  if (!db) return () => {};
+
+  const q = query(
+    collection(db, USERS_COLLECTION),
+    where("approvalStatus", "==", "approved")
+  );
+
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const list: PublicChatUser[] = [];
+      snapshot.forEach((docSnap) => {
+        const d = docSnap.data();
+        if (
+          d.approvalStatus === "approved" &&
+          (!excludeUid || docSnap.id !== excludeUid)
+        ) {
+          list.push({
+            id: docSnap.id,
+            uid: docSnap.id,
+            name: d.name || "구성원",
+            role: (d.role as UserRole) || "student",
+            avatarInitials:
+              d.avatarInitials || (d.name ? d.name.slice(0, 2) : "학"),
+            approvalStatus: "approved",
+            careerTrack: d.careerTrack || "",
+            doubleMajor: d.doubleMajor || "",
+            bio: d.bio || "",
+          });
+        }
+      });
+      list.sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
+      onUpdate(list);
+    },
+    (err) => {
+      console.warn("승인 회원 실시간 구독 오류:", err);
+      onError(
+        err.message || "승인 회원 목록을 불러오는 중 오류가 발생했습니다."
+      );
+    }
+  );
+
+  return unsubscribe;
+}
+
+/**
+ * 대화 상대 1회성 검색 함수
  */
 export async function searchApprovedUsersInFirestore(
   excludeUid?: string
-): Promise<UserProfileDoc[]> {
+): Promise<PublicChatUser[]> {
   const { db } = getFirestoreInstance();
   if (!db) return [];
 
@@ -587,17 +696,33 @@ export async function searchApprovedUsersInFirestore(
       where("approvalStatus", "==", "approved")
     );
     const snap = await getDocs(q);
-    const list: UserProfileDoc[] = [];
+    const list: PublicChatUser[] = [];
     snap.forEach((d) => {
-      if (!excludeUid || d.id !== excludeUid) {
-        list.push({ id: d.id, ...(d.data() as any) });
+      const data = d.data();
+      if (
+        data.approvalStatus === "approved" &&
+        (!excludeUid || d.id !== excludeUid)
+      ) {
+        list.push({
+          id: d.id,
+          uid: d.id,
+          name: data.name || "구성원",
+          role: (data.role as UserRole) || "student",
+          avatarInitials:
+            data.avatarInitials ||
+            (data.name ? data.name.slice(0, 2) : "학"),
+          approvalStatus: "approved",
+          careerTrack: data.careerTrack || "",
+          doubleMajor: data.doubleMajor || "",
+          bio: data.bio || "",
+        });
       }
     });
     list.sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
     return list;
-  } catch (err) {
+  } catch (err: any) {
     console.warn("승인 회원 검색 오류:", err);
-    return [];
+    throw err;
   }
 }
 
@@ -695,7 +820,7 @@ export function subscribeToChatMessages(
  */
 export async function getOrCreateDirectChatInFirestore(
   currentUser: PlatformUser,
-  targetUser: UserProfileDoc,
+  targetUser: { id: string; name: string; role: UserRole; avatarInitials?: string; studentIdOrYear?: string },
   categoryTag?: string
 ): Promise<string> {
   const { db } = getFirestoreInstance();
@@ -718,7 +843,7 @@ export async function getOrCreateDirectChatInFirestore(
 
   const newChat: FirestoreChatRoom = {
     id: chatId,
-    title: `${targetUser.name} (${targetUser.studentIdOrYear})`,
+    title: targetUser.name,
     isGroup: false,
     categoryTag:
       categoryTag ||
@@ -729,15 +854,15 @@ export async function getOrCreateDirectChatInFirestore(
         uid: currentUser.id,
         name: currentUser.name,
         role: currentUser.role,
-        studentIdOrYear: currentUser.studentIdOrYear,
         avatarInitials: currentUser.avatarInitials,
       },
       [targetUser.id]: {
         uid: targetUser.id,
         name: targetUser.name,
         role: targetUser.role,
-        studentIdOrYear: targetUser.studentIdOrYear,
-        avatarInitials: targetUser.avatarInitials,
+        avatarInitials:
+          targetUser.avatarInitials ||
+          (targetUser.name ? targetUser.name.slice(0, 2) : "학"),
       },
     },
     lastMessageText: "대화가 시작되었습니다. 첫 인사를 건네보세요!",
@@ -772,7 +897,7 @@ export async function getOrCreateDirectChatInFirestore(
 export async function createGroupChatInFirestore(
   currentUser: PlatformUser,
   title: string,
-  invitedUsers: UserProfileDoc[],
+  invitedUsers: { id: string; name: string; role: UserRole; avatarInitials?: string }[],
   categoryTag = "단체 대화방"
 ): Promise<string> {
   const { db } = getFirestoreInstance();
@@ -788,15 +913,14 @@ export async function createGroupChatInFirestore(
       uid: currentUser.id,
       name: currentUser.name,
       role: currentUser.role,
-      studentIdOrYear: currentUser.studentIdOrYear,
       avatarInitials: currentUser.avatarInitials,
     },
     ...invitedUsers.map((u) => ({
       uid: u.id,
       name: u.name,
       role: u.role,
-      studentIdOrYear: u.studentIdOrYear,
-      avatarInitials: u.avatarInitials,
+      avatarInitials:
+        u.avatarInitials || (u.name ? u.name.slice(0, 2) : "학"),
     })),
   ];
 
@@ -889,7 +1013,7 @@ export async function sendChatMessageInFirestore(
 export async function inviteUsersToChatInFirestore(
   chatId: string,
   currentUser: PlatformUser,
-  newUsers: UserProfileDoc[]
+  newUsers: { id: string; name: string; role: UserRole; avatarInitials?: string; studentIdOrYear?: string }[]
 ): Promise<void> {
   const { db } = getFirestoreInstance();
   if (!db) return;
@@ -903,8 +1027,8 @@ export async function inviteUsersToChatInFirestore(
       uid: u.id,
       name: u.name,
       role: u.role,
-      studentIdOrYear: u.studentIdOrYear,
-      avatarInitials: u.avatarInitials,
+      avatarInitials:
+        u.avatarInitials || (u.name ? u.name.slice(0, 2) : "학"),
     };
   });
 

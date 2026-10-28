@@ -28,12 +28,12 @@ service cloud.firestore {
     // ==============================================================
     match /users/{userId} {
       // 본인은 자신의 프로필을 언제든 읽을 수 있고(승인 대기 상태 확인용),
-      // 승인된 정회원은 대화 상대 검색 및 학과 구성원 프로필 조회가 가능하며,
+      // 승인된 정회원은 대화 상대 검색을 위해 승인된 회원의 프로필을 조회할 수 있으며,
       // 관리자는 모든 회원의 가입 신청서를 조회할 수 있습니다.
       allow read: if isAuthenticated() && (
         request.auth.uid == userId
-        || isApprovedUser()
         || isApprovedAdmin()
+        || (isApprovedUser() && resource.data.approvalStatus == 'approved')
       );
 
       // [회원가입 및 생성 규칙]
@@ -82,6 +82,18 @@ service cloud.firestore {
 
       // 회원 탈퇴 또는 관리자 삭제
       allow delete: if isAuthenticated() && (request.auth.uid == userId || isApprovedAdmin());
+    }
+
+    // ==============================================================
+    // 1-1. 채팅용 공개 프로필 (publicProfiles 컬렉션 - 개인정보 최소화)
+    // ==============================================================
+    match /publicProfiles/{userId} {
+      // 승인된 정회원 및 관리자만 공개 프로필 목록을 조회할 수 있습니다.
+      allow read: if isApprovedUser() || isApprovedAdmin();
+
+      // 본인 또는 관리자만 공개 프로필을 생성/수정할 수 있습니다.
+      allow write: if isApprovedAdmin()
+                   || (isApprovedUser() && request.auth.uid == userId);
     }
 
     // ==============================================================

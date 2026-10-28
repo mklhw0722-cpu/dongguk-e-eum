@@ -54,8 +54,12 @@ import {
   inviteUsersToChatInFirestore,
   leaveChatInFirestore,
   searchApprovedUsersInFirestore,
+  subscribeToApprovedUsers,
+  PublicChatUser,
+  getFirebaseInstances,
 } from "@/lib/firebase";
 import { User as FirebaseUser } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 
 interface AppContextValue extends PlatformDataState {
   currentUser: User;
@@ -108,9 +112,11 @@ interface AppContextValue extends PlatformDataState {
   startOrOpenDirectChat: (targetUserId: string, categoryTag?: string) => Promise<string> | string;
   createGroupConversation: (title: string, memberIds: string[], categoryTag?: string) => Promise<string> | string;
   firestoreRooms: FirestoreChatRoom[];
-  approvedMembers: UserProfileDoc[];
-  refreshApprovedMembers: () => Promise<UserProfileDoc[]>;
-  inviteUsersToChat: (chatId: string, users: UserProfileDoc[]) => Promise<void>;
+  approvedMembers: PublicChatUser[];
+  approvedMembersLoading: boolean;
+  approvedMembersError: string | null;
+  refreshApprovedMembers: () => Promise<PublicChatUser[]>;
+  inviteUsersToChat: (chatId: string, users: (PublicChatUser | UserProfileDoc)[]) => Promise<void>;
   leaveChat: (chatId: string) => Promise<void>;
 
   // 기능 B. 공지사항 액션
@@ -338,7 +344,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Firestore 실시간 대화방 목록 및 승인 회원 상태
   const [firestoreRooms, setFirestoreRooms] = useState<FirestoreChatRoom[]>([]);
-  const [approvedMembers, setApprovedMembers] = useState<UserProfileDoc[]>([]);
+  const [approvedMembers, setApprovedMembers] = useState<PublicChatUser[]>([]);
+  const [approvedMembersLoading, setApprovedMembersLoading] = useState(false);
+  const [approvedMembersError, setApprovedMembersError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -347,9 +355,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     if (!rawFirebaseUser || !authUserProfile || authUserProfile.approvalStatus !== "approved") {
       setFirestoreRooms([]);
+      setApprovedMembers([]);
+      setApprovedMembersLoading(false);
+      setApprovedMembersError(null);
       return;
     }
 
+    setApprovedMembersLoading(true);
+    setApprovedMembersError(null);
+
+    // 1. 대화방 목록 실시간 구독
     const unsubChats = subscribeToUserChats(
       authUserProfile.id,
       (rooms) => {
@@ -360,20 +375,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    searchApprovedUsersInFirestore(authUserProfile.id).then((users) => {
-      setApprovedMembers(users);
-    });
+    // 2. 승인된 정회원 실시간 목록 구독 (관리자가 승인/거절 시 즉시 자동 반영)
+    const unsubApprovedUsers = subscribeToApprovedUsers(
+      authUserProfile.id,
+      (users) => {
+        setApprovedMembers(users);
+        setApprovedMembersLoading(false);
+        setApprovedMembersError(null);
+      },
+      (errMessage) => {
+        setApprovedMembersLoading(false);
+        setApprovedMembersError(errMessage);
+      }
+    );
 
     return () => {
       if (unsubChats) unsubChats();
+      if (unsubApprovedUsers) unsubApprovedUsers();
     };
   }, [hydrated, firebaseVersionTick, rawFirebaseUser, authUserProfile]);
 
   const refreshApprovedMembers = async () => {
     if (authUserProfile) {
-      const users = await searchApprovedUsersInFirestore(authUserProfile.id);
-      setApprovedMembers(users);
-      return users;
+      try {
+        setApprovedMembersLoading(true);
+        const users = await searchApprovedUsersInFirestore(authUserProfile.id);
+        setApprovedMembers(users);
+        setApprovedMembersError(null);
+        return users;
+      } catch (err: any) {
+        setApprovedMembersError(err.message);
+        return [];
+      } finally {
+        setApprovedMembersLoading(false);
+      }
     }
     return [];
   };
@@ -418,12 +453,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return firestoreRooms.map((room) => {
         let displayTitle = room.title;
 
-        // 1:1 대화방의 경우 상대방 이름과 학번으로 제목 동적 설정
+        // 1:1 대화방의 경우 상대방 이름으로 제목 동적 설정 (학번 노출 방지)
         if (!room.isGroup) {
           const partnerUid = room.participants.find((uid) => uid !== authUserProfile.id);
           if (partnerUid && room.participantDetails?.[partnerUid]) {
             const partner = room.participantDetails[partnerUid];
-            displayTitle = `${partner.name} (${partner.studentIdOrYear})`;
+            displayTitle = partner.name || "대화 상대";
           }
         }
 
@@ -588,9 +623,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     categoryTag = "1:1 대화"
   ): Promise<string> => {
     if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
-      const targetUser =
+      let targetUser: any =
         approvedMembers.find((u) => u.id === targetUserId) ||
         realUsersForAdmin.find((u) => u.id === targetUserId);
+
+      if (!targetUser) {
+        try {
+          const { db } = getFirebaseInstances();
+          if (db) {
+            const userSnap = await getDoc(doc(db, "users", targetUserId));
+            if (userSnap.exists()) {
+              const d = userSnap.data();
+              targetUser = {
+                id: userSnap.id,
+                uid: userSnap.id,
+                name: d.name || "구성원",
+                role: d.role || "student",
+                avatarInitials: d.avatarInitials || "학",
+                approvalStatus: d.approvalStatus || "approved",
+              };
+            }
+          }
+        } catch (e) {
+          console.warn("대화 상대 정보 직접 조회 실패:", e);
+        }
+      }
 
       if (targetUser) {
         return await getOrCreateDirectChatInFirestore(
@@ -599,6 +656,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           categoryTag
         );
       }
+
+      throw new Error("대화 상대를 찾을 수 없습니다.");
     }
 
     const existing = state.conversations.find(
@@ -621,9 +680,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const newConv: Conversation = {
       id: newConvId,
-      title: targetUser
-        ? `${targetUser.name} (${targetUser.studentIdOrYear})`
-        : "새로운 1:1 대화",
+      title: targetUser ? targetUser.name : "새로운 1:1 대화",
       isGroup: false,
       categoryTag,
       memberIds: [currentUser.id, targetUserId],
@@ -670,7 +727,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     categoryTag = "단체 대화방"
   ): Promise<string> => {
     if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
-      const invitedUsers = approvedMembers.filter((u) => memberIds.includes(u.id));
+      const invitedUsers = memberIds.map((id) => {
+        const found = approvedMembers.find((u) => u.id === id);
+        if (found) return found;
+        return {
+          id,
+          name: "구성원",
+          role: "student" as UserRole,
+          avatarInitials: "학",
+        };
+      });
       return await createGroupChatInFirestore(
         currentUser,
         title,
@@ -722,9 +788,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return newConvId;
   };
 
-  const inviteUsersToChat = async (chatId: string, users: UserProfileDoc[]) => {
+  const inviteUsersToChat = async (
+    chatId: string,
+    users: (PublicChatUser | UserProfileDoc)[]
+  ) => {
     if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
-      await inviteUsersToChatInFirestore(chatId, currentUser, users);
+      await inviteUsersToChatInFirestore(chatId, currentUser, users as any);
     }
   };
 
@@ -1203,6 +1272,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         conversations,
         firestoreRooms,
         approvedMembers,
+        approvedMembersLoading,
+        approvedMembersError,
         refreshApprovedMembers,
         inviteUsersToChat,
         leaveChat,

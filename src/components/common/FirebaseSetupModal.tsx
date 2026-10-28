@@ -40,8 +40,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated() && (
         request.auth.uid == userId
-        || isApprovedUser()
         || isApprovedAdmin()
+        || (isApprovedUser() && resource.data.approvalStatus == 'approved')
       );
       allow create: if isAuthenticated()
                     && request.auth.uid == userId
@@ -79,6 +79,13 @@ service cloud.firestore {
         )
       );
       allow delete: if isAuthenticated() && (request.auth.uid == userId || isApprovedAdmin());
+    }
+
+    // 1-1. 채팅용 공개 프로필 (개인정보 최소화)
+    match /publicProfiles/{userId} {
+      allow read: if isApprovedUser() || isApprovedAdmin();
+      allow write: if isApprovedAdmin()
+                   || (isApprovedUser() && request.auth.uid == userId);
     }
 
     // 2. 최초 관리자 안전 생성

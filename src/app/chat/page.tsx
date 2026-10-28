@@ -14,16 +14,15 @@ import {
   Check,
   X,
   LogOut,
-  Radio,
   AlertTriangle,
   RefreshCw,
 } from "lucide-react";
 import {
   subscribeToChatMessages,
   FirestoreChatMessage,
-  UserProfileDoc,
+  PublicChatUser,
 } from "@/lib/firebase";
-import { UserRole } from "@/types";
+import { UserRole, User } from "@/types";
 
 export default function ChatPage() {
   const {
@@ -36,6 +35,8 @@ export default function ChatPage() {
     startOrOpenDirectChat,
     createGroupConversation,
     approvedMembers,
+    approvedMembersLoading,
+    approvedMembersError,
     refreshApprovedMembers,
     inviteUsersToChat,
     leaveChat,
@@ -75,14 +76,17 @@ export default function ChatPage() {
     }
   }, [conversations, activeConvId]);
 
-  // 대화 가능한 사용자 풀: 실제 Firebase 인증 상태이면 승인된 회원 목록, 아니면 데모 목데이터
-  const availableUsers =
-    isRealAuthActive && approvedMembers.length > 0 ? approvedMembers : users;
+  // 대화 가능한 사용자 풀:
+  // 실제 Firebase 인증 상태이면 승인된 실제 정회원(approvedMembers)만 엄격하게 사용 (목데이터 혼입 원천 방지)
+  // 비로그인 데모 상태일 때만 예시 목데이터(users) 사용
+  const availableUsers: (PublicChatUser | User)[] = isRealAuthActive
+    ? approvedMembers
+    : users;
 
   const activeConversation =
     conversations.find((c) => c.id === activeConvId) || conversations[0];
 
-  // 활성 대화방 실시간 메시지 구독 (Lazy Loading: 현재 열려있는 1개 방만 구독하여 Spark 무료 한도 보호)
+  // 활성 대화방 실시간 메시지 구독 (Lazy Loading: 열려있는 1개 방만 구독하여 무료 할당량 절약)
   useEffect(() => {
     if (
       !activeConversation?.id ||
@@ -152,7 +156,7 @@ export default function ChatPage() {
     );
   });
 
-  // 대화 상대 검색용 사용자 목록 (본인 제외)
+  // 대화 상대 검색용 사용자 목록 (본인 제외, 개인정보 보호: 학번/이메일 검색 제외, 이름 및 역할/전공/진로만 검색)
   const searchableUsers = availableUsers.filter((u) => {
     if (u.id === currentUser.id) return false;
     if (roleFilter !== "all" && u.role !== roleFilter) return false;
@@ -160,7 +164,6 @@ export default function ChatPage() {
     if (!q) return true;
     return (
       u.name.toLowerCase().includes(q) ||
-      (u.studentIdOrYear && u.studentIdOrYear.toLowerCase().includes(q)) ||
       (u.doubleMajor && u.doubleMajor.toLowerCase().includes(q)) ||
       (u.careerTrack && u.careerTrack.toLowerCase().includes(q))
     );
@@ -258,12 +261,13 @@ export default function ChatPage() {
             id: uid,
             name: "학과 구성원",
             role: "student" as UserRole,
-            studentIdOrYear: "",
             avatarInitials: "학",
             email: "",
             approvalStatus: "approved" as const,
             joinedAt: "",
             bio: "",
+            doubleMajor: "",
+            careerTrack: undefined,
           }
         );
       })
@@ -323,17 +327,17 @@ export default function ChatPage() {
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
             <span className="font-bold">
-              Firestore 실시간 채팅 연결됨
+              Firestore 실시간 채팅 연동 활성화
             </span>
             <span className="text-emerald-600 dark:text-emerald-400 text-xs hidden sm:inline">
-              · 다른 브라우저나 기기에서 보낸 메시지가 실시간으로 즉시 동기화됩니다.
+              · 승인된 회원 목록과 주고받는 메시지가 실시간으로 자동 동기화됩니다.
             </span>
           </div>
           <button
             type="button"
             onClick={() => refreshApprovedMembers()}
             title="회원 목록 새로고침"
-            className="p-1 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300"
+            className="p-1 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 transition"
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
@@ -346,10 +350,17 @@ export default function ChatPage() {
       )}
 
       {/* 통신 에러 배너 */}
-      {chatError && (
-        <div className="flex items-center gap-2 p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-200 text-xs">
-          <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
-          <span>{chatError}</span>
+      {(chatError || approvedMembersError) && (
+        <div className="flex items-start gap-2 p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-200 text-xs">
+          <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="font-bold">{chatError || approvedMembersError}</p>
+            {approvedMembersError && (
+              <p className="text-[11px] text-rose-600 dark:text-rose-400">
+                Firebase Console의 Firestore Database ➔ Rules(규칙) 탭에서 최신 보안 규칙이 정상 배포되었는지 확인해 주세요.
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -454,7 +465,7 @@ export default function ChatPage() {
                   <p className="text-xs text-slate-500 mt-0.5">
                     참여 중:{" "}
                     {activeMembers
-                      .map((m) => `${m?.name}(${ROLE_LABELS[m!.role]})`)
+                      .map((m) => `${m?.name}(${ROLE_LABELS[m!.role] || "구성원"})`)
                       .join(", ")}
                   </p>
                 </div>
@@ -507,12 +518,11 @@ export default function ChatPage() {
                             <p className="font-bold text-slate-900 dark:text-white">
                               {member.name}{" "}
                               <span className="text-orange-600 font-semibold">
-                                ({ROLE_LABELS[member.role]})
+                                ({ROLE_LABELS[member.role] || "구성원"})
                               </span>
                             </p>
                             <p className="text-slate-500 text-[11px]">
-                              {member.studentIdOrYear || "학번 정보"}
-                              {member.doubleMajor ? ` · ${member.doubleMajor}` : ""}
+                              {member.doubleMajor ? `복전: ${member.doubleMajor}` : ""}
                             </p>
                           </div>
                           {member.careerTrack && (
@@ -549,9 +559,6 @@ export default function ChatPage() {
                     : sender
                     ? ROLE_LABELS[sender.role]
                     : "";
-                  const senderSubText = sender?.studentIdOrYear
-                    ? ` (${sender.studentIdOrYear})`
-                    : "";
 
                   return (
                     <div
@@ -564,7 +571,6 @@ export default function ChatPage() {
                         <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1 ml-1">
                           {senderDisplayName}
                           {senderDisplayRole ? ` · ${senderDisplayRole}` : ""}
-                          {senderSubText}
                         </span>
                       )}
                       <div className="flex items-end gap-1.5 max-w-[85%] sm:max-w-[75%]">
@@ -650,7 +656,7 @@ export default function ChatPage() {
                 type="text"
                 value={userSearchQuery}
                 onChange={(e) => setUserSearchQuery(e.target.value)}
-                placeholder="이름, 학번(예: 22학번), 복수전공(예: 심리학), 진로 검색..."
+                placeholder="이름, 복수전공, 진로 분야 검색..."
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm"
               />
               <div className="flex gap-1.5 flex-wrap">
@@ -677,9 +683,26 @@ export default function ChatPage() {
             </div>
 
             <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl">
-              {searchableUsers.length === 0 ? (
+              {approvedMembersError ? (
+                <div className="p-4 text-center text-xs text-rose-500 space-y-1">
+                  <p className="font-bold">회원 목록 조회 오류</p>
+                  <p className="text-[11px]">{approvedMembersError}</p>
+                  <p className="text-[10px] text-slate-400">Firebase 콘솔에서 최신 Firestore 보안 규칙을 게시했는지 확인해 주세요.</p>
+                </div>
+              ) : approvedMembersLoading ? (
+                <div className="p-8 text-center text-xs text-slate-500 space-y-2">
+                  <RefreshCw className="w-5 h-5 mx-auto animate-spin text-orange-600" />
+                  <p>승인된 학과 구성원 목록을 실시간으로 불러오는 중입니다...</p>
+                </div>
+              ) : availableUsers.filter((u) => u.id !== currentUser.id).length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400 space-y-1">
+                  <Users className="w-6 h-6 mx-auto text-slate-300 mb-1" />
+                  <p className="font-semibold text-slate-600 dark:text-slate-300">대화 가능한 다른 승인 회원이 아직 없습니다.</p>
+                  <p className="text-[11px]">관리자가 가입을 승인하면 이곳에 자동으로 즉시 나타납니다.</p>
+                </div>
+              ) : searchableUsers.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-400">
-                  검색 결과가 없습니다.
+                  '{userSearchQuery}' 검색 조건과 일치하는 승인 회원이 없습니다.
                 </div>
               ) : (
                 searchableUsers.map((u) => (
@@ -693,13 +716,14 @@ export default function ChatPage() {
                           {u.name}
                         </span>
                         <span className="px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-[10px] font-bold">
-                          {ROLE_LABELS[u.role]}
+                          {ROLE_LABELS[u.role] || "구성원"}
                         </span>
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        {u.studentIdOrYear}
-                        {u.doubleMajor ? ` · 복전: ${u.doubleMajor}` : ""}
-                        {u.careerTrack ? ` · 진로: ${u.careerTrack}` : ""}
+                        {u.doubleMajor ? `복전: ${u.doubleMajor}` : ""}
+                        {u.doubleMajor && u.careerTrack ? " · " : ""}
+                        {u.careerTrack ? `진로: ${u.careerTrack}` : ""}
+                        {!u.doubleMajor && !u.careerTrack && u.bio ? u.bio : ""}
                       </p>
                     </div>
 
@@ -772,41 +796,56 @@ export default function ChatPage() {
                   초대할 구성원 선택 ({selectedUserIds.length}명 선택됨)
                 </label>
                 <div className="max-h-52 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl">
-                  {availableUsers
-                    .filter((u) => u.id !== currentUser.id)
-                    .map((u) => {
-                      const checked = selectedUserIds.includes(u.id);
-                      return (
-                        <button
-                          key={u.id}
-                          type="button"
-                          onClick={() => toggleSelectGroupUser(u.id)}
-                          className={`w-full text-left p-3 flex items-center justify-between transition ${
-                            checked
-                              ? "bg-orange-50 dark:bg-orange-950/40"
-                              : "hover:bg-slate-50 dark:hover:bg-slate-800/40"
-                          }`}
-                        >
-                          <div>
-                            <span className="font-bold text-slate-900 dark:text-white">
-                              {u.name}
-                            </span>{" "}
-                            <span className="text-xs text-slate-500">
-                              ({ROLE_LABELS[u.role]} · {u.studentIdOrYear})
-                            </span>
-                          </div>
-                          <div
-                            className={`w-5 h-5 rounded-md flex items-center justify-center border ${
+                  {approvedMembersError ? (
+                    <div className="p-4 text-center text-xs text-rose-500">
+                      회원 목록 조회 오류: {approvedMembersError}
+                    </div>
+                  ) : approvedMembersLoading ? (
+                    <div className="p-6 text-center text-xs text-slate-500">
+                      승인 회원 목록을 불러오는 중...
+                    </div>
+                  ) : availableUsers.filter((u) => u.id !== currentUser.id).length === 0 ? (
+                    <div className="p-6 text-center text-xs text-slate-400">
+                      초대 가능한 다른 승인 회원이 아직 없습니다.
+                    </div>
+                  ) : (
+                    availableUsers
+                      .filter((u) => u.id !== currentUser.id)
+                      .map((u) => {
+                        const checked = selectedUserIds.includes(u.id);
+                        return (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => toggleSelectGroupUser(u.id)}
+                            className={`w-full text-left p-3 flex items-center justify-between transition ${
                               checked
-                                ? "bg-orange-600 border-orange-600 text-white"
-                                : "border-slate-300 dark:border-slate-600"
+                                ? "bg-orange-50 dark:bg-orange-950/40"
+                                : "hover:bg-slate-50 dark:hover:bg-slate-800/40"
                             }`}
                           >
-                            {checked && <Check className="w-3.5 h-3.5" />}
-                          </div>
-                        </button>
-                      );
-                    })}
+                            <div>
+                              <span className="font-bold text-slate-900 dark:text-white">
+                                {u.name}
+                              </span>{" "}
+                              <span className="text-xs text-slate-500">
+                                ({ROLE_LABELS[u.role] || "구성원"}
+                                {u.careerTrack ? ` · ${u.careerTrack}` : ""})
+                              </span>
+                            </div>
+                            <div
+                              className={`w-5 h-5 rounded-md flex items-center justify-center border ${
+                                checked
+                                  ? "bg-orange-600 border-orange-600 text-white"
+                                  : "border-slate-300 dark:border-slate-600"
+                              }`}
+                            >
+                              {checked && <Check className="w-3.5 h-3.5" />}
+                            </div>
+                          </button>
+                        );
+                      })
+                  )}
                 </div>
               </div>
 
@@ -859,47 +898,62 @@ export default function ChatPage() {
                   초대할 구성원 선택 ({inviteSelectedIds.length}명 선택됨)
                 </label>
                 <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl">
-                  {availableUsers
-                    .filter((u) => !activeConversation.memberIds.includes(u.id))
-                    .map((u) => {
-                      const checked = inviteSelectedIds.includes(u.id);
-                      return (
-                        <button
-                          key={u.id}
-                          type="button"
-                          onClick={() => {
-                            setInviteSelectedIds((prev) =>
-                              prev.includes(u.id)
-                                ? prev.filter((id) => id !== u.id)
-                                : [...prev, u.id]
-                            );
-                          }}
-                          className={`w-full text-left p-3 flex items-center justify-between transition ${
-                            checked
-                              ? "bg-orange-50 dark:bg-orange-950/40"
-                              : "hover:bg-slate-50 dark:hover:bg-slate-800/40"
-                          }`}
-                        >
-                          <div>
-                            <span className="font-bold text-slate-900 dark:text-white">
-                              {u.name}
-                            </span>{" "}
-                            <span className="text-xs text-slate-500">
-                              ({ROLE_LABELS[u.role]} · {u.studentIdOrYear})
-                            </span>
-                          </div>
-                          <div
-                            className={`w-5 h-5 rounded-md flex items-center justify-center border ${
+                  {approvedMembersError ? (
+                    <div className="p-4 text-center text-xs text-rose-500">
+                      회원 목록 조회 오류: {approvedMembersError}
+                    </div>
+                  ) : approvedMembersLoading ? (
+                    <div className="p-6 text-center text-xs text-slate-500">
+                      승인 회원 목록을 불러오는 중...
+                    </div>
+                  ) : availableUsers.filter((u) => !activeConversation.memberIds.includes(u.id)).length === 0 ? (
+                    <div className="p-6 text-center text-xs text-slate-400">
+                      초대 가능한 다른 승인 회원이 아직 없습니다.
+                    </div>
+                  ) : (
+                    availableUsers
+                      .filter((u) => !activeConversation.memberIds.includes(u.id))
+                      .map((u) => {
+                        const checked = inviteSelectedIds.includes(u.id);
+                        return (
+                          <button
+                            key={u.id}
+                            type="button"
+                            onClick={() => {
+                              setInviteSelectedIds((prev) =>
+                                prev.includes(u.id)
+                                  ? prev.filter((id) => id !== u.id)
+                                  : [...prev, u.id]
+                              );
+                            }}
+                            className={`w-full text-left p-3 flex items-center justify-between transition ${
                               checked
-                                ? "bg-orange-600 border-orange-600 text-white"
-                                : "border-slate-300 dark:border-slate-600"
+                                ? "bg-orange-50 dark:bg-orange-950/40"
+                                : "hover:bg-slate-50 dark:hover:bg-slate-800/40"
                             }`}
                           >
-                            {checked && <Check className="w-3.5 h-3.5" />}
-                          </div>
-                        </button>
-                      );
-                    })}
+                            <div>
+                              <span className="font-bold text-slate-900 dark:text-white">
+                                {u.name}
+                              </span>{" "}
+                              <span className="text-xs text-slate-500">
+                                ({ROLE_LABELS[u.role] || "구성원"}
+                                {u.careerTrack ? ` · ${u.careerTrack}` : ""})
+                              </span>
+                            </div>
+                            <div
+                              className={`w-5 h-5 rounded-md flex items-center justify-center border ${
+                                checked
+                                  ? "bg-orange-600 border-orange-600 text-white"
+                                  : "border-slate-300 dark:border-slate-600"
+                              }`}
+                            >
+                              {checked && <Check className="w-3.5 h-3.5" />}
+                            </div>
+                          </button>
+                        );
+                      })
+                  )}
                 </div>
               </div>
 
