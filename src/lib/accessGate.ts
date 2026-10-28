@@ -81,6 +81,18 @@ export function canAccessInternal(state: AccessGateState): boolean {
   return state === "approved";
 }
 
+/**
+ * 졸업요건 자가점검 이용 가능 여부:
+ * 학부 재학생(신입학) 전용 서비스이며, 관리자(admin)는 학사 기준 관리 및 검토를 위해 접근할 수 있습니다.
+ * 교수(professor) 및 졸업생(alumni)은 접근이 차단됩니다.
+ */
+export function canAccessGraduation(
+  profile: { role?: unknown } | null
+): boolean {
+  if (!profile || !profile.role) return false;
+  return profile.role === "student" || profile.role === "admin";
+}
+
 /** 관리자 기능 이용 가능 여부: 승인 완료 + role === "admin" 일 때만 */
 export function canAccessAdmin(
   state: AccessGateState,

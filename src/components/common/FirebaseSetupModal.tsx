@@ -157,21 +157,27 @@ service cloud.firestore {
       }
     }
 
-    // 5. 공통 졸업요건 카탈로그 (관리자 전용 등록·수정, 승인된 정회원 조회)
+    // 5. 공통 졸업요건 카탈로그 (관리자 전용 등록·수정, 재학생/관리자만 조회 가능, 교수/졸업생 차단)
     match /graduationRulesCatalog/{docId} {
-      allow read: if isApprovedUser();
+      allow read: if isApprovedUser() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
+        || isApprovedAdmin()
+      );
       allow write: if isApprovedAdmin();
     }
 
-    // 5-1. 개인별 졸업요건·이수 기록 (본인 또는 관리자만 접근 가능, 공식 인정 상태 임의 변경 차단)
+    // 5-1. 개인별 졸업요건·이수 기록 (재학생 본인 또는 관리자만 접근 가능, 교수/졸업생 차단, 공식 인정 상태 임의 변경 차단)
     match /graduationRecords/{userId} {
       allow read, write: if isApprovedUser() && (
-        request.auth.uid == userId
-        && (
-          request.resource == null
-          || !('officialAdminVerified' in request.resource.data)
-          || request.resource.data.officialAdminVerified == false
-          || (resource != null && request.resource.data.officialAdminVerified == resource.data.get('officialAdminVerified', false))
+        (
+          request.auth.uid == userId
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
+          && (
+            request.resource == null
+            || !('officialAdminVerified' in request.resource.data)
+            || request.resource.data.officialAdminVerified == false
+            || (resource != null && request.resource.data.officialAdminVerified == resource.data.get('officialAdminVerified', false))
+          )
         )
         || isApprovedAdmin()
       );

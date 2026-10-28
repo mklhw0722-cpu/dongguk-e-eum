@@ -195,28 +195,34 @@ service cloud.firestore {
     }
 
     // ==============================================================
-    // 5. 공통 졸업요건 카탈로그 (graduationRulesCatalog 컬렉션 - 관리자 전용 수정)
+    // 5. 공통 졸업요건 카탈로그 (graduationRulesCatalog 컬렉션 - 관리자 전용 수정, 교수/졸업생 차단)
     // ==============================================================
     match /graduationRulesCatalog/{docId} {
-      // 승인된 정회원(approved)만 공식 공통 졸업요건 카탈로그를 조회할 수 있습니다 (미승인 차단)
-      allow read: if isApprovedUser();
+      // 승인된 재학생(student) 또는 관리자(admin)만 공식 공통 졸업요건 카탈로그를 조회할 수 있습니다 (교수, 졸업생, 미승인 차단)
+      allow read: if isApprovedUser() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
+        || isApprovedAdmin()
+      );
       // 일반 학생은 공통 졸업요건을 임의로 수정할 수 없으며, 오직 승인된 관리자만 등록·수정할 수 있습니다.
       allow write: if isApprovedAdmin();
     }
 
     // ==============================================================
-    // 5-1. 개인별 졸업요건·이수 기록 (graduationRecords 컬렉션 - 개인정보 보호)
+    // 5-1. 개인별 졸업요건·이수 기록 (graduationRecords 컬렉션 - 재학생 본인 및 관리자 전용, 교수/졸업생 차단)
     // ==============================================================
     match /graduationRecords/{userId} {
-      // 오직 본인(userId) 또는 승인된 관리자만 조회·수정 가능 (타 학생 및 미승인 사용자 접근 원천 차단)
+      // 오직 본인(재학생: role == 'student') 또는 승인된 관리자만 조회·수정 가능 (교수, 졸업생, 타 학생, 미승인 원천 차단)
       // 학생 본인은 학교/관리자 공식 인정 여부(officialAdminVerified)를 임의로 true로 변경할 수 없습니다.
       allow read, write: if isApprovedUser() && (
-        request.auth.uid == userId
-        && (
-          request.resource == null
-          || !('officialAdminVerified' in request.resource.data)
-          || request.resource.data.officialAdminVerified == false
-          || (resource != null && request.resource.data.officialAdminVerified == resource.data.get('officialAdminVerified', false))
+        (
+          request.auth.uid == userId
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
+          && (
+            request.resource == null
+            || !('officialAdminVerified' in request.resource.data)
+            || request.resource.data.officialAdminVerified == false
+            || (resource != null && request.resource.data.officialAdminVerified == resource.data.get('officialAdminVerified', false))
+          )
         )
         || isApprovedAdmin()
       );

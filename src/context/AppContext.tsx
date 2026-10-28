@@ -516,51 +516,61 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     );
 
-    // 4. 공식 공통 졸업요건 카탈로그(graduationRulesCatalog/current) 실시간 구독
-    const unsubGradCatalog = subscribeToGraduationCatalogInFirestore(
-      (cloudCatalog) => {
-        if (cloudCatalog && cloudCatalog.cohorts) {
-          setGraduationCatalog(cloudCatalog);
-          if (typeof window !== "undefined") {
-            window.localStorage.setItem(
-              "dongguk_e_eum_graduation_catalog_v1",
-              JSON.stringify(cloudCatalog)
-            );
-          }
-        }
-      },
-      () => {
-        // 초기 문서 미생성 시 기본 공식 카탈로그(page/619) 유지
-      }
-    );
+    // 4 & 5. 졸업요건 카탈로그 및 개인별 학사기록 실시간 구독
+    // 학부 재학생(student) 및 관리자(admin)에게만 구독 허용 (교수진·졸업생은 백엔드 접근 권한 제외)
+    const isGraduationAllowed =
+      authUserProfile?.role === "student" || authUserProfile?.role === "admin";
 
-    // 5. 학생 개인별 졸업요건·이수 강좌 기록(graduationRecords/{uid}) 실시간 구독
-    const unsubGradRecord = subscribeToStudentGraduationRecordInFirestore(
-      currentUid,
-      (cloudRecord) => {
-        if (cloudRecord) {
-          setState((prev) => ({
-            ...prev,
-            studentProgress: migrateStudentProgress(
-              {
-                ...prev.studentProgress,
-                ...cloudRecord,
-              },
-              authUserProfile
-            ),
-          }));
-        } else {
-          // 클라우드 기록이 아직 없다면 가입 시 입력한 프로필(authUserProfile)과 기존 로컬 기록을 합쳐 마이그레이션
-          setState((prev) => ({
-            ...prev,
-            studentProgress: migrateStudentProgress(prev.studentProgress, authUserProfile),
-          }));
+    let unsubGradCatalog: (() => void) | null = null;
+    let unsubGradRecord: (() => void) | null = null;
+
+    if (isGraduationAllowed) {
+      // 4. 공식 공통 졸업요건 카탈로그(graduationRulesCatalog/current) 실시간 구독
+      unsubGradCatalog = subscribeToGraduationCatalogInFirestore(
+        (cloudCatalog) => {
+          if (cloudCatalog && cloudCatalog.cohorts) {
+            setGraduationCatalog(cloudCatalog);
+            if (typeof window !== "undefined") {
+              window.localStorage.setItem(
+                "dongguk_e_eum_graduation_catalog_v1",
+                JSON.stringify(cloudCatalog)
+              );
+            }
+          }
+        },
+        () => {
+          // 초기 문서 미생성 시 기본 공식 카탈로그(page/619) 유지
         }
-      },
-      () => {
-        // 보안 규칙 적용 전이거나 초기 빈 상태인 경우 로컬 상태 유지
-      }
-    );
+      );
+
+      // 5. 학생 개인별 졸업요건·이수 강좌 기록(graduationRecords/{uid}) 실시간 구독
+      unsubGradRecord = subscribeToStudentGraduationRecordInFirestore(
+        currentUid,
+        (cloudRecord) => {
+          if (cloudRecord) {
+            setState((prev) => ({
+              ...prev,
+              studentProgress: migrateStudentProgress(
+                {
+                  ...prev.studentProgress,
+                  ...cloudRecord,
+                },
+                authUserProfile
+              ),
+            }));
+          } else {
+            // 클라우드 기록이 아직 없다면 가입 시 입력한 프로필(authUserProfile)과 기존 로컬 기록을 합쳐 마이그레이션
+            setState((prev) => ({
+              ...prev,
+              studentProgress: migrateStudentProgress(prev.studentProgress, authUserProfile),
+            }));
+          }
+        },
+        () => {
+          // 보안 규칙 적용 전이거나 초기 빈 상태인 경우 로컬 상태 유지
+        }
+      );
+    }
 
     return () => {
       if (unsubChats) unsubChats();

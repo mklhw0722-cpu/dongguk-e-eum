@@ -8,6 +8,7 @@ import {
   resolveRouteView,
   canAccessInternal,
   canAccessAdmin,
+  canAccessGraduation,
   classifyRoute,
 } from "../src/lib/accessGate.ts";
 
@@ -149,4 +150,12 @@ test("경로 판정: GitHub Pages basePath 와 끝 슬래시를 정확히 처리
   assert.equal(classifyRoute("/dongguk-e-eum"), "internal");
   assert.equal(classifyRoute("/authors"), "internal", "/auth 로 시작하는 다른 주소는 로그인 화면이 아님");
   assert.equal(classifyRoute("/chat/admin-notes"), "internal");
+});
+
+test("11. 졸업요건 관리는 재학생 및 관리자만 이용 가능하며 교수진과 졸업생은 차단된다", () => {
+  assert.equal(canAccessGraduation({ role: "student" }), true, "재학생은 접근 가능");
+  assert.equal(canAccessGraduation({ role: "admin" }), true, "관리자는 접근 가능");
+  assert.equal(canAccessGraduation({ role: "professor" }), false, "교수는 접근 차단");
+  assert.equal(canAccessGraduation({ role: "alumni" }), false, "졸업생은 접근 차단");
+  assert.equal(canAccessGraduation(null), false, "비로그인/프로필 없음 차단");
 });

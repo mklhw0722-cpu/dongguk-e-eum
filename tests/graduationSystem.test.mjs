@@ -363,32 +363,34 @@ test("10, 11, 12. [Firestore 보안 규칙 검증] 타 학생 학사정보 접�
     "utf8"
   );
 
-  // 1) 공통 졸업요건 카탈로그(graduationRulesCatalog) 규칙 존재 및 관리자 전용 쓰기 검증
+  // 1) 공통 졸업요건 카탈로그(graduationRulesCatalog) 규칙 존재 및 관리자 전용 쓰기, 교수/졸업생 차단 검증
   assert.ok(
     rulesText.includes("match /graduationRulesCatalog/{docId}"),
     "graduationRulesCatalog 보안 규칙이 존재해야 합니다"
   );
   assert.ok(
-    rulesText.includes("allow read: if isApprovedUser();") &&
-      rulesText.includes("allow write: if isApprovedAdmin();"),
-    "공통 졸업요건은 승인된 회원만 읽고 승인된 관리자만 수정할 수 있어야 합니다"
+    rulesText.includes("allow write: if isApprovedAdmin();") &&
+      rulesText.includes("role == 'student'"),
+    "공통 졸업요건은 승인된 재학생과 관리자만 읽을 수 있고 관리자만 수정할 수 있어야 합니다"
   );
 
-  // 2) 개인별 졸업요건 기록(graduationRecords/{userId}) 본인 또는 관리자만 접근 가능 & 공식 인정 위변조 방지 검증
+  // 2) 개인별 졸업요건 기록(graduationRecords/{userId}) 본인(재학생) 또는 관리자만 접근 가능 & 공식 인정 위변조 방지 & 교수/졸업생 차단 검증
   assert.ok(
     rulesText.includes("match /graduationRecords/{userId}"),
     "graduationRecords 보안 규칙이 존재해야 합니다"
   );
   assert.ok(
     rulesText.includes("request.auth.uid == userId") &&
+      rulesText.includes("role == 'student'") &&
       rulesText.includes("officialAdminVerified"),
-    "타 학생의 학사정보 접근을 차단하고 학생이 officialAdminVerified를 임의로 true로 바꾸지 못해야 합니다"
+    "타 학생 및 교수·졸업생의 접근을 차단하고 학생이 officialAdminVerified를 임의로 true로 바꾸지 못해야 합니다"
   );
 
-  // 3) 보안 규칙 시뮬레이션 검증 (미승인 사용자 / 일반 학생 / 타 학생 / 관리자)
+  // 3) 보안 규칙 시뮬레이션 검증 (미승인 사용자 / 일반 학생 / 타 학생 / 관리자 / 교수 / 졸업생)
   const simulateAccess = ({
     isApproved,
     isAdmin,
+    role = "student",
     authUid,
     collection,
     docId,
@@ -397,15 +399,20 @@ test("10, 11, 12. [Firestore 보안 규칙 검증] 타 학생 학사정보 접�
   }) => {
     if (!isApproved) return false; // 12. 미승인 사용자 전면 차단
     if (collection === "graduationRulesCatalog") {
-      if (action === "read") return true;
+      if (action === "read") {
+        return Boolean(isAdmin) || role === "student"; // 교수·졸업생 차단
+      }
       return Boolean(isAdmin); // 11. 일반 학생의 공통 졸업요건 수정 차단
     }
     if (collection === "graduationRecords") {
       if (action === "read") {
-        return isAdmin || authUid === docId; // 10. 다른 학생의 학사정보 조회 차단
+        if (isAdmin) return true;
+        if (role !== "student") return false; // 교수·졸업생 차단
+        return authUid === docId; // 10. 다른 학생의 학사정보 조회 차단
       }
       if (action === "write") {
         if (isAdmin) return true;
+        if (role !== "student") return false; // 교수·졸업생 차단
         if (authUid !== docId) return false; // 10. 다른 학생의 학사정보 수정 차단
         if (payloadOfficialVerified === true) return false; // 학생의 공식 인정 상태 사칭 차단
         return true;
@@ -494,6 +501,7 @@ test("10, 11, 12. [Firestore 보안 규칙 검증] 타 학생 학사정보 접�
     simulateAccess({
       isApproved: true,
       isAdmin: false,
+      role: "student",
       authUid: "studentA",
       collection: "graduationRecords",
       docId: "studentA",
@@ -501,6 +509,60 @@ test("10, 11, 12. [Firestore 보안 규칙 검증] 타 학생 학사정보 접�
       payloadOfficialVerified: false,
     }),
     true
+  );
+
+  // 교수진(professor) 및 졸업생(alumni) 접근 시도 -> 전면 차단(false) 검증
+  assert.equal(
+    simulateAccess({
+      isApproved: true,
+      isAdmin: false,
+      role: "professor",
+      authUid: "prof1",
+      collection: "graduationRulesCatalog",
+      docId: "current",
+      action: "read",
+    }),
+    false,
+    "교수는 공통 졸업요건 카탈로그 조회 불가"
+  );
+  assert.equal(
+    simulateAccess({
+      isApproved: true,
+      isAdmin: false,
+      role: "professor",
+      authUid: "prof1",
+      collection: "graduationRecords",
+      docId: "prof1",
+      action: "read",
+    }),
+    false,
+    "교수는 개인별 졸업요건 기록 조회 불가"
+  );
+  assert.equal(
+    simulateAccess({
+      isApproved: true,
+      isAdmin: false,
+      role: "alumni",
+      authUid: "alumni1",
+      collection: "graduationRulesCatalog",
+      docId: "current",
+      action: "read",
+    }),
+    false,
+    "졸업생은 공통 졸업요건 카탈로그 조회 불가"
+  );
+  assert.equal(
+    simulateAccess({
+      isApproved: true,
+      isAdmin: false,
+      role: "alumni",
+      authUid: "alumni1",
+      collection: "graduationRecords",
+      docId: "alumni1",
+      action: "read",
+    }),
+    false,
+    "졸업생은 개인별 졸업요건 기록 조회 불가"
   );
 
   // 공식 출처 URL 확인

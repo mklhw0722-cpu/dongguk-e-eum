@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import Link from "next/link";
+import { canAccessGraduation } from "@/lib/accessGate";
 import { useApp } from "@/context/AppContext";
 import {
   CourseCategory,
@@ -18,7 +20,7 @@ import {
   OFFICIAL_COURSE_PRESETS,
   OFFICIAL_GUIDE_URL,
 } from "@/lib/graduationCurriculum";
-import { DemoInfoBanner } from "@/components/common/Cards";
+import { DemoInfoBanner, ROLE_LABELS } from "@/components/common/Cards";
 import {
   GraduationCap,
   AlertTriangle,
@@ -33,6 +35,7 @@ import {
   Search,
   Edit3,
   ShieldCheck,
+  ShieldAlert,
   Info,
   Award,
   Sparkles,
@@ -72,6 +75,8 @@ const TEACHING_STATUS_LABELS: Record<TeachingTrackStatus, string> = {
 
 export default function GraduationPage() {
   const {
+    currentUser,
+    authUserProfile,
     graduationCatalog,
     studentProgress,
     updateStudentAcademicProfile,
@@ -333,6 +338,68 @@ export default function GraduationPage() {
   const vs = studentProgress.volunteeringState!;
   const ps = studentProgress.practicumState!;
   const tc = studentProgress.teachingChecklist!;
+
+  // 교수 및 졸업생 접근 차단 (프론트엔드 보호 게이트)
+  const userRole = authUserProfile?.role || currentUser.role;
+  const isAllowed = canAccessGraduation({ role: userRole });
+
+  if (!isAllowed) {
+    const roleLabel =
+      userRole === "professor"
+        ? "교수진"
+        : userRole === "alumni"
+        ? "졸업생(동문)"
+        : "비재학생";
+    return (
+      <div className="max-w-3xl mx-auto py-12 px-4 sm:px-6">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 sm:p-12 text-center shadow-lg space-y-6">
+          <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400 mx-auto flex items-center justify-center">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300">
+              학부 재학생(신입학) 전용 서비스
+            </span>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-slate-100">
+              졸업요건 관리에 접근할 수 없습니다
+            </h1>
+            <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg mx-auto leading-relaxed">
+              현재 로그인하신 계정은 <strong>{roleLabel}</strong> 계정입니다.<br />
+              졸업요건 자가점검 및 이수 강좌 관리는 <strong>동국대학교 교육학과 학부 신입학 재학생</strong>만을 위한 기능으로,
+              교수진 및 졸업생 계정의 접근이 제한됩니다.
+            </p>
+          </div>
+
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700 max-w-md mx-auto text-left text-xs text-slate-500 space-y-1">
+            <div className="flex justify-between font-semibold text-slate-700 dark:text-slate-300">
+              <span>내 계정 구분</span>
+              <span>{ROLE_LABELS[userRole] || userRole}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>접근 제한 사유</span>
+              <span>학부 이수 기준 대상 외 (신입학 재학생 전용)</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 justify-center pt-2">
+            <Link
+              href="/"
+              className="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm transition inline-flex items-center justify-center gap-2"
+            >
+              홈 대시보드로 이동
+            </Link>
+            <Link
+              href="/rooms"
+              className="px-5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm transition inline-flex items-center justify-center gap-2"
+            >
+              진로·복전 공유방 둘러보기
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">

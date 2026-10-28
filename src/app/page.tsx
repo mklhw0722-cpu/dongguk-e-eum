@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { useApp } from "@/context/AppContext";
+import { canAccessGraduation } from "@/lib/accessGate";
 import { ROLE_LABELS } from "@/components/common/Cards";
 import { formatUnreadBadge } from "@/lib/chatReadReceipts";
 import {
@@ -354,7 +355,8 @@ export default function HomePage() {
             )}
           </section>
 
-          {/* 나의 졸업요건 확인 바로가기 */}
+          {/* 나의 졸업요건 확인 바로가기 (재학생/관리자 전용) */}
+          {canAccessGraduation(currentUser) && (
           <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -395,6 +397,7 @@ export default function HomePage() {
               </p>
             </div>
           </section>
+          )}
         </div>
       </div>
 

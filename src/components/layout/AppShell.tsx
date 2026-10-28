@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AccessGateScreen } from "@/components/layout/AccessGateScreen";
-import { canAccessAdmin, classifyRoute, resolveRouteView } from "@/lib/accessGate";
+import { canAccessAdmin, canAccessGraduation, classifyRoute, resolveRouteView } from "@/lib/accessGate";
 import { useApp } from "@/context/AppContext";
 import { UserRole } from "@/types";
 import { ROLE_LABELS } from "@/components/common/Cards";
@@ -77,6 +77,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   // 관리자 권한 검증: 승인 완료(approved)이고 역할이 admin인 경우만 관리자 인정
   const isApprovedAdminUser = Boolean(rawFirebaseUser) && canAccessAdmin(accessGate, authUserProfile);
+  const isGraduationAllowed = canAccessGraduation(authUserProfile || currentUser);
 
   // 메뉴 노출: 비로그인은 로그인·가입 메뉴만, 미승인은 메뉴 없음, 승인 회원은 내부 메뉴(관리자 메뉴는 관리자만)
   const visibleNavItems = NAV_ITEMS.filter((item) => {
@@ -84,6 +85,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (!isAccessAllowed) return false;
     if (item.href === "/auth") return false;
     if (item.href === "/admin") return isApprovedAdminUser;
+    if (item.href === "/graduation") return isGraduationAllowed;
     return true;
   });
 
@@ -465,7 +467,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {(isAccessAllowed || accessGate === "signed_out") && (
       <nav
         className={`md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-2 py-1.5 grid gap-1 ${
-          !isAccessAllowed ? "grid-cols-1" : "grid-cols-6"
+          !isAccessAllowed ? "grid-cols-1" : isGraduationAllowed ? "grid-cols-6" : "grid-cols-5"
         }`}
       >
         {(!isAccessAllowed
@@ -477,7 +479,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               { href: "/notices", shortLabel: "공지", icon: Megaphone },
               { href: "/chat", shortLabel: "대화창", icon: MessageSquare },
               { href: "/rooms", shortLabel: "공유방", icon: Compass },
-              { href: "/graduation", shortLabel: "졸업요건", icon: CheckSquare },
+              ...(isGraduationAllowed
+                ? [{ href: "/graduation", shortLabel: "졸업요건", icon: CheckSquare }]
+                : []),
               isApprovedAdminUser
                 ? { href: "/admin", shortLabel: "관리자", icon: ShieldCheck }
                 : { href: "/alumni", shortLabel: "졸업생", icon: Users },
