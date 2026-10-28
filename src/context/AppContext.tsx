@@ -58,6 +58,7 @@ import {
   PublicChatUser,
   getFirebaseInstances,
   syncApprovedUsersToPublicProfiles,
+  updateUserDisplayName,
 } from "@/lib/firebase";
 import { User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
@@ -97,6 +98,7 @@ interface AppContextValue extends PlatformDataState {
   handleLogout: () => Promise<void>;
   handleResetPassword: (email: string) => Promise<void>;
   handleClaimInitialAdmin: () => Promise<void>;
+  handleUpdateUserName: (newName: string) => Promise<void>;
 
   // 실제 관리자 회원 승인 액션
   realUsersForAdmin: UserProfileDoc[];
@@ -590,6 +592,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const updated = await claimInitialAdminRole();
     setAuthUserProfile(updated);
     setCurrentRole("admin");
+  };
+
+  const handleUpdateUserName = async (newName: string) => {
+    const currentUid = authUserProfile?.id || (rawFirebaseUser ? rawFirebaseUser.uid : "");
+    if (!currentUid) throw new Error("로그인된 사용자가 없습니다.");
+    await updateUserDisplayName(currentUid, newName);
+    setAuthUserProfile((prev) =>
+      prev
+        ? {
+            ...prev,
+            name: newName.trim(),
+            avatarInitials: newName.trim().slice(0, 2),
+          }
+        : null
+    );
   };
 
   const handleAdminUpdateApproval = async (
@@ -1347,6 +1364,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handleLogout,
         handleResetPassword,
         handleClaimInitialAdmin,
+        handleUpdateUserName,
         realUsersForAdmin,
         handleAdminUpdateApproval,
         sendMessage,

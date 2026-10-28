@@ -27,6 +27,7 @@ import {
   signOut,
   sendPasswordResetEmail,
   onAuthStateChanged,
+  updateProfile,
   User as FirebaseUser,
 } from "firebase/auth";
 import {
@@ -465,6 +466,52 @@ export async function updateUserApprovalStatusByAdmin(params: {
   } else {
     try {
       await deleteDoc(publicRef);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/**
+ * 사용자(관리자 포함)의 표시 이름 및 프로필 이니셜 변경
+ */
+export async function updateUserDisplayName(
+  uid: string,
+  newName: string
+): Promise<void> {
+  const { auth, db } = getFirebaseInstances();
+  if (!db) throw new Error("Firestore가 연결되어 있지 않습니다.");
+
+  const trimmed = newName.trim();
+  if (!trimmed) throw new Error("이름을 공백으로 설정할 수 없습니다.");
+
+  const avatarInitials = trimmed.slice(0, 2);
+  const userRef = doc(db, USERS_COLLECTION, uid);
+
+  await updateDoc(userRef, {
+    name: trimmed,
+    avatarInitials,
+    updatedAt: new Date().toISOString(),
+  });
+
+  try {
+    const publicRef = doc(db, "publicProfiles", uid);
+    await setDoc(
+      publicRef,
+      {
+        name: trimmed,
+        avatarInitials,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  } catch {
+    // ignore
+  }
+
+  if (auth?.currentUser && auth.currentUser.uid === uid) {
+    try {
+      await updateProfile(auth.currentUser, { displayName: trimmed });
     } catch {
       // ignore
     }

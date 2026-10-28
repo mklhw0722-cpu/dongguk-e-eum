@@ -53,6 +53,7 @@ export default function AdminPage() {
     resolveReport,
     realUsersForAdmin,
     handleAdminUpdateApproval,
+    handleUpdateUserName,
     isFirestoreConnected,
     authUserProfile,
   } = useApp();
@@ -100,6 +101,24 @@ export default function AdminPage() {
 
   // 공유방 수정 상태
   const [editingRoomId, setEditingRoomId] = useState<string | null>(null);
+  const [isEditingAdminName, setIsEditingAdminName] = useState(false);
+  const [adminNameInput, setAdminNameInput] = useState(authUserProfile?.name || "이혜원");
+  const [isAdminNameSaving, setIsAdminNameSaving] = useState(false);
+
+  const handleSaveAdminName = async (nameToSave: string) => {
+    const trimmed = nameToSave.trim();
+    if (!trimmed || isAdminNameSaving) return;
+    setIsAdminNameSaving(true);
+    try {
+      await handleUpdateUserName(trimmed);
+      setIsEditingAdminName(false);
+      alert(`관리자 이름이 '${trimmed}'(으)로 성공적으로 변경되었습니다.`);
+    } catch (err: any) {
+      alert(`이름 변경 실패: ${err?.message || err}`);
+    } finally {
+      setIsAdminNameSaving(false);
+    }
+  };
   const [editRoomName, setEditRoomName] = useState("");
   const [editRoomCat, setEditRoomCat] = useState("");
   const [editRoomDesc, setEditRoomDesc] = useState("");
@@ -180,10 +199,88 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <DemoInfoBanner
+            <DemoInfoBanner
         title="관리자 권한 및 승인 통제 원칙"
         description="관리자 승인(approved)을 받은 계정만 내부 커뮤니티 데이터에 접근할 수 있으며, 일반 사용자는 자신의 권한이나 승인 상태를 스스로 변경할 수 없습니다."
       />
+
+      {/* 접속 중인 관리자 프로필 및 이름 변경 섹션 */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-orange-600 text-white flex items-center justify-center font-black text-sm shrink-0">
+            {authUserProfile.avatarInitials || (authUserProfile.name ? authUserProfile.name.slice(0, 2) : "관리")}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-sm text-slate-900 dark:text-white">
+                {authUserProfile.name || "시스템 관리자"}
+              </span>
+              <span className="px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-[10px] font-bold">
+                최고 관리자
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 mt-0.5">{authUserProfile.email}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {isEditingAdminName ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSaveAdminName(adminNameInput);
+              }}
+              className="flex items-center gap-1.5"
+            >
+              <input
+                type="text"
+                value={adminNameInput}
+                onChange={(e) => setAdminNameInput(e.target.value)}
+                placeholder="새 관리자 이름 (예: 이혜원)"
+                className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold focus:outline-orange-600"
+                autoFocus
+              />
+              <button
+                type="submit"
+                disabled={!adminNameInput.trim() || isAdminNameSaving}
+                className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition disabled:opacity-50"
+              >
+                {isAdminNameSaving ? "저장 중..." : "저장"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsEditingAdminName(false)}
+                className="px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs text-slate-500 font-semibold"
+              >
+                취소
+              </button>
+            </form>
+          ) : (
+            <>
+              {authUserProfile.name !== "이혜원" && (
+                <button
+                  type="button"
+                  disabled={isAdminNameSaving}
+                  onClick={() => handleSaveAdminName("이혜원")}
+                  className="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition shadow-xs"
+                >
+                  이름을 &apos;이혜원&apos;으로 변경
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setAdminNameInput(authUserProfile.name || "이혜원");
+                  setIsEditingAdminName(true);
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition"
+              >
+                직접 수정
+              </button>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* 탭 메뉴 */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800">
