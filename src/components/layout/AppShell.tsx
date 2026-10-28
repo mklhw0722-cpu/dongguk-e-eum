@@ -18,8 +18,6 @@ import {
   CheckSquare,
   ShieldCheck,
   UserCheck,
-  Moon,
-  Sun,
   RotateCcw,
   Sparkles,
   Database,
@@ -47,8 +45,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const {
     currentUser,
-    isDarkMode,
-    toggleDarkMode,
     resetDemoData,
     conversations,
     approvalRequests,
@@ -200,16 +196,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              type="button"
-              onClick={toggleDarkMode}
-              title="다크모드 전환"
-              className="p-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-slate-200 transition cursor-pointer"
-            >
-              {isDarkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
-            </button>
-
-            {isAccessAllowed && (
+{isAccessAllowed && (
               <button
                 type="button"
                 onClick={resetDemoData}

@@ -1,14 +1,15 @@
 @import "tailwindcss";
 
 :root {
+  /* 라이트모드 기본 테마 (선명하고 편안한 고대비 가독성 확보) */
   --bg-main: #f8fafc;
   --bg-surface: #ffffff;
   --bg-muted: #f1f5f9;
-  --text-main: #0f172a;
-  --text-sub: #475569;
-  --text-muted: #94a3b8;
+  --text-main: #0f172a; /* 짙은 네이비블랙으로 가독성 최적화 */
+  --text-sub: #334155;  /* 보조 텍스트 대비 향상 */
+  --text-muted: #64748b;
   --border-color: #e2e8f0;
-  --brand-primary: #ea580c;
+  --brand-primary: #ea580c; /* 동국e음 공식 오렌지 포인트 */
   --brand-primary-hover: #c2410c;
   --brand-primary-soft: #fff7ed;
   --brand-primary-border: #fed7aa;

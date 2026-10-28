@@ -503,11 +503,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state, hydrated]);
 
+  // 항상 라이트모드 유지: 브라우저나 시스템 설정에 다크모드가 켜져 있어도 dark 클래스를 제거하여 항상 라이트모드로 고정
   useEffect(() => {
     if (typeof document !== "undefined") {
-      document.documentElement.classList.toggle("dark", isDarkMode);
+      document.documentElement.classList.remove("dark");
     }
-  }, [isDarkMode]);
+  }, []);
 
   // 실제 Firebase Auth 로그인 여부
   const isRealAuthActive = Boolean(rawFirebaseUser);
@@ -580,7 +581,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const toggleDarkMode = () => {
-    setIsDarkMode((prev) => !prev);
+    // 향후 다크모드 재도입을 위해 인터페이스 보존 (현재는 라이트모드 고정)
+    setIsDarkMode(false);
   };
 
   const resetDemoData = () => {
