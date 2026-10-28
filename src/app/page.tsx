@@ -158,7 +158,7 @@ export default function HomePage() {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs text-xs font-bold">
               <Sparkles className="w-3.5 h-3.5" />
-              동국대학교 교육학과 폐쇄형 소통 플랫폼 · 동국e음
+              동국대학교 교육학과 전용 소통 플랫폼 · 동국e음
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
               반갑습니다, {currentUser.name}님! ({ROLE_LABELS[currentRole]} 모드)
