@@ -65,6 +65,33 @@ export default function AdminPage() {
     {}
   );
   const [roleSelects, setRoleSelects] = useState<Record<string, UserRole>>({});
+  const [userRoleFilter, setUserRoleFilter] = useState<string>("all");
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+
+  const handleUpdateRole = async (
+    targetUserId: string,
+    newRole: UserRole,
+    currentStatus?: ApprovalStatus,
+    comment?: string
+  ) => {
+    setUpdatingUserId(targetUserId);
+    try {
+      if (realUsersForAdmin.some((u) => u.id === targetUserId)) {
+        await handleAdminUpdateApproval(
+          targetUserId,
+          currentStatus || "approved",
+          comment || "관리자가 회원 역할을 변경했습니다.",
+          newRole
+        );
+      } else {
+        updateUserRoleByAdmin(targetUserId, newRole);
+      }
+    } catch (err: any) {
+      alert(`역할 변경 중 오류가 발생했습니다: ${err?.message || err}`);
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
 
   // 복수전공 공유방 추가 폼
   const [newMajorName, setNewMajorName] = useState("");
@@ -181,7 +208,8 @@ export default function AdminPage() {
               : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
           }`}
         >
-          <Users className="w-4 h-4" /> 사용자 역할 관리 ({users.length})
+          <Users className="w-4 h-4" /> 전체 회원 관리 (
+          {realUsersForAdmin.length > 0 ? realUsersForAdmin.length : users.length})
         </button>
         <button
           type="button"
@@ -440,48 +468,150 @@ export default function AdminPage() {
 
       {/* 탭 2: 사용자 역할 관리 */}
       {activeTab === "users" && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {users.map((u) => (
-              <div
-                key={u.id}
-                className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-sm text-slate-900 dark:text-white">
-                      {u.name}
-                    </span>
-                    <span className="px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-xs font-bold">
-                      현재: {ROLE_LABELS[u.role]}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    {u.email} · {u.studentIdOrYear}
-                  </p>
-                </div>
+        <div className="space-y-4">
+          {/* 역할별 필터 탭 (전체, 재학생, 졸업생, 교수진, 관리자) */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {[
+              { key: "all", label: "전체 회원" },
+              { key: "student", label: "재학생" },
+              { key: "alumni", label: "졸업생" },
+              { key: "professor", label: "교수진" },
+              { key: "admin", label: "관리자" },
+            ].map((tab) => {
+              const count = (realUsersForAdmin.length > 0 ? realUsersForAdmin : users).filter(
+                (u) => tab.key === "all" || u.role === tab.key
+              ).length;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setUserRoleFilter(tab.key)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                    userRoleFilter === tab.key
+                      ? "bg-orange-600 text-white shadow-xs"
+                      : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                      userRoleFilter === tab.key
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="text-slate-400">역할 변경:</span>
-                  {(["student", "alumni", "professor", "admin"] as UserRole[]).map(
-                    (roleOption) => (
-                      <button
-                        key={roleOption}
-                        type="button"
-                        onClick={() => updateUserRoleByAdmin(u.id, roleOption)}
-                        className={`px-2.5 py-1 rounded-lg font-bold transition ${
-                          u.role === roleOption
-                            ? "bg-slate-900 dark:bg-orange-600 text-white"
-                            : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
-                        }`}
-                      >
-                        {ROLE_LABELS[roleOption]}
-                      </button>
-                    )
-                  )}
-                </div>
-              </div>
-            ))}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs">
+            {/* 상단 안내 바 */}
+            <div className="px-5 py-3 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs">
+              <span className="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                <Database className="w-4 h-4 text-orange-600" />
+                {realUsersForAdmin.length > 0
+                  ? `Firebase 실제 등록 회원 목록 (${realUsersForAdmin.length}명)`
+                  : `예시 회원 목록 (${users.length}명)`}
+              </span>
+              <span className="text-slate-400">
+                역할 버튼 클릭 시 권한이 즉시 변경됩니다.
+              </span>
+            </div>
+
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {(() => {
+                const targetList = realUsersForAdmin.length > 0 ? realUsersForAdmin : users;
+                const filtered = targetList.filter(
+                  (u) => userRoleFilter === "all" || u.role === userRoleFilter
+                );
+
+                if (filtered.length === 0) {
+                  return (
+                    <div className="p-8 text-center text-xs text-slate-400 space-y-1">
+                      <Users className="w-6 h-6 mx-auto text-slate-300 mb-1" />
+                      <p className="font-semibold text-slate-600 dark:text-slate-300">
+                        선택한 역할({ROLE_LABELS[userRoleFilter as UserRole] || userRoleFilter})의 회원이 없습니다.
+                      </p>
+                      <p className="text-[11px]">
+                        다른 필터 탭을 선택하거나 신규 회원이 가입하면 표시됩니다.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return filtered.map((u) => {
+                  const isUpdating = updatingUserId === u.id;
+                  const st = STATUS_LABELS[u.approvalStatus];
+                  return (
+                    <div
+                      key={u.id}
+                      className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
+                            {u.name}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-xs font-bold">
+                            {ROLE_LABELS[u.role] || "구성원"}
+                          </span>
+                          {st && (
+                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${st.style}`}>
+                              {st.label}
+                            </span>
+                          )}
+                          <span className="text-xs text-slate-400">
+                            {u.studentIdOrYear}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+                          <span>{u.email}</span>
+                          <span>·</span>
+                          <span className="text-[11px] text-slate-400">UID: {u.id}</span>
+                          {u.joinedAt && (
+                            <>
+                              <span>·</span>
+                              <span className="text-[11px] text-slate-400">가입일: {u.joinedAt}</span>
+                            </>
+                          )}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap shrink-0 pt-1 lg:pt-0">
+                        <span className="text-xs text-slate-400 mr-1 font-semibold">역할 변경:</span>
+                        {(["student", "alumni", "professor", "admin"] as UserRole[]).map(
+                          (roleOption) => (
+                            <button
+                              key={roleOption}
+                              type="button"
+                              disabled={isUpdating}
+                              onClick={() =>
+                                handleUpdateRole(
+                                  u.id,
+                                  roleOption,
+                                  u.approvalStatus,
+                                  (u as any).adminComment
+                                )
+                              }
+                              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition disabled:opacity-50 ${
+                                u.role === roleOption
+                                  ? "bg-orange-600 text-white shadow-xs"
+                                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                              }`}
+                            >
+                              {ROLE_LABELS[roleOption]}
+                            </button>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
           </div>
         </div>
       )}
