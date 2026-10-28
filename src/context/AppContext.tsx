@@ -239,18 +239,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const loaded = PlatformRepository.loadState();
     setState(loaded);
 
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const urlProjectId = params.get("fbProjectId");
-      const urlApiKey = params.get("fbApiKey");
-      if (urlProjectId && urlApiKey) {
-        saveFirebaseConfigToLocal({
-          apiKey: urlApiKey,
-          projectId: urlProjectId,
-          authDomain: `${urlProjectId}.firebaseapp.com`,
-        });
-      }
-    }
+    // Firebase config is now statically fixed to Dongguk E-Eum spark project
 
     setHydrated(true);
   }, []);

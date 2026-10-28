@@ -524,20 +524,16 @@ export default function RoomsPage() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          <button
-            type="button"
-            onClick={() => setIsFirebaseModalOpen(true)}
-            className={`px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 transition ${
+          <div
+            className={`px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 ${
               isFirestoreConnected
-                ? "bg-emerald-600 text-white"
-                : "bg-slate-900 dark:bg-slate-700 text-white"
+                ? "bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700"
+                : "bg-slate-100 text-slate-600"
             }`}
           >
-            <Database className="w-4 h-4" />
-            {isFirestoreConnected
-              ? `Firestore 실시간 연동 중 (${firebaseProjectId})`
-              : "Firestore 클라우드 공유 연결하기"}
-          </button>
+            <Database className="w-4 h-4 text-emerald-600" />
+            <span>실시간 클라우드 공유 동기화 활성</span>
+          </div>
 
           <button
             type="button"

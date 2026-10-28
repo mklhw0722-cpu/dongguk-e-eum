@@ -118,19 +118,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="bg-slate-900 text-white px-3 sm:px-6 py-2 text-xs border-b border-slate-800 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap">
+            {/* 학과 공식 클라우드 DB 연결 상태 표시 (관리자만 클릭 시 상세 모달 열림) */}
             <button
               type="button"
-              onClick={() => setIsFirebaseModalOpen(true)}
-              className={`px-2.5 py-1 rounded-md font-bold text-[11px] inline-flex items-center gap-1.5 transition cursor-pointer ${
+              onClick={() => {
+                if (isApprovedAdminUser) {
+                  setIsFirebaseModalOpen(true);
+                }
+              }}
+              title={isApprovedAdminUser ? "클릭 시 관리자 Firebase 연동 설정 열기" : "동국대학교 교육학과 공식 클라우드 DB와 실시간 연결되어 있습니다."}
+              className={`px-2.5 py-1 rounded-md font-bold text-[11px] inline-flex items-center gap-1.5 transition ${
+                isApprovedAdminUser ? "cursor-pointer hover:opacity-90" : "cursor-default"
+              } ${
                 isFirestoreConnected
-                  ? "bg-emerald-600 hover:bg-emerald-500 text-white"
-                  : "bg-orange-600 hover:bg-orange-500 text-white"
+                  ? "bg-emerald-600 text-white"
+                  : "bg-orange-600 text-white"
               }`}
             >
               <Database className="w-3.5 h-3.5" />
               {isFirestoreConnected
-                ? `Firebase DB 연결됨 (${firebaseProjectId})`
-                : "Firebase 클라우드 DB 연결 설정"}
+                ? `동국e음 클라우드 DB 정상 연결 (${firebaseProjectId})`
+                : "동국e음 클라우드 DB 연결 준비중"}
             </button>
 
             {rawFirebaseUser && authUserProfile ? (

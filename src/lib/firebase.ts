@@ -57,7 +57,16 @@ const CHATS_COLLECTION = "chats";
 /**
  * 환경변수 또는 브라우저에 저장된 Firebase 설정을 반환합니다.
  */
-export function getActiveFirebaseConfig(): FirebaseWebConfig | null {
+export const DEFAULT_FIREBASE_CONFIG: FirebaseWebConfig = {
+  apiKey: "AIzaSyBxWc_DQky50aTRIq-ioqxv8CXxMAvxRQU",
+  authDomain: "dongguk-e-eum.firebaseapp.com",
+  projectId: "dongguk-e-eum",
+  storageBucket: "dongguk-e-eum.firebasestorage.app",
+  messagingSenderId: "1010816939334",
+  appId: "1:1010816939334:web:7f3158b47d6980c7ae6147",
+};
+
+export function getActiveFirebaseConfig(): FirebaseWebConfig {
   const envApiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
   const envProjectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 
@@ -82,11 +91,11 @@ export function getActiveFirebaseConfig(): FirebaseWebConfig | null {
         }
       }
     } catch {
-      return null;
+      return DEFAULT_FIREBASE_CONFIG;
     }
   }
 
-  return null;
+  return DEFAULT_FIREBASE_CONFIG;
 }
 
 export function parseFirebaseConfigText(rawText: string): FirebaseWebConfig | null {
