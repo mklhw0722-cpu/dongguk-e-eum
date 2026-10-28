@@ -18,7 +18,9 @@ import {
   arrayUnion,
   arrayRemove,
   serverTimestamp,
+  runTransaction,
 } from "firebase/firestore";
+import { compareBySeq } from "@/lib/chatReadReceipts";
 import {
   getAuth,
   Auth,
@@ -666,6 +668,12 @@ export interface FirestoreChatRoom {
   lastSenderId?: string;
   createdBy: string;
   createdAt: string;
+  /** 대화방 내 일반 메시지 마지막 순번 (읽음 표시 커서 계산용) */
+  msgSeq?: number;
+  /** 참여자별 마지막으로 읽은 메시지 순번 */
+  readSeq?: Record<string, number>;
+  /** 참여자별 대화방 입장 시점의 메시지 순번 (초대 이전 메시지 안읽음 제외용) */
+  joinSeq?: Record<string, number>;
 }
 
 export interface FirestoreChatMessage {
@@ -678,6 +686,8 @@ export interface FirestoreChatMessage {
   createdAt: string;
   timestamp?: any;
   isSystemMessage?: boolean;
+  /** 대화방 내 일반 메시지 순번 (1부터 단조 증가) */
+  seq?: number;
 }
 
 /**
@@ -996,8 +1006,10 @@ export function subscribeToChatMessages(
         msgs.push({ id: d.id, ...(d.data() as any) });
       });
 
-      // 오래된 메시지부터 최신 메시지 순서로 정렬
+      // 오래된 메시지부터 최신 메시지 순서로 정렬 (순번 seq가 둘 다 있으면 seq 우선)
       msgs.sort((a, b) => {
+        const seqCmp = compareBySeq(a, b);
+        if (seqCmp !== 0) return seqCmp;
         const tA = a.timestamp?.toMillis ? a.timestamp.toMillis() : 0;
         const tB = b.timestamp?.toMillis ? b.timestamp.toMillis() : 0;
         if (tA && tB && tA !== tB) return tA - tB;
@@ -1075,6 +1087,15 @@ export async function getOrCreateDirectChatInFirestore(
     lastSenderId: currentUser.id,
     createdBy: currentUser.id,
     createdAt: nowDate,
+    msgSeq: 0,
+    readSeq: {
+      [currentUser.id]: 0,
+      [targetUser.id]: 0,
+    },
+    joinSeq: {
+      [currentUser.id]: 0,
+      [targetUser.id]: 0,
+    },
   };
 
   await setDoc(chatDocRef, newChat);
@@ -1143,6 +1164,11 @@ export async function createGroupChatInFirestore(
   });
   const nowDate = new Date().toISOString().slice(0, 10);
 
+  const initialCursorMap: Record<string, number> = {};
+  participants.forEach((uid) => {
+    initialCursorMap[uid] = 0;
+  });
+
   const newChat: FirestoreChatRoom = {
     id: chatId,
     title: title.trim() || "새 단체 대화방",
@@ -1155,6 +1181,9 @@ export async function createGroupChatInFirestore(
     lastSenderId: currentUser.id,
     createdBy: currentUser.id,
     createdAt: nowDate,
+    msgSeq: 0,
+    readSeq: { ...initialCursorMap },
+    joinSeq: { ...initialCursorMap },
   };
 
   await setDoc(chatDocRef, newChat);
@@ -1176,7 +1205,9 @@ export async function createGroupChatInFirestore(
 }
 
 /**
- * 대화방에 새 메시지를 전송하고 방의 마지막 메시지 정보를 갱신합니다.
+ * 대화방에 새 메시지를 전송하고 방의 마지막 메시지 정보 및 순번(msgSeq, 발신자 readSeq)을 원자적으로 갱신합니다.
+ * - 동시에 여러 명이 메시지를 보내도 순번이 꼬이지 않도록 Firestore 트랜잭션을 사용합니다.
+ * - 메시지를 보낸 본인은 그 순번까지 자동으로 읽은 것으로 처리됩니다.
  */
 export async function sendChatMessageInFirestore(
   chatId: string,
@@ -1194,28 +1225,92 @@ export async function sendChatMessageInFirestore(
     minute: "2-digit",
   });
 
+  const chatRef = doc(db, CHATS_COLLECTION, chatId);
   const msgRef = doc(collection(db, CHATS_COLLECTION, chatId, "messages"));
-  await setDoc(msgRef, {
-    id: msgRef.id,
-    chatId,
-    senderId: currentUser.id,
-    senderName: currentUser.name,
-    senderRole: currentUser.role,
-    content: trimmed,
-    createdAt: nowTime,
-    timestamp: serverTimestamp(),
-    isSystemMessage: false,
-  });
 
-  await updateDoc(doc(db, CHATS_COLLECTION, chatId), {
-    lastMessageText: trimmed,
-    lastMessageAt: nowTime,
-    lastSenderId: currentUser.id,
+  await runTransaction(db, async (tx) => {
+    const chatSnap = await tx.get(chatRef);
+    if (!chatSnap.exists()) {
+      throw new Error("존재하지 않는 대화방입니다.");
+    }
+    const chatData = chatSnap.data() as FirestoreChatRoom;
+    const prevSeq =
+      typeof chatData.msgSeq === "number" && Number.isFinite(chatData.msgSeq)
+        ? Math.max(0, Math.floor(chatData.msgSeq))
+        : 0;
+    const nextSeq = prevSeq + 1;
+
+    tx.set(msgRef, {
+      id: msgRef.id,
+      chatId,
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      senderRole: currentUser.role,
+      content: trimmed,
+      createdAt: nowTime,
+      timestamp: serverTimestamp(),
+      isSystemMessage: false,
+      seq: nextSeq,
+    });
+
+    tx.update(chatRef, {
+      msgSeq: nextSeq,
+      [`readSeq.${currentUser.id}`]: nextSeq,
+      lastMessageText: trimmed,
+      lastMessageAt: nowTime,
+      lastSenderId: currentUser.id,
+    });
+  });
+}
+
+/**
+ * 사용자가 채팅방을 열어 메시지를 확인했을 때 본인의 읽은 위치(readSeq[userId])만 단조 증가로 갱신합니다.
+ * - 여러 메시지를 한꺼번에 읽어도 마지막 순번(targetSeq) 1번만 기록하여 Firestore 쓰기 비용을 아낍니다.
+ * - 여러 기기에서 동시 접속해도 이미 더 큰 순번을 읽었다면 역행하지 않습니다.
+ */
+export async function markChatReadInFirestore(
+  chatId: string,
+  userId: string,
+  targetSeq: number
+): Promise<void> {
+  const { db } = getFirestoreInstance();
+  if (!db || !chatId || !userId) return;
+  const safeTarget =
+    typeof targetSeq === "number" && Number.isFinite(targetSeq)
+      ? Math.floor(targetSeq)
+      : 0;
+  if (safeTarget <= 0) return;
+
+  const chatRef = doc(db, CHATS_COLLECTION, chatId);
+  await runTransaction(db, async (tx) => {
+    const chatSnap = await tx.get(chatRef);
+    if (!chatSnap.exists()) return;
+    const data = chatSnap.data() as FirestoreChatRoom;
+    if (!Array.isArray(data.participants) || !data.participants.includes(userId)) {
+      return;
+    }
+    const roomMaxSeq =
+      typeof data.msgSeq === "number" && Number.isFinite(data.msgSeq)
+        ? Math.floor(data.msgSeq)
+        : safeTarget;
+    const clampedTarget = Math.min(safeTarget, Math.max(roomMaxSeq, safeTarget));
+    const currentRead =
+      typeof data.readSeq?.[userId] === "number" ? data.readSeq[userId] : 0;
+    const currentJoin =
+      typeof data.joinSeq?.[userId] === "number" ? data.joinSeq[userId] : 0;
+    if (clampedTarget <= Math.max(currentRead, currentJoin)) {
+      return; // 이미 같거나 더 최신 위치까지 읽었으므로 쓰기 생략
+    }
+    tx.update(chatRef, {
+      [`readSeq.${userId}`]: clampedTarget,
+    });
   });
 }
 
 /**
  * 기존 대화방에 새로운 사용자를 초대합니다.
+ * - 새로 초대된 사용자는 초대 시점의 방 순번(msgSeq)을 joinSeq와 readSeq로 부여받아,
+ *   초대되기 전에 오간 메시지의 읽음 계산에 잘못 포함되지 않습니다.
  */
 export async function inviteUsersToChatInFirestore(
   chatId: string,
@@ -1228,20 +1323,37 @@ export async function inviteUsersToChatInFirestore(
   const newUids = newUsers.map((u) => u.id);
   if (newUids.length === 0) return;
 
-  const detailsUpdate: Record<string, any> = {};
-  newUsers.forEach((u) => {
-    detailsUpdate[`participantDetails.${u.id}`] = {
-      uid: u.id,
-      name: u.name,
-      role: u.role,
-      avatarInitials:
-        u.avatarInitials || (u.name ? u.name.slice(0, 2) : "학"),
-    };
-  });
+  const chatRef = doc(db, CHATS_COLLECTION, chatId);
+  await runTransaction(db, async (tx) => {
+    const chatSnap = await tx.get(chatRef);
+    if (!chatSnap.exists()) return;
+    const chatData = chatSnap.data() as FirestoreChatRoom;
+    const currentMsgSeq =
+      typeof chatData.msgSeq === "number" && Number.isFinite(chatData.msgSeq)
+        ? Math.max(0, Math.floor(chatData.msgSeq))
+        : 0;
 
-  await updateDoc(doc(db, CHATS_COLLECTION, chatId), {
-    participants: arrayUnion(...newUids),
-    ...detailsUpdate,
+    const detailsUpdate: Record<string, any> = {
+      participants: arrayUnion(...newUids),
+    };
+    newUsers.forEach((u) => {
+      detailsUpdate[`participantDetails.${u.id}`] = {
+        uid: u.id,
+        name: u.name,
+        role: u.role,
+        avatarInitials:
+          u.avatarInitials || (u.name ? u.name.slice(0, 2) : "학"),
+      };
+      // 초대 시점 순번을 joinSeq 및 초기 readSeq에 기록 (초대 이전 메시지 안읽음 제외)
+      if (typeof chatData.joinSeq?.[u.id] !== "number") {
+        detailsUpdate[`joinSeq.${u.id}`] = currentMsgSeq;
+      }
+      if (typeof chatData.readSeq?.[u.id] !== "number" || chatData.readSeq[u.id] < currentMsgSeq) {
+        detailsUpdate[`readSeq.${u.id}`] = currentMsgSeq;
+      }
+    });
+
+    tx.update(chatRef, detailsUpdate);
   });
 
   const nowTime = new Date().toLocaleTimeString("ko-KR", {

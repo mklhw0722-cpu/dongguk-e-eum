@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { useApp } from "@/context/AppContext";
 import { ROLE_LABELS } from "@/components/common/Cards";
+import { formatUnreadBadge } from "@/lib/chatReadReceipts";
 import {
   Megaphone,
   MessageSquare,
@@ -336,7 +337,7 @@ export default function HomePage() {
                             {conv.title}
                           </p>
                           <span className="px-1.5 py-0.5 rounded bg-orange-600 text-white text-[10px] font-bold">
-                            +{myMember?.unreadCount}
+                            +{formatUnreadBadge(myMember?.unreadCount || 0)}
                           </span>
                         </div>
                         <p className="text-xs text-slate-600 dark:text-slate-300 truncate mt-0.5">

@@ -22,6 +22,13 @@ import {
   FirestoreChatMessage,
   PublicChatUser,
 } from "@/lib/firebase";
+import {
+  unreadCountForMessage,
+  formatUnreadBadge,
+  computeMarkReadTarget,
+  effectiveReadSeq,
+  ReadStateRoom,
+} from "@/lib/chatReadReceipts";
 import { UserRole, User } from "@/types";
 
 export default function ChatPage() {
@@ -54,7 +61,10 @@ export default function ChatPage() {
 
   // 실시간 Firestore 메시지 및 통신 오류 상태
   const [realMessages, setRealMessages] = useState<FirestoreChatMessage[]>([]);
+  const [loadedRoomId, setLoadedRoomId] = useState<string | null>(null);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [isPageVisible, setIsPageVisible] = useState<boolean>(true);
+  const [isScrolledToLatest, setIsScrolledToLatest] = useState<boolean>(true);
 
   // 모달 상태: "direct" (사용자 검색 및 1:1 대화 시작) | "group" (단체 채팅방 개설) | "invite" (기존 방 새 참여자 초대) | null
   const [modalMode, setModalMode] = useState<"direct" | "group" | "invite" | null>(
@@ -68,6 +78,22 @@ export default function ChatPage() {
   const [groupCategory, setGroupCategory] = useState("수업/스터디 모임");
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  // 브라우저 탭 가시성(visibilityState) 감지: 백그라운드 탭에서는 무조건 읽음 처리하지 않음
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const updateVisibility = () => {
+      setIsPageVisible(document.visibilityState === "visible");
+    };
+    updateVisibility();
+    document.addEventListener("visibilitychange", updateVisibility);
+    window.addEventListener("focus", updateVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", updateVisibility);
+      window.removeEventListener("focus", updateVisibility);
+    };
+  }, []);
 
   // 대화방 목록 변경 시 기본 활성 방 유지
   useEffect(() => {
@@ -95,14 +121,20 @@ export default function ChatPage() {
       authUserProfile.approvalStatus !== "approved"
     ) {
       setRealMessages([]);
+      setLoadedRoomId(activeConversation?.id || null);
       return;
     }
 
+    const targetRoomId = activeConversation.id;
+    setLoadedRoomId(null);
+    setIsScrolledToLatest(true);
+
     const unsub = subscribeToChatMessages(
-      activeConversation.id,
+      targetRoomId,
       50,
       (msgs) => {
         setRealMessages(msgs);
+        setLoadedRoomId(targetRoomId);
         setChatError(null);
       },
       (err) => {
@@ -121,14 +153,83 @@ export default function ChatPage() {
       ? realMessages
       : messages.filter((m) => m.conversationId === activeConversation?.id);
 
-  // 새 메시지 수신 또는 전송 시 대화창 맨 아래로 스크롤
+  // 현재 활성 대화방의 읽음 상태 계산용 객체
+  const activeRoomReadState: ReadStateRoom = {
+    participants: activeConversation?.memberIds || [],
+    msgSeq: activeConversation?.msgSeq,
+    readSeq: activeConversation?.readSeq,
+    joinSeq: activeConversation?.joinSeq,
+  };
+
+  // 화면에 실제로 불러온 메시지 중 가장 큰 순번 (불러오지 않은 메시지까지 앞질러 읽음 처리 방지)
+  const latestLoadedSeq = displayMessages.reduce((maxSeq: number, m: any) => {
+    const s = typeof m.seq === "number" && Number.isFinite(m.seq) ? Math.floor(m.seq) : 0;
+    return s > maxSeq ? s : maxSeq;
+  }, 0);
+
+  // 읽음 처리 조건 검사:
+  // 1) 해당 채팅방이 현재 화면에 열려 있고(activeConversation 존재)
+  // 2) 브라우저 탭이 화면에 보이는 상태이며(isPageVisible)
+  // 3) 해당 방의 메시지 목록을 실제로 불러왔고(messagesLoaded)
+  // 4) 사용자가 최신 메시지 영역을 보고 있을 때(isScrolledToLatest)만 읽음 처리
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [displayMessages]);
+    if (!activeConversation?.id) return;
+    const isRealMode =
+      isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved";
+    const messagesLoaded = isRealMode
+      ? loadedRoomId === activeConversation.id
+      : true;
+
+    const currentReadSeq = effectiveReadSeq(activeRoomReadState, currentUser.id);
+    const targetSeq = computeMarkReadTarget({
+      isRoomOpen: Boolean(activeConversation?.id),
+      isPageVisible,
+      messagesLoaded,
+      isScrolledToLatest,
+      latestLoadedSeq:
+        latestLoadedSeq > 0
+          ? latestLoadedSeq
+          : !isRealMode
+          ? activeConversation.msgSeq || 0
+          : 0,
+      currentReadSeq,
+    });
+
+    if (targetSeq !== null) {
+      markConversationRead(activeConversation.id, targetSeq);
+    }
+  }, [
+    activeConversation?.id,
+    activeConversation?.msgSeq,
+    activeConversation?.readSeq,
+    activeConversation?.joinSeq,
+    isRealAuthActive,
+    authUserProfile,
+    loadedRoomId,
+    isPageVisible,
+    isScrolledToLatest,
+    latestLoadedSeq,
+    currentUser.id,
+    markConversationRead,
+  ]);
+
+  // 새 메시지 수신 또는 전송 시 대화창 맨 아래로 스크롤 (이미 하단 근처를 보고 있을 때)
+  useEffect(() => {
+    if (isScrolledToLatest) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [displayMessages, isScrolledToLatest]);
+
+  const handleMessagesScroll = () => {
+    const el = messagesContainerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setIsScrolledToLatest(distanceFromBottom <= 80);
+  };
 
   const handleSelectConversation = (convId: string) => {
     setActiveConvId(convId);
-    markConversationRead(convId);
+    setIsScrolledToLatest(true);
   };
 
   const handleSend = async (e: React.FormEvent) => {
@@ -430,8 +531,11 @@ export default function ChatPage() {
                         {conv.lastMessageAt}
                       </span>
                       {unread > 0 && (
-                        <span className="px-2 py-0.5 rounded-full bg-orange-600 text-white text-[10px] font-bold">
-                          안읽음 {unread}
+                        <span
+                          data-testid={`room-unread-badge-${conv.id}`}
+                          className="px-2 py-0.5 rounded-full bg-orange-600 text-white text-[10px] font-bold"
+                        >
+                          안읽음 {formatUnreadBadge(unread)}
                         </span>
                       )}
                     </div>
@@ -538,7 +642,11 @@ export default function ChatPage() {
               )}
 
               {/* 메시지 스트림 */}
-              <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-[400px]">
+              <div
+                ref={messagesContainerRef}
+                onScroll={handleMessagesScroll}
+                className="flex-1 p-4 space-y-3 overflow-y-auto max-h-[400px]"
+              >
                 {displayMessages.map((msg: any) => {
                   if (msg.isSystemMessage) {
                     return (
@@ -559,6 +667,10 @@ export default function ChatPage() {
                     : sender
                     ? ROLE_LABELS[sender.role]
                     : "";
+                  const msgUnreadCount = unreadCountForMessage(
+                    msg,
+                    activeRoomReadState
+                  );
 
                   return (
                     <div
@@ -573,14 +685,25 @@ export default function ChatPage() {
                           {senderDisplayRole ? ` · ${senderDisplayRole}` : ""}
                         </span>
                       )}
-                      <div className="flex items-end gap-1.5 max-w-[85%] sm:max-w-[75%]">
+                      <div className="flex items-end gap-1.5 max-w-[88%] sm:max-w-[75%]">
                         {isMe && (
-                          <span className="text-[10px] text-slate-400 shrink-0">
-                            {msg.createdAt}
-                          </span>
+                          <div className="flex flex-col items-end justify-end leading-tight shrink-0 gap-0.5">
+                            {msgUnreadCount > 0 && (
+                              <span
+                                data-testid={`msg-unread-count-${msg.id}`}
+                                title={`아직 읽지 않은 참여자 ${msgUnreadCount}명`}
+                                className="text-[11px] font-bold text-amber-600 dark:text-amber-400 tabular-nums"
+                              >
+                                {msgUnreadCount}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                              {msg.createdAt}
+                            </span>
+                          </div>
                         )}
                         <div
-                          className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-2xs ${
+                          className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-2xs break-words ${
                             isMe
                               ? "bg-orange-600 text-white rounded-br-xs"
                               : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-bl-xs"
@@ -589,9 +712,20 @@ export default function ChatPage() {
                           {msg.content}
                         </div>
                         {!isMe && (
-                          <span className="text-[10px] text-slate-400 shrink-0">
-                            {msg.createdAt}
-                          </span>
+                          <div className="flex flex-col items-start justify-end leading-tight shrink-0 gap-0.5">
+                            {msgUnreadCount > 0 && (
+                              <span
+                                data-testid={`msg-unread-count-${msg.id}`}
+                                title={`아직 읽지 않은 참여자 ${msgUnreadCount}명`}
+                                className="text-[11px] font-bold text-amber-600 dark:text-amber-400 tabular-nums"
+                              >
+                                {msgUnreadCount}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                              {msg.createdAt}
+                            </span>
+                          </div>
                         )}
                       </div>
                     </div>

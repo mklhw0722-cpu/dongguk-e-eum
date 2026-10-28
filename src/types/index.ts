@@ -57,6 +57,7 @@ export interface Message {
   content: string;
   createdAt: string;
   isSystemMessage?: boolean;
+  seq?: number; // 대화방 내 메시지 단조 증가 순번 (읽음 표시 계산용)
 }
 
 export interface Conversation {
@@ -69,6 +70,9 @@ export interface Conversation {
   lastMessageText: string;
   lastMessageAt: string;
   createdBy: string;
+  msgSeq?: number; // 마지막 일반 메시지 순번
+  readSeq?: Record<string, number>; // 참여자별 마지막 읽은 순번
+  joinSeq?: Record<string, number>; // 참여자별 대화방 입장 시점 순번 (초대 이전 메시지 제외용)
 }
 
 export type NoticeCategory =

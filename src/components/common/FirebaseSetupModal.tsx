@@ -120,7 +120,7 @@ service cloud.firestore {
       );
     }
 
-    // 4. 대화창 (chats 컬렉션 - 참여자 전용 보호)
+    // 4. 대화창 (chats 컬렉션 - 참여자 전용 보호 및 읽음 표시 위변조 방지)
     match /chats/{chatId} {
       allow read: if isApprovedUser() && (
         request.auth.uid in resource.data.participants
@@ -128,8 +128,18 @@ service cloud.firestore {
       );
       allow create: if isApprovedUser() && request.auth.uid in request.resource.data.participants;
       allow update: if isApprovedUser() && (
-        request.auth.uid in resource.data.participants
-        || isApprovedAdmin()
+        isApprovedAdmin()
+        || (
+          request.auth.uid in resource.data.participants
+          && (
+            !request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readSeq'])
+            || (
+              request.resource.data.readSeq.diff(resource.data.get('readSeq', {})).affectedKeys().hasOnly([request.auth.uid])
+              && request.resource.data.readSeq[request.auth.uid] is int
+              && request.resource.data.readSeq[request.auth.uid] >= resource.data.get('readSeq', {}).get(request.auth.uid, 0)
+            )
+          )
+        )
       );
 
       match /messages/{messageId} {

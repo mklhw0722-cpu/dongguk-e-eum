@@ -52,6 +52,7 @@ import {
   getOrCreateDirectChatInFirestore,
   createGroupChatInFirestore,
   sendChatMessageInFirestore,
+  markChatReadInFirestore,
   inviteUsersToChatInFirestore,
   leaveChatInFirestore,
   searchApprovedUsersInFirestore,
@@ -64,6 +65,7 @@ import {
   upsertNoticeInFirestore,
   syncOfficialNoticesToFirestore,
 } from "@/lib/firebase";
+import { unreadCountForUser, effectiveReadSeq } from "@/lib/chatReadReceipts";
 import officialNoticesJson from "@/data/officialNotices.json";
 import { extractScheduleFromTitle } from "@/lib/officialNoticeParser";
 import { User as FirebaseUser } from "firebase/auth";
@@ -128,7 +130,7 @@ interface AppContextValue extends PlatformDataState {
 
   // 기능 A. 대화창 액션
   sendMessage: (conversationId: string, content: string) => Promise<void> | void;
-  markConversationRead: (conversationId: string) => void;
+  markConversationRead: (conversationId: string, upToSeq?: number) => Promise<void> | void;
   startOrOpenDirectChat: (targetUserId: string, categoryTag?: string) => Promise<string> | string;
   createGroupConversation: (title: string, memberIds: string[], categoryTag?: string) => Promise<string> | string;
   firestoreRooms: FirestoreChatRoom[];
@@ -586,6 +588,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           }
         }
 
+        const readStateRoom = {
+          participants: room.participants || [],
+          msgSeq: room.msgSeq,
+          readSeq: room.readSeq,
+          joinSeq: room.joinSeq,
+        };
+
         return {
           id: room.id,
           title: displayTitle,
@@ -596,15 +605,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             conversationId: room.id,
             userId: uid,
             joinedAt: room.createdAt,
-            unreadCount: 0,
+            unreadCount: unreadCountForUser(readStateRoom, uid),
           })),
           lastMessageText: room.lastMessageText || "",
           lastMessageAt: room.lastMessageAt || "",
           createdBy: room.createdBy,
+          msgSeq: room.msgSeq,
+          readSeq: room.readSeq,
+          joinSeq: room.joinSeq,
         };
       });
     }
-    return state.conversations;
+    return state.conversations.map((conv) => {
+      if (typeof conv.msgSeq !== "number") return conv;
+      const readStateRoom = {
+        participants: conv.memberIds || [],
+        msgSeq: conv.msgSeq,
+        readSeq: conv.readSeq,
+        joinSeq: conv.joinSeq,
+      };
+      return {
+        ...conv,
+        members: conv.members.map((m) => ({
+          ...m,
+          unreadCount: unreadCountForUser(readStateRoom, m.userId),
+        })),
+      };
+    });
   }, [isRealAuthActive, authUserProfile, firestoreRooms, state.conversations]);
 
   const switchRole = (role: UserRole) => {
@@ -701,6 +728,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // --- 대화창 액션 ---
+  // 중복 읽음 쓰기 방지용 ref (방 ID -> 마지막으로 요청한 순번)
+  const lastMarkedSeqRef = useRef<Record<string, number>>({});
+
   const sendMessage = async (conversationId: string, content: string) => {
     const trimmed = content.trim();
     if (!trimmed) return;
@@ -719,45 +749,123 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       minute: "2-digit",
     });
 
-    const newMsg: Message = {
-      id: `msg-${Date.now()}`,
-      conversationId,
-      senderId: currentUser.id,
-      content: trimmed,
-      createdAt: nowTime,
-    };
+    setState((prev) => {
+      const targetConv = prev.conversations.find((c) => c.id === conversationId);
+      const nextSeq = (targetConv?.msgSeq || 0) + 1;
 
-    setState((prev) => ({
-      ...prev,
-      messages: [...prev.messages, newMsg],
-      conversations: prev.conversations.map((conv) =>
-        conv.id === conversationId
-          ? {
-              ...conv,
-              lastMessageText: trimmed,
-              lastMessageAt: nowTime,
-              members: conv.members.map((m) =>
-                m.userId === currentUser.id ? { ...m, unreadCount: 0 } : m
-              ),
-            }
-          : conv
-      ),
-    }));
+      const newMsg: Message = {
+        id: `msg-${Date.now()}`,
+        conversationId,
+        senderId: currentUser.id,
+        content: trimmed,
+        createdAt: nowTime,
+        seq: nextSeq,
+      };
+
+      return {
+        ...prev,
+        messages: [...prev.messages, newMsg],
+        conversations: prev.conversations.map((conv) => {
+          if (conv.id !== conversationId) return conv;
+          const nextReadSeq = {
+            ...(conv.readSeq || {}),
+            [currentUser.id]: nextSeq,
+          };
+          const readStateRoom = {
+            participants: conv.memberIds,
+            msgSeq: nextSeq,
+            readSeq: nextReadSeq,
+            joinSeq: conv.joinSeq || {},
+          };
+          return {
+            ...conv,
+            msgSeq: nextSeq,
+            readSeq: nextReadSeq,
+            lastMessageText: trimmed,
+            lastMessageAt: nowTime,
+            members: conv.members.map((m) => ({
+              ...m,
+              unreadCount: unreadCountForUser(readStateRoom, m.userId),
+            })),
+          };
+        }),
+      };
+    });
   };
 
-  const markConversationRead = (conversationId: string) => {
+  const markConversationRead = async (conversationId: string, upToSeq?: number) => {
+    if (!conversationId) return;
+
+    if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
+      const room = firestoreRooms.find((r) => r.id === conversationId);
+      const targetSeq =
+        typeof upToSeq === "number" && upToSeq > 0
+          ? Math.floor(upToSeq)
+          : typeof room?.msgSeq === "number"
+          ? Math.floor(room.msgSeq)
+          : 0;
+      if (targetSeq <= 0) return;
+
+      const currentEffective = room
+        ? effectiveReadSeq(
+            {
+              participants: room.participants || [],
+              msgSeq: room.msgSeq,
+              readSeq: room.readSeq,
+              joinSeq: room.joinSeq,
+            },
+            currentUser.id
+          )
+        : 0;
+      if (targetSeq <= currentEffective) return;
+
+      const inflightKey = `${conversationId}:${ currentUser.id }`;
+      if ((lastMarkedSeqRef.current[inflightKey] || 0) >= targetSeq) {
+        return;
+      }
+      lastMarkedSeqRef.current[inflightKey] = targetSeq;
+
+      try {
+        await markChatReadInFirestore(conversationId, currentUser.id, targetSeq);
+      } catch (err) {
+        // 실패 시 재시도 가능하도록 롤백
+        delete lastMarkedSeqRef.current[inflightKey];
+        console.warn("읽음 상태 갱신 안내:", err);
+      }
+      return;
+    }
+
     setState((prev) => ({
       ...prev,
-      conversations: prev.conversations.map((conv) =>
-        conv.id === conversationId
-          ? {
-              ...conv,
-              members: conv.members.map((m) =>
-                m.userId === currentUser.id ? { ...m, unreadCount: 0 } : m
-              ),
-            }
-          : conv
-      ),
+      conversations: prev.conversations.map((conv) => {
+        if (conv.id !== conversationId) return conv;
+        const maxSeq = conv.msgSeq || 0;
+        const targetSeq =
+          typeof upToSeq === "number" && upToSeq > 0
+            ? Math.min(Math.floor(upToSeq), Math.max(maxSeq, Math.floor(upToSeq)))
+            : maxSeq;
+        const prevRead = conv.readSeq?.[currentUser.id] || 0;
+        const nextReadVal = Math.max(prevRead, targetSeq);
+        const nextReadSeq = {
+          ...(conv.readSeq || {}),
+          [currentUser.id]: nextReadVal,
+        };
+        const readStateRoom = {
+          participants: conv.memberIds,
+          msgSeq: maxSeq,
+          readSeq: nextReadSeq,
+          joinSeq: conv.joinSeq || {},
+        };
+        return {
+          ...conv,
+          readSeq: nextReadSeq,
+          members: conv.members.map((m) =>
+            m.userId === currentUser.id
+              ? { ...m, unreadCount: unreadCountForUser(readStateRoom, currentUser.id) }
+              : m
+          ),
+        };
+      }),
     }));
   };
 
@@ -838,12 +946,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           conversationId: newConvId,
           userId: targetUserId,
           joinedAt: nowDate,
-          unreadCount: 1,
+          unreadCount: 0,
         },
       ],
       lastMessageText: "대화가 시작되었습니다. 첫 인사를 건네보세요!",
       lastMessageAt: nowTime,
       createdBy: currentUser.id,
+      msgSeq: 0,
+      readSeq: { [currentUser.id]: 0, [targetUserId]: 0 },
+      joinSeq: { [currentUser.id]: 0, [targetUserId]: 0 },
     };
 
     const sysMsg: Message = {
@@ -896,6 +1007,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       minute: "2-digit",
     });
 
+    const initialCursor: Record<string, number> = {};
+    uniqueMembers.forEach((uid) => {
+      initialCursor[uid] = 0;
+    });
+
     const newConv: Conversation = {
       id: newConvId,
       title: title.trim() || "교육학과 새 단체 대화방",
@@ -906,11 +1022,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         conversationId: newConvId,
         userId: uid,
         joinedAt: nowDate,
-        unreadCount: uid === currentUser.id ? 0 : 1,
+        unreadCount: 0,
       })),
       lastMessageText: `${currentUser.name}님이 단체 채팅방을 개설했습니다.`,
       lastMessageAt: nowTime,
       createdBy: currentUser.id,
+      msgSeq: 0,
+      readSeq: { ...initialCursor },
+      joinSeq: { ...initialCursor },
     };
 
     const sysMsg: Message = {
@@ -937,13 +1056,95 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   ) => {
     if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
       await inviteUsersToChatInFirestore(chatId, currentUser, users as any);
+      return;
     }
+
+    const newUids = users.map((u) => u.id).filter(Boolean);
+    if (newUids.length === 0) return;
+
+    const nowDate = new Date().toISOString().slice(0, 10);
+    const nowTime = new Date().toLocaleTimeString("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const names = users.map((u) => u.name).join(", ");
+    const sysMsg: Message = {
+      id: `msg-sys-${Date.now()}`,
+      conversationId: chatId,
+      senderId: currentUser.id,
+      content: `${currentUser.name}님이 ${names}님을 초대했습니다.`,
+      createdAt: nowTime,
+      isSystemMessage: true,
+    };
+
+    setState((prev) => ({
+      ...prev,
+      messages: [...prev.messages, sysMsg],
+      conversations: prev.conversations.map((conv) => {
+        if (conv.id !== chatId) return conv;
+        const currentSeq = conv.msgSeq || 0;
+        const nextMemberIds = Array.from(new Set([...conv.memberIds, ...newUids]));
+        const nextJoinSeq = { ...(conv.joinSeq || {}) };
+        const nextReadSeq = { ...(conv.readSeq || {}) };
+        newUids.forEach((uid) => {
+          if (typeof nextJoinSeq[uid] !== "number") nextJoinSeq[uid] = currentSeq;
+          if (typeof nextReadSeq[uid] !== "number" || nextReadSeq[uid] < currentSeq) {
+            nextReadSeq[uid] = currentSeq;
+          }
+        });
+        const existingMemberMap = new Map(conv.members.map((m) => [m.userId, m]));
+        const nextMembers = nextMemberIds.map(
+          (uid) =>
+            existingMemberMap.get(uid) || {
+              conversationId: chatId,
+              userId: uid,
+              joinedAt: nowDate,
+              unreadCount: 0,
+            }
+        );
+        return {
+          ...conv,
+          isGroup: nextMemberIds.length > 2 ? true : conv.isGroup,
+          memberIds: nextMemberIds,
+          members: nextMembers,
+          joinSeq: nextJoinSeq,
+          readSeq: nextReadSeq,
+        };
+      }),
+    }));
   };
 
   const leaveChat = async (chatId: string) => {
     if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
       await leaveChatInFirestore(chatId, currentUser);
+      return;
     }
+
+    const nowTime = new Date().toLocaleTimeString("ko-KR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    const sysMsg: Message = {
+      id: `msg-sys-${Date.now()}`,
+      conversationId: chatId,
+      senderId: currentUser.id,
+      content: `${currentUser.name}님이 대화방을 나갔습니다.`,
+      createdAt: nowTime,
+      isSystemMessage: true,
+    };
+
+    setState((prev) => ({
+      ...prev,
+      messages: [...prev.messages, sysMsg],
+      conversations: prev.conversations.map((conv) => {
+        if (conv.id !== chatId) return conv;
+        return {
+          ...conv,
+          memberIds: conv.memberIds.filter((uid) => uid !== currentUser.id),
+          members: conv.members.filter((m) => m.userId !== currentUser.id),
+        };
+      }),
+    }));
   };
 
   // --- 공지사항 통합 데이터 & 액션 (공식 홈페이지 자동 연동 + 관리자 직접 작성 + 캘린더 일정 관리) ---

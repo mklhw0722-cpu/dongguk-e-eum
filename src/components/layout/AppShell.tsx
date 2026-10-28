@@ -10,6 +10,7 @@ import { UserRole } from "@/types";
 import { ROLE_LABELS } from "@/components/common/Cards";
 import { FirebaseSetupModal } from "@/components/common/FirebaseSetupModal";
 import { DONGGUK_SYMBOL_DATA_URL } from "@/lib/donggukSymbol";
+import { formatUnreadBadge } from "@/lib/chatReadReceipts";
 import {
   Home,
   Megaphone,
@@ -316,7 +317,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                             : "bg-orange-600 text-white"
                         }`}
                       >
-                        {totalUnreadMessages}
+                        {formatUnreadBadge(totalUnreadMessages)}
                       </span>
                     )}
 
@@ -498,8 +499,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Icon className="w-5 h-5 mb-0.5" />
               <span className="truncate">{item.shortLabel}</span>
               {item.href === "/chat" && totalUnreadMessages > 0 && (
-                <span className="absolute top-0.5 right-2 w-4 h-4 rounded-full bg-orange-600 text-white text-[10px] flex items-center justify-center">
-                  {totalUnreadMessages}
+                <span className="absolute top-0.5 right-1 min-w-4 h-4 px-1 rounded-full bg-orange-600 text-white text-[10px] flex items-center justify-center">
+                  {formatUnreadBadge(totalUnreadMessages)}
                 </span>
               )}
             </Link>

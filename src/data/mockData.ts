@@ -408,6 +408,9 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
     lastMessageText: "네 동국님! 교육프로그램개발과평가 수업 과제를 포트폴리오에 넣으면 정말 좋아요.",
     lastMessageAt: "오후 2:15",
     createdBy: "u-student-1",
+    msgSeq: 4,
+    readSeq: { "u-student-1": 3, "u-alumni-1": 4 },
+    joinSeq: { "u-student-1": 0, "u-alumni-1": 0 },
   },
   {
     id: "conv-2",
@@ -422,6 +425,9 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
     lastMessageText: "김동국 학생, 이번 학기 HRD 학술제 팀 주제 초안 잘 봤습니다. 목요일 오후에 연구실에서 잠깐 볼까요?",
     lastMessageAt: "오전 11:30",
     createdBy: "u-prof-1",
+    msgSeq: 1,
+    readSeq: { "u-prof-1": 1, "u-student-1": 0 },
+    joinSeq: { "u-prof-1": 0, "u-student-1": 0 },
   },
   {
     id: "conv-3",
@@ -438,6 +444,9 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
     lastMessageText: "한지민(졸업생): 발표 자료 목차 깔끔하네요! 현업 사례 슬라이드 피드백 댓글로 남겼어요.",
     lastMessageAt: "어제",
     createdBy: "u-student-1",
+    msgSeq: 3,
+    readSeq: { "u-student-1": 1, "u-student-2": 3, "u-alumni-3": 3, "u-prof-1": 3 },
+    joinSeq: { "u-student-1": 0, "u-student-2": 0, "u-alumni-3": 0, "u-prof-1": 0 },
   },
   {
     id: "conv-4",
@@ -453,6 +462,9 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
     lastMessageText: "박필동: 이번 겨울방학 교육봉사 계획서 양식 공지 올라왔더라고요!",
     lastMessageAt: "10월 20일",
     createdBy: "u-student-3",
+    msgSeq: 2,
+    readSeq: { "u-student-1": 2, "u-student-3": 2, "u-alumni-2": 2 },
+    joinSeq: { "u-student-1": 0, "u-student-3": 0, "u-alumni-2": 0 },
   },
 ];
 
@@ -463,6 +475,7 @@ export const MOCK_MESSAGES: Message[] = [
     senderId: "u-student-1",
     content: "선배님 안녕하세요! 교육학과 22학번 김동국입니다. 멘토링 요청 수락해 주셔서 정말 감사합니다!",
     createdAt: "오후 2:10",
+    seq: 1,
   },
   {
     id: "msg-102",
@@ -470,6 +483,7 @@ export const MOCK_MESSAGES: Message[] = [
     senderId: "u-student-1",
     content: "심리학 복수전공을 하면서 들었던 수업들과 교육학과 전공 과목 중 어떤 프로젝트를 자소서/포트폴리오에 강조하셨는지 궁금합니다.",
     createdAt: "오후 2:11",
+    seq: 2,
   },
   {
     id: "msg-103",
@@ -477,6 +491,7 @@ export const MOCK_MESSAGES: Message[] = [
     senderId: "u-alumni-1",
     content: "반가워요 동국님! 후배님이 같은 진로를 준비한다니 더 반갑네요 :)",
     createdAt: "오후 2:14",
+    seq: 3,
   },
   {
     id: "msg-104",
@@ -484,6 +499,7 @@ export const MOCK_MESSAGES: Message[] = [
     senderId: "u-alumni-1",
     content: "네 동국님! 교육프로그램개발과평가 수업 과제를 포트폴리오에 넣으면 정말 좋아요. 요구분석(Needs Analysis)부터 평가 문항 설계까지 직접 해본 경험이 현업 HRD 담당자들에게 큰 어필이 됩니다.",
     createdAt: "오후 2:15",
+    seq: 4,
   },
   {
     id: "msg-201",
@@ -491,6 +507,7 @@ export const MOCK_MESSAGES: Message[] = [
     senderId: "u-prof-1",
     content: "김동국 학생, 이번 학기 HRD 학술제 팀 주제 초안 잘 봤습니다. 목요일 오후에 연구실에서 잠깐 볼까요?",
     createdAt: "오전 11:30",
+    seq: 1,
   },
   {
     id: "msg-301",
@@ -498,6 +515,7 @@ export const MOCK_MESSAGES: Message[] = [
     senderId: "u-student-2",
     content: "안녕하세요! 이번 학술제 에듀테크·HRD 분과 발표 초안 정리해 보았습니다.",
     createdAt: "어제 오후 4:10",
+    seq: 1,
   },
   {
     id: "msg-302",
@@ -505,6 +523,7 @@ export const MOCK_MESSAGES: Message[] = [
     senderId: "u-prof-1",
     content: "수고 많았습니다. 학습자 데이터 기반 피드백 루프 설계 부분이 특히 흥미롭군요.",
     createdAt: "어제 오후 5:00",
+    seq: 2,
   },
   {
     id: "msg-303",
@@ -512,6 +531,7 @@ export const MOCK_MESSAGES: Message[] = [
     senderId: "u-alumni-3",
     content: "발표 자료 목차 깔끔하네요! 현업 사례 슬라이드 피드백 댓글로 남겼어요.",
     createdAt: "어제 오후 7:20",
+    seq: 3,
   },
   {
     id: "msg-401",
@@ -519,6 +539,7 @@ export const MOCK_MESSAGES: Message[] = [
     senderId: "u-alumni-2",
     content: "후배님들 교육봉사는 미리미리 학기 중에 조금씩 채워두면 4학년 때 임용 공부할 때 훨씬 여유로워요!",
     createdAt: "10월 20일 오전 10:00",
+    seq: 1,
   },
   {
     id: "msg-402",
@@ -526,6 +547,7 @@ export const MOCK_MESSAGES: Message[] = [
     senderId: "u-student-3",
     content: "박필동: 이번 겨울방학 교육봉사 계획서 양식 공지 올라왔더라고요!",
     createdAt: "10월 20일 오후 1:15",
+    seq: 2,
   },
 ];
 
