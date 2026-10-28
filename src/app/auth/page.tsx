@@ -552,9 +552,7 @@ export default function AuthPage() {
                           주전공 + 복수전공 교직 병행 (교직 복수전공)
                         </option>
                       )}
-                      <option value="non_teaching">
-                        교직 미이수 (일반 학사학위 취득 과정)
-                      </option>
+
                     </select>
                   </div>
                 </div>

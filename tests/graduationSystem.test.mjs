@@ -568,3 +568,45 @@ test("10, 11, 12. [Firestore 보안 규칙 검증] 타 학생 학사정보 접�
   // 공식 출처 URL 확인
   assert.equal(OFFICIAL_GUIDE_URL, "https://edu.dongguk.edu/page/619");
 });
+
+test("13. [교육학과 개편 요건 검증] 전공필수 36학점, 교직 10학점(소양 6 + 실습 4[교생2+봉사2]), 졸업시험 합격 기준이 정확히 반영된다", () => {
+  const cohortRule = OFFICIAL_GRADUATION_CATALOG.cohorts["2023"];
+  assert.equal(cohortRule.majorRequiredCredits, 36, "전공필수 36학점 기준 확인");
+  assert.equal(cohortRule.teachingTotalCredits, 10, "교직 총 10학점 기준 확인");
+  assert.equal(cohortRule.teachingLiteracyCredits, 6, "교직소양 6학점 확인");
+  assert.equal(cohortRule.teachingPracticumMinCredits, 4, "교육실습 4학점 확인");
+  assert.equal(cohortRule.volunteeringCredits, 2, "교육봉사 2학점 확인");
+  assert.equal(cohortRule.volunteeringHours, 60, "교육봉사 60시간 확인");
+  assert.equal(cohortRule.schoolPracticumMinCredits, 2, "학교현장실습(교생실습) 2학점 확인");
+  assert.equal(cohortRule.graduationExamRequired, true, "교육학과 졸업시험 필수 확인");
+
+  const progress = migrateStudentProgress({
+    userId: "u-test-exam",
+    academicProfile: {
+      admissionYearNumber: 2023,
+      admissionYearLabel: "2023학년도 신입학 (23학번)",
+      majorPlanType: "single",
+      hasDoubleMajor: false,
+      doubleMajorDepartment: "",
+      teachingTrackStatus: "educational_major",
+      isEnglishTrack: false,
+      updatedAt: "2026-10-28",
+    },
+    teachingChecklist: {
+      personalityTestPassCount: 2,
+      cprCompletedCount: 2,
+      genderSensitivityCount: 4,
+      majorGpa: 3.8,
+      teachingGpa: 4.0,
+      graduationExamCompleted: true,
+      disqualificationGuidanceAcknowledged: true,
+    },
+    courses: [],
+    credits: {},
+    volunteeringRecords: [],
+    checklist: [],
+  });
+
+  const audit = calculateGraduationAudit(progress, OFFICIAL_GRADUATION_CATALOG);
+  assert.equal(audit.teachingChecklistAudit.examCompleted, true, "졸업시험 합격 확인");
+});

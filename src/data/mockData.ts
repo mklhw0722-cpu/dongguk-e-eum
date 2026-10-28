@@ -986,6 +986,7 @@ export const MOCK_STUDENT_PROGRESS: StudentProgress = {
     majorGpa: 3.85,
     teachingGpa: 4.12,
     graduationThesisCompleted: false,
+    graduationExamCompleted: false,
     disqualificationGuidanceAcknowledged: true,
     officialVerificationConfirmedByAdmin: false,
   },
