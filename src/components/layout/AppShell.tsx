@@ -88,7 +88,29 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return true;
   });
 
-  const isAuthPage = pathname === "/auth";
+  // 경로 정규화: GitHub Pages의 basePath(/dongguk-e-eum), 후행 슬래시(/) 등 완벽 대응
+  const normalizedPath = (pathname || "")
+    .replace(/^\/dongguk-e-eum/, "")
+    .replace(/\/+$/, "") || "/";
+
+  // 가입 및 로그인 화면 (/auth) 여부 판정 - 어떤 URL 형식에서도 무조건 100% 접근 보장!
+  const isAuthPage =
+    normalizedPath === "/auth" ||
+    normalizedPath.startsWith("/auth/") ||
+    (Boolean(pathname) && (pathname.includes("/auth") || pathname.endsWith("/auth/")));
+
+  const isAdminPage =
+    normalizedPath === "/admin" ||
+    normalizedPath.startsWith("/admin/") ||
+    (Boolean(pathname) && (pathname.includes("/admin") || pathname.endsWith("/admin/")));
+
+  const isItemActive = (href: string) => {
+    const itemNorm = href.replace(/\/+$/, "") || "/";
+    if (itemNorm === "/") {
+      return normalizedPath === "/";
+    }
+    return normalizedPath === itemNorm || normalizedPath.startsWith(itemNorm + "/");
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-main)] text-[var(--text-main)]">
@@ -245,10 +267,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <nav className="space-y-1">
               {visibleNavItems.map((item) => {
                 const Icon = item.icon;
-                const isActive =
-                  item.href === "/"
-                    ? pathname === "/"
-                    : pathname.startsWith(item.href);
+                const isActive = isItemActive(item.href);
 
                 return (
                   <Link
@@ -498,7 +517,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   </button>
                 </div>
               </div>
-            ) : pathname.startsWith("/admin") && authUserProfile.role !== "admin" ? (
+            ) : isAdminPage && authUserProfile?.role !== "admin" ? (
               // 7. 일반 승인 회원이 URL로 /admin 직접 접근 시 403 차단
               <div className="max-w-xl mx-auto my-14 bg-white dark:bg-slate-900 rounded-3xl border border-rose-300 dark:border-rose-900/60 p-8 text-center space-y-4 shadow-lg">
                 <div className="w-16 h-16 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto">
@@ -508,7 +527,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   관리자 전용 구역 접근 제한 (403 Forbidden)
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md mx-auto">
-                  <strong>{authUserProfile.name}</strong>님은 현재 <strong>{ROLE_LABELS[authUserProfile.role]}</strong> 신분으로 승인되어 있습니다.<br />
+                  <strong>{authUserProfile?.name}</strong>님은 현재 <strong>{ROLE_LABELS[authUserProfile?.role || "student"]}</strong> 신분으로 승인되어 있습니다.<br />
                   관리자 센터는 시스템 최고 관리자(Admin) 권한을 부여받은 계정만 접근할 수 있습니다.
                 </p>
                 <div className="pt-2 flex flex-wrap justify-center gap-2.5">
@@ -529,13 +548,31 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* 모바일 하단 내비게이션 바 */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-2 py-1.5 grid grid-cols-6 gap-1">
-        {visibleNavItems.slice(0, 6).map((item) => {
+      <nav
+        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-2 py-1.5 grid gap-1 ${
+          !isAccessAllowed ? "grid-cols-4" : "grid-cols-6"
+        }`}
+      >
+        {(!isAccessAllowed
+          ? [
+              { href: "/", shortLabel: "홈", icon: Home },
+              { href: "/notices", shortLabel: "공지", icon: Megaphone },
+              { href: "/rooms", shortLabel: "공유방", icon: Compass },
+              { href: "/auth", shortLabel: "로그인/가입", icon: UserCheck },
+            ]
+          : [
+              { href: "/", shortLabel: "홈", icon: Home },
+              { href: "/notices", shortLabel: "공지", icon: Megaphone },
+              { href: "/chat", shortLabel: "대화창", icon: MessageSquare },
+              { href: "/rooms", shortLabel: "공유방", icon: Compass },
+              { href: "/graduation", shortLabel: "졸업요건", icon: CheckSquare },
+              isApprovedAdminUser
+                ? { href: "/admin", shortLabel: "관리자", icon: ShieldCheck }
+                : { href: "/auth", shortLabel: "내정보", icon: UserCheck },
+            ]
+        ).map((item) => {
           const Icon = item.icon;
-          const isActive =
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
+          const isActive = isItemActive(item.href);
 
           return (
             <Link
@@ -543,7 +580,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               href={item.href}
               className={`flex flex-col items-center justify-center py-1 rounded-xl text-[11px] font-semibold transition relative ${
                 isActive
-                  ? "text-orange-600"
+                  ? "text-orange-600 font-bold"
                   : "text-slate-500 dark:text-slate-400"
               }`}
             >
