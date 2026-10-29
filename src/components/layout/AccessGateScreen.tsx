@@ -75,7 +75,7 @@ export function AccessGateScreen({
         </h2>
         <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md mx-auto">
           <strong>{name}</strong>님, 회원가입은 정상적으로 완료되었습니다.
-          동국대학교 교육학과 폐쇄형 플랫폼 보안 정책에 따라 학과 관리자의 소속 승인 전까지는 내부 콘텐츠 이용이 제한됩니다.
+          동국대학교 교육학과 전용 플랫폼 보안 정책에 따라 학과 관리자의 소속 승인 전까지는 내부 콘텐츠 이용이 제한됩니다.
         </p>
         <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 text-left text-xs space-y-1.5 border border-amber-200 dark:border-amber-900/50">
           <p className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">

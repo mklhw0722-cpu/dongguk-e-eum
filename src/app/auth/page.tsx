@@ -566,7 +566,7 @@ export default function AuthPage() {
           <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md mx-auto">
             {authUserProfile?.approvalStatus === "approved"
               ? "축하합니다! 학과 관리자의 승인이 완료되어 이제 플랫폼의 모든 게시판, 대화창, 멘토링 기능을 정상 이용하실 수 있습니다."
-              : "동국대학교 교육학과 폐쇄형 플랫폼의 보안 정책에 따라 관리자의 소속 확인 후 내부 콘텐츠가 열립니다. 관리자가 승인하면 새로고침 없이 화면이 즉시 열립니다."}
+              : "동국대학교 교육학과 전용 플랫폼의 보안 정책에 따라 관리자의 소속 확인 후 내부 콘텐츠가 열립니다. 관리자가 승인하면 새로고침 없이 화면이 즉시 열립니다."}
           </p>
 
           <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 text-left text-xs space-y-1.5 border border-slate-200 dark:border-slate-700">
@@ -736,7 +736,7 @@ export default function AuthPage() {
                 거절 사유:
               </p>
               <p className="text-rose-800 dark:text-rose-300">
-                &ldquo;동국대학교 교육학과 구성원(재학생·졸업생·교수진)만 가입할 수 있는 폐쇄형 플랫폼입니다.&rdquo;
+                &ldquo;동국대학교 교육학과 구성원(재학생·졸업생·교수진)만 가입할 수 있는 전용 플랫폼입니다.&rdquo;
               </p>
             </div>
           </div>

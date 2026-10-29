@@ -421,7 +421,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     : "동국e음 보안 인증 확인 중..."}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  폐쇄형 학과 플랫폼 보안 정책에 따라 로그인 여부와 소속 승인 상태를 순서대로 확인하고 있습니다.
+                  학과 전용 플랫폼 보안 정책에 따라 로그인 여부와 소속 승인 상태를 순서대로 확인하고 있습니다.
                 </p>
               </div>
             ) : routeView === "forbidden" ? (
