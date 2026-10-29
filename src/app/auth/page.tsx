@@ -145,12 +145,11 @@ export default function AuthPage() {
         ? {
             admissionYearNumber: signupAdmissionYear,
             admissionYearLabel,
-            majorPlanType: signupMajorPlanType,
-            hasDoubleMajor: signupMajorPlanType !== "single",
-            doubleMajorDepartment:
-              signupMajorPlanType === "single" ? "" : signupDoubleMajorDept.trim(),
-            teachingTrackStatus: signupTeachingStatus,
-            isEnglishTrack: signupIsEnglishTrack,
+            majorPlanType: "single", // 기본 단일전공 (가입 후 졸업요건 화면에서 수정 가능)
+            hasDoubleMajor: false,
+            doubleMajorDepartment: "",
+            teachingTrackStatus: "educational_major", // 교육학과 기본 교직 과정
+            isEnglishTrack: false,
             specialConditionMemo: "",
             adminVerifiedSpecialCondition: false,
             updatedAt: new Date().toISOString().slice(0, 10),
@@ -492,104 +491,6 @@ export default function AuthPage() {
                 </div>
               )}
             </div>
-
-            {/* 재학생 전용 개인별 학사정보 (전공 이수 형태 + 교직 이수 상태 분리 입력) */}
-            {selectedRole === "student" && (
-              <div className="p-4 rounded-2xl bg-orange-50/60 dark:bg-slate-800/60 border border-orange-200/80 dark:border-slate-700 space-y-3.5">
-                <div className="flex items-center justify-between flex-wrap gap-1">
-                  <span className="font-extrabold text-xs sm:text-sm text-orange-950 dark:text-orange-200">
-                    동국대학교 교육학과 신입학 학사정보 (졸업요건 자동 적용)
-                  </span>
-                  <span className="text-[11px] font-semibold text-orange-700 dark:text-orange-300">
-                    가입 후 [졸업요건 점검] 화면에서 언제든 수정 가능
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="block font-bold mb-1 text-xs">
-                      1. 전공 이수 형태 (단일 / 복수전공)
-                    </label>
-                    <select
-                      value={signupMajorPlanType}
-                      onChange={(e) => {
-                        const nextPlan = e.target.value as MajorPlanType;
-                        setSignupMajorPlanType(nextPlan);
-                        if (nextPlan === "single" && signupTeachingStatus === "double_teaching") {
-                          setSignupTeachingStatus("educational_major");
-                        }
-                      }}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold"
-                    >
-                      <option value="single">
-                        단일전공 (교육학과 전공 66학점)
-                      </option>
-                      <option value="double_edu">
-                        복수전공 — 사범대학 내 타 학과 (주전공 62 + 복수 50학점)
-                      </option>
-                      <option value="double_general">
-                        복수전공 — 일반대학(비사범대) 학과 (주전공 62 + 타 학과 기준)
-                      </option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-bold mb-1 text-xs">
-                      2. 교직 이수 관련 상태 (복수전공과 동시 적용 가능)
-                    </label>
-                    <select
-                      value={signupTeachingStatus}
-                      onChange={(e) =>
-                        setSignupTeachingStatus(e.target.value as TeachingTrackStatus)
-                      }
-                      className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold"
-                    >
-                      <option value="educational_major">
-                        주전공 교직 이수 (교육학과 사범대 기본 과정)
-                      </option>
-                      {signupMajorPlanType !== "single" && (
-                        <option value="double_teaching">
-                          주전공 + 복수전공 교직 병행 (교직 복수전공)
-                        </option>
-                      )}
-
-                    </select>
-                  </div>
-                </div>
-
-                {signupMajorPlanType !== "single" && (
-                  <div>
-                    <label className="block font-bold mb-1 text-xs">
-                      복수전공 학과명
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={signupDoubleMajorDept}
-                      onChange={(e) => setSignupDoubleMajorDept(e.target.value)}
-                      placeholder={
-                        signupMajorPlanType === "double_edu"
-                          ? "예: 국어교육과, 역사교육과, 수학교육과 등"
-                          : "예: 심리학과, 경영학과, 컴퓨터공학과 등"
-                      }
-                      className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
-                    />
-                  </div>
-                )}
-
-                <label className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-300 cursor-pointer pt-0.5">
-                  <input
-                    type="checkbox"
-                    checked={signupIsEnglishTrack}
-                    onChange={(e) => setSignupIsEnglishTrack(e.target.checked)}
-                    className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
-                  />
-                  <span>
-                    영어트랙 대상자입니다 (체크 시 공통교양·핵심교양 영어트랙 별도 기준 확인 필요 안내 적용)
-                  </span>
-                </label>
-              </div>
-            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
