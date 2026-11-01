@@ -82,10 +82,15 @@ export default function NoticesPage() {
     [notices]
   );
 
-  // 확정 일정 공지 목록 (절대 게시글 작성일(createdAt)을 행사일로 사용하지 않고, scheduleStatus === "confirmed" 및 eventStartDate가 있는 공지만 포함)
+  // 확정 일정 공지 목록 (마감일이 지난 공지는 자동 제외하여 현재 진행/예정 중인 일정만 노출)
   const confirmedScheduleNotices = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
     return notices
-      .filter((n) => n.scheduleStatus === "confirmed" && Boolean(n.eventStartDate))
+      .filter((n) => {
+        if (n.scheduleStatus !== "confirmed" || !n.eventStartDate) return false;
+        const deadline = n.eventEndDate || n.eventStartDate;
+        return deadline >= today;
+      })
       .sort((a, b) => (a.eventStartDate || "").localeCompare(b.eventStartDate || ""));
   }, [notices]);
 
@@ -311,7 +316,7 @@ export default function NoticesPage() {
               </h2>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              신청 기간·행사 일시가 명확히 확인된 공지만 캘린더에 표시하며, 게시글 작성일을 행사일로 오인하지 않습니다.
+              신청 기간·행사 일시가 명확하고 마감일이 지나지 않은 일정만 자동으로 표시합니다.
             </p>
           </div>
 
@@ -344,7 +349,7 @@ export default function NoticesPage() {
         {calendarTab === "confirmed" ? (
           confirmedScheduleNotices.length === 0 ? (
             <div className="p-6 rounded-xl bg-slate-50 text-center text-xs text-slate-500">
-              현재 제목에서 확정된 신청 기간·행사 일정이 없습니다. [일정 검토 필요] 탭에서 원문 일정을 확인해 보세요.
+              현재 진행 중이거나 예정된 일정이 없습니다. (마감된 일정은 자동으로 내려갔습니다)
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
