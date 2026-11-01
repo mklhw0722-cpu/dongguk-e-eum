@@ -90,6 +90,7 @@ export default function GraduationPage() {
     addVolunteeringRecord,
     removeVolunteeringRecord,
     toggleChecklistItem,
+    removeChecklistItem,
     addChecklistItem,
   } = useApp();
 
@@ -1938,33 +1939,48 @@ export default function GraduationPage() {
             {studentProgress.checklist.map((item) => (
               <div
                 key={item.id}
-                onClick={() => toggleChecklistItem(item.id)}
-                className={`p-3 rounded-xl border cursor-pointer flex items-start gap-2.5 text-xs transition ${
+                className={`p-3 rounded-xl border flex items-start justify-between gap-2.5 text-xs transition ${
                   item.completed
                     ? "bg-emerald-50/50 border-emerald-200"
                     : "bg-slate-50/60 border-slate-200"
                 }`}
               >
-                <input
-                  type="checkbox"
-                  checked={item.completed}
-                  onChange={() => {}}
-                  className="mt-0.5 rounded border-slate-300 text-emerald-600"
-                />
-                <div>
-                  <p
-                    className={`font-bold ${
-                      item.completed
-                        ? "line-through text-slate-400"
-                        : "text-slate-800 dark:text-slate-200"
-                    }`}
-                  >
-                    {item.label}
-                  </p>
-                  {item.memo && (
-                    <p className="text-[11px] text-slate-500 mt-0.5">{item.memo}</p>
-                  )}
+                <div
+                  onClick={() => toggleChecklistItem(item.id)}
+                  className="flex items-start gap-2.5 cursor-pointer flex-1"
+                >
+                  <input
+                    type="checkbox"
+                    checked={item.completed}
+                    onChange={() => {}}
+                    className="mt-0.5 rounded border-slate-300 text-emerald-600 pointer-events-none"
+                  />
+                  <div>
+                    <p
+                      className={`font-bold ${
+                        item.completed
+                          ? "line-through text-slate-400"
+                          : "text-slate-800 dark:text-slate-200"
+                      }`}
+                    >
+                      {item.label}
+                    </p>
+                    {item.memo && (
+                      <p className="text-[11px] text-slate-500 mt-0.5">{item.memo}</p>
+                    )}
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    removeChecklistItem(item.id);
+                  }}
+                  className="text-slate-400 hover:text-red-500 p-1 transition"
+                  title="메모 삭제"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             ))}
           </div>

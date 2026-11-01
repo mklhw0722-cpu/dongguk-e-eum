@@ -226,6 +226,7 @@ interface AppContextValue extends PlatformDataState {
   ) => void;
   removeVolunteeringRecord: (id: string) => void;
   toggleChecklistItem: (id: string) => void;
+  removeChecklistItem: (id: string) => void;
   addChecklistItem: (
     label: string,
     category: RequirementCategory,
@@ -1953,6 +1954,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
   };
 
+  const removeChecklistItem = (id: string) => {
+    let nextSnapshot: StudentProgress | null = null;
+    setState((prev) => {
+      const nextProgress: StudentProgress = {
+        ...prev.studentProgress,
+        checklist: prev.studentProgress.checklist.filter((item) => item.id !== id),
+      };
+      nextSnapshot = nextProgress;
+      return {
+        ...prev,
+        studentProgress: nextProgress,
+      };
+    });
+    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+  };
+
   const toggleChecklistItem = (id: string) => {
     let nextSnapshot: StudentProgress | null = null;
     setState((prev) => {
@@ -2284,6 +2301,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addVolunteeringRecord,
         removeVolunteeringRecord,
         toggleChecklistItem,
+        removeChecklistItem,
         addChecklistItem,
         toggleJoinRoom,
         createCommunityRoom,
