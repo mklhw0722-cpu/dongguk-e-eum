@@ -502,7 +502,7 @@ export default function GraduationPage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
           <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
             <span className="text-slate-400 block mb-1">신입학 연도 · 적용 과정</span>
             <p className="font-extrabold text-slate-900 dark:text-white text-sm">
@@ -540,19 +540,8 @@ export default function GraduationPage() {
                 : "교직 요건 제외 (학사학위 기준 적용)"}
             </p>
           </div>
-
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
-            <span className="text-slate-400 block mb-1">기타 개인별 적용 조건</span>
-            <p className="font-extrabold text-slate-900 dark:text-white text-sm">
-              {profile.isEnglishTrack ? "영어트랙 대상자" : "일반 트랙 (영어강의 면제)"}
-            </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              {profile.isEnglishTrack
-                ? "영어트랙 교양 기준 확인 필요"
-                : "사범대학 영어강의 이수 의무 제외"}
-            </p>
-          </div>
         </div>
+
 
         {isEditingProfile && (
           <form
@@ -675,17 +664,6 @@ export default function GraduationPage() {
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={isEnglishTrackInput}
-                  onChange={(e) => setIsEnglishTrackInput(e.target.checked)}
-                  className="rounded border-slate-300 text-orange-600"
-                />
-                <span>
-                  영어트랙 대상자입니다 (체크 시 공통교양·핵심교양 별도 기준 확인 필요 상태로 표시)
-                </span>
-              </label>
 
               <div className="flex gap-2">
                 <button
