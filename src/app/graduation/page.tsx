@@ -772,9 +772,6 @@ export default function GraduationPage() {
                     <p className="font-bold text-slate-900 dark:text-white">
                       {item.title}
                     </p>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      {item.description}
-                    </p>
                   </td>
                   <td className="py-2.5 px-3 font-extrabold text-slate-900 dark:text-white whitespace-nowrap">
                     {item.targetDisplay}
