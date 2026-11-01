@@ -1995,8 +1995,8 @@ export function calculateGraduationAudit(
   if (!tc.graduationThesisCompleted) {
     unmetItems.push({
       id: "unmet-thesis",
-      title: "교육학과 졸업논문 미완료",
-      detail: "공식 가이드 기준 교육학과는 졸업논문 통과가 필수입니다 (학과 세부 지침 확인 필수).",
+      title: "교육학과 졸업시험 미완료",
+      detail: "교육학과는 졸업시험 합격이 필수입니다 (학과 세부 지침 확인 필수).",
       category: "기타 졸업요건",
     });
   }
@@ -2231,7 +2231,7 @@ export function buildLegacyGraduationRequirementsFromCatalog(
       unit: "여부",
       targetValue: 1,
       description:
-        "전공 평점 2.31+ / 교직 평점 2.75+, 인성검사 적격 2회+, 심폐소생술 2회+, 성인지 교육(2020 이전 2회+, 2021 이후 4회+), 교육학과 졸업논문",
+        "전공 평점 2.31+ / 교직 평점 2.75+, 인성검사 적격 2회+, 심폐소생술 2회+, 성인지 교육(2020 이전 2회+, 2021 이후 4회+), 교육학과 졸업시험",
       applicableCondition: "전 학번 및 교직 과정 이수자",
       officialGuideLabel: "동국대학교 사범대학·교육학과 학업이수 가이드",
       officialGuideUrl: catalog.sourceUrl,

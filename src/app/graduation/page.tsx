@@ -1636,7 +1636,7 @@ export default function GraduationPage() {
         <div>
           <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
             <ClipboardCheck className="w-5 h-5 text-orange-600" />
-            6. 교직 적성·응급처치·성인지 교육·평점평균·졸업논문 체크리스트
+            6. 교직 적성·응급처치·성인지 교육·평점평균·졸업시험 체크리스트
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
             공식 학업이수 가이드 기준을 자동 대조합니다. 성인지 교육은{" "}
@@ -1840,11 +1840,11 @@ export default function GraduationPage() {
             </div>
           </div>
 
-          {/* 5) 교육학과 졸업논문 */}
+          {/* 5) 교육학과 졸업시험 */}
           <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
               <span className="font-extrabold text-slate-900 dark:text-white">
-                교육학과 졸업논문
+                교육학과 졸업시험
               </span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
@@ -1857,7 +1857,7 @@ export default function GraduationPage() {
               </span>
             </div>
             <p className="text-[11px] text-slate-500">
-              공식 가이드 기준: 졸업논문(교육학과) 필수 — 세부 일정 및 지침은 교육학과 공지 확인
+              교육학과 졸업요건 기준: 졸업시험 합격 필수 — 세부 일정 및 과목은 학과 공지 확인
             </p>
             <label className="flex items-center gap-2 pt-1 cursor-pointer font-bold text-slate-800 dark:text-slate-200">
               <input
@@ -1866,11 +1866,12 @@ export default function GraduationPage() {
                 onChange={(e) =>
                   updateTeachingChecklistState({
                     graduationThesisCompleted: e.target.checked,
+                    graduationExamCompleted: e.target.checked,
                   })
                 }
                 className="rounded border-slate-300 text-orange-600"
               />
-              <span>졸업논문 제출 및 통과 완료</span>
+              <span>교육학과 졸업시험 합격 완료</span>
             </label>
           </div>
 
