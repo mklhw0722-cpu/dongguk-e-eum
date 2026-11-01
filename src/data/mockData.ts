@@ -1070,25 +1070,11 @@ export const MOCK_STUDENT_PROGRESS: StudentProgress = {
       memo: "교육학개론, 교육심리, 교육철학및교육사 수강 완료",
     },
     {
-      id: "chk-3",
-      label: "심리학 복수전공 필수 과목(심리통계 등) 수강 여부 확인",
-      category: "복수전공 이수 학점",
-      completed: false,
-      memo: "다음 학기 실험심리학 수강 예정",
-    },
-    {
       id: "chk-4",
       label: "교직 적성 및 인성검사 / 응급처치 및 심폐소생술 실습 횟수 확인",
       category: "교직 이수 학점",
       completed: false,
       memo: "이번 학기 응급처치 실습 신청 일정 확인하기",
-    },
-    {
-      id: "chk-5",
-      label: "학과 졸업요건(학술제 발표 또는 졸업논문 등) 학과 사무실 공지 확인",
-      category: "기타 졸업요건",
-      completed: false,
-      memo: "2026년 11월 학술제 발표 참가 준비 중",
     },
   ],
 };
