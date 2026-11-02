@@ -1665,8 +1665,7 @@ export function calculateGraduationAudit(
         totalEarnedCredits >= cohortRule.totalGraduationCredits
           ? "기준 충족"
           : `잔여 ${Math.max(0, cohortRule.totalGraduationCredits - totalEarnedCredits)}학점`,
-      helperText:
-        "이수 완료한 모든 강좌의 학점을 1회씩만 합산합니다 (교직이론 대체인정 전공과목 이중 합산 제외).",
+      helperText: "",
       sourceUrl: cohortRule.sourceUrl,
       lastVerifiedAt: cohortRule.lastVerifiedAt,
     },
@@ -1698,42 +1697,32 @@ export function calculateGraduationAudit(
           : eduMajorEarnedCredits >= applicable.eduMajorTargetCredits
           ? "기준 충족"
           : `잔여 ${Math.max(0, applicable.eduMajorTargetCredits - eduMajorEarnedCredits)}학점`,
-      helperText:
-        "교육학과는 전공과목으로 교직이론(12학점)을 대체이수하므로 단일 66학점 / 복수 62학점을 이수해야 합니다.",
+      helperText: "",
       sourceUrl: cohortRule.sourceUrl,
       lastVerifiedAt: cohortRule.lastVerifiedAt,
     },
     {
       id: "card-liberal",
       category: "교양 이수 학점",
-      title: "공통교양 및 학문기초(외국어 6학점)",
-      earnedValue: totalLiberalArtsEarned,
-      targetValue: liberalArtsTarget,
-      targetDisplay:
-        liberalArtsTarget !== null
-          ? `총 ${liberalArtsTarget}학점 (공통교양 ${applicable.commonLiberalArtsTargetCredits} + 학문기초 ${applicable.academicFoundationTargetCredits})`
-          : `공통교양 ${applicable.commonLiberalArtsDisplay} + 학문기초 ${applicable.academicFoundationTargetCredits}학점`,
+      title: "공통교양",
+      earnedValue: commonLiberalArtsEarnedCredits,
+      targetValue: applicable.commonLiberalArtsTargetCredits,
+      targetDisplay: applicable.commonLiberalArtsTargetCredits !== null ? `${applicable.commonLiberalArtsTargetCredits}학점` : applicable.commonLiberalArtsDisplay,
       unit: "학점",
-      percentage: makePercentage(
-        totalLiberalArtsEarned,
-        liberalArtsTarget,
-        applicable.commonLiberalArtsStatus
-      ),
+      percentage: makePercentage(commonLiberalArtsEarnedCredits, applicable.commonLiberalArtsTargetCredits, applicable.commonLiberalArtsStatus),
       status:
         applicable.commonLiberalArtsStatus === "needs_admin_review"
           ? "needs_review"
-          : liberalArtsTarget !== null && totalLiberalArtsEarned >= liberalArtsTarget && academicFoundationEarnedCredits >= applicable.academicFoundationTargetCredits
+          : applicable.commonLiberalArtsTargetCredits !== null && commonLiberalArtsEarnedCredits >= applicable.commonLiberalArtsTargetCredits
           ? "fulfilled"
           : "in_progress",
       statusBadgeText:
         applicable.commonLiberalArtsStatus === "needs_admin_review"
           ? "요람 세부기준 확인 필요"
-          : liberalArtsTarget !== null &&
-            totalLiberalArtsEarned >= liberalArtsTarget &&
-            academicFoundationEarnedCredits >= applicable.academicFoundationTargetCredits
+          : applicable.commonLiberalArtsTargetCredits !== null && commonLiberalArtsEarnedCredits >= applicable.commonLiberalArtsTargetCredits
           ? "기준 충족"
           : "이수 진행 중",
-      helperText: `공통교양 ${commonLiberalArtsEarnedCredits}학점 + 학문기초(외국어영역) ${academicFoundationEarnedCredits}/${applicable.academicFoundationTargetCredits}학점`,
+      helperText: "",
       sourceUrl: cohortRule.sourceUrl,
       lastVerifiedAt: cohortRule.lastVerifiedAt,
     },
@@ -1784,10 +1773,10 @@ export function calculateGraduationAudit(
       {
         id: "card-teaching",
         category: "교직 이수 학점",
-        title: "교직과목 이수 현황 (교직이론 대체인정 포함)",
+        title: "교직과목 이수 현황",
         earnedValue: effectiveTeachingCredits,
         targetValue: cohortRule.teachingTotalCredits,
-        targetDisplay: `${cohortRule.teachingTotalCredits}학점 (이론12·소양6·실습4~6)`,
+        targetDisplay: `${cohortRule.teachingTotalCredits}학점 (소양6·실습4)`,
         unit: "학점",
         percentage: makePercentage(
           effectiveTeachingCredits,
@@ -1799,12 +1788,8 @@ export function calculateGraduationAudit(
           teachingTheoryAudit.isFulfilled
             ? "fulfilled"
             : "in_progress",
-        statusBadgeText:
-          effectiveTeachingCredits >= cohortRule.teachingTotalCredits &&
-          teachingTheoryAudit.isFulfilled
-            ? "기준 충족"
-            : `교직이론 ${teachingTheoryAudit.recognizedSubjectCount}/${teachingTheoryAudit.targetSubjects}과목`,
-        helperText: `교직이론 인정 ${teachingTheoryAudit.recognizedEquivalentCredits}/12학점(${teachingTheoryAudit.recognizedSubjectCount}과목) · 교직소양 ${courseTeachingLiteracyCredits}/6학점 · 실습/봉사 ${practicumRecognizedCredits + Math.min(2, volunteeringRecognizedCredits)}/4학점`,
+        statusBadgeText: effectiveTeachingCredits >= cohortRule.teachingTotalCredits ? "기준 충족" : `잔여 ${Math.max(0, cohortRule.teachingTotalCredits - effectiveTeachingCredits)}학점`,
+        helperText: `교직소양 ${courseTeachingLiteracyCredits}/6학점 · 실습/봉사 ${practicumRecognizedCredits + Math.min(2, volunteeringRecognizedCredits)}/4학점`,
         sourceUrl: cohortRule.sourceUrl,
         lastVerifiedAt: cohortRule.lastVerifiedAt,
       },
