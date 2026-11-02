@@ -1107,7 +1107,7 @@ export function resolveApplicableRequirements(
         ? "교육학과 단일전공 이수학점 (별도 기준)"
         : "교육학과 복수전공 주전공 이수학점 (별도 기준)",
       targetValue: eduMajorTargetCredits,
-      targetDisplay: isSingleMajor ? "66학점 이상 (전공필수 36학점 + 전공선택 30학점)" : "50학점 이상 (전공필수 36학점 + 전공선택 14학점)",
+      targetDisplay: isSingleMajor ? "66학점 이상 (전공필수 36학점 + 전공선택 30학점)" : "62학점 이상 (전공필수 36학점 + 전공선택 26학점)",
       unit: "학점",
       reviewStatus: eduMajorTargetStatus,
       applicableTarget: isSingleMajor
@@ -1679,7 +1679,7 @@ export function calculateGraduationAudit(
           : "교육학과 주전공 학점 (복수전공 62학점)",
       earnedValue: eduMajorEarnedCredits,
       targetValue: applicable.eduMajorTargetCredits,
-      targetDisplay: `${applicable.eduMajorTargetCredits}학점 (사범대 일반 ${applicable.generalMajorReferenceCredits} + 대체 12)`,
+      targetDisplay: `${applicable.eduMajorTargetCredits}학점 이상`,
       unit: "학점",
       percentage: makePercentage(
         eduMajorEarnedCredits,
