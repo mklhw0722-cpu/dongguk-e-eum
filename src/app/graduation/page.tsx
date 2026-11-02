@@ -1079,12 +1079,13 @@ export default function GraduationPage() {
                 수동 보정값 0으로 초기화 (등록 강좌 학점만 사용)
               </button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {(
                 [
                   "졸업 이수 학점",
                   "전공 이수 학점",
                   "교양 이수 학점",
+                  "학문기초 이수 학점",
                   "복수전공 이수 학점",
                   "교직 이수 학점",
                 ] as RequirementCategory[]

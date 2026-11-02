@@ -842,3 +842,40 @@ test("17. [전공필수 12과목·전공선택 18과목 프리셋 및 교직이�
   assert.equal(electivePresets.length, 18, "전공선택 프리셋 18과목 확인");
   assert.equal(theoryPresets.length, 0, "교직이론 프리셋은 선택 항목에서 완전히 제거됨");
 });
+
+test("18. [학문기초 이수 학점 수동 보정 및 공통교양·학문기초 카드 연동] 학문기초 이수 학점 입력 시 공통교양 및 학문기초 카드와 미충족 검증에 실시간 반영된다", () => {
+  const student = createEmptyStudentProgress("student-foundation-test", {
+    id: "student-foundation-test",
+    name: "박학문",
+    studentIdOrYear: "2023학년도 신입학 (23학번)",
+  });
+
+  // 1) 학문기초 입력 전: 교양 29학점만 있는 경우 (2023학번 기준 공통교양 29학점 + 학문기초 6학점 = 총 35학점)
+  student.credits["교양 이수 학점"] = {
+    completedValue: 29,
+    userCustomTarget: null,
+    lastUpdated: new Date().toISOString(),
+  };
+
+  const auditBefore = calculateGraduationAudit(student, OFFICIAL_GRADUATION_CATALOG);
+  const liberalCardBefore = auditBefore.categoryCards.find((c) => c.id === "card-liberal");
+  assert.ok(liberalCardBefore);
+  // 공통교양 29학점은 충족되었으나 학문기초(6학점)는 0학점이므로 아직 in_progress
+  assert.equal(liberalCardBefore.earnedValue, 29);
+  assert.equal(liberalCardBefore.status, "in_progress");
+
+  // 2) 학문기초 6학점 직접 보정 입력
+  student.credits["학문기초 이수 학점"] = {
+    completedValue: 6,
+    userCustomTarget: null,
+    lastUpdated: new Date().toISOString(),
+  };
+
+  const auditAfter = calculateGraduationAudit(student, OFFICIAL_GRADUATION_CATALOG);
+  const liberalCardAfter = auditAfter.categoryCards.find((c) => c.id === "card-liberal");
+  assert.ok(liberalCardAfter);
+  // 29(공통교양) + 6(학문기초) = 35학점으로 합산 반영되어 fulfilled 달성
+  assert.equal(liberalCardAfter.earnedValue, 35);
+  assert.equal(liberalCardAfter.status, "fulfilled");
+  assert.match(liberalCardAfter.helperText, /학문기초 6\/6학점/);
+});
