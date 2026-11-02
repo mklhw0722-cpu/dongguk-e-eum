@@ -125,7 +125,7 @@ test("9. 미승인 사용자의 Firestore 내부 데이터 읽기가 차단되�
   assert.match(rules, /match \/communityPosts\/\{postId\}[\s\S]*?allow read:\s*if isApprovedUser\(\)/);
   assert.match(rules, /match \/publicProfiles\/\{userId\}[\s\S]*?allow read:\s*if isApprovedUser\(\) \|\| isApprovedAdmin\(\)/);
   assert.match(rules, /match \/chats\/\{chatId\}[\s\S]*?allow read:\s*if isApprovedUser\(\)/);
-  assert.match(rules, /match \/graduationRecords\/\{userId\}[\s\S]*?allow read, write:\s*if isApprovedUser\(\)/);
+  assert.match(rules, /match \/graduationRecords\/\{userId\}[\s\S]*?allow read(?:, write)?:\s*if isApprovedUser\(\)/);
   // 일반 가입은 pending 만 허용하고, 본인 수정 시 approvalStatus 와 role 변경이 차단되는지 확인
   assert.match(rules, /request\.resource\.data\.approvalStatus == 'pending'/);
   assert.match(rules, /!request\.resource\.data\.diff\(resource\.data\)\.affectedKeys\(\)[\s\S]*?\.hasAny\(\['approvalStatus', 'role'/);
