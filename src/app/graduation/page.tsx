@@ -46,9 +46,9 @@ import {
 } from "lucide-react";
 
 const COURSE_CATEGORIES: CourseCategory[] = [
-  "전공필수/선택 (교육학과)",
+  "전공필수 (교육학과)",
+  "전공선택 (교육학과)",
   "복수전공",
-  "교직이론",
   "교직소양",
   "교육실습(학교현장실습)",
   "교육봉사활동",
@@ -232,7 +232,7 @@ export default function GraduationPage() {
   const [courseSemesterInput, setCourseSemesterInput] =
     useState<CourseSemester>("1학기");
   const [courseCategoryInput, setCourseCategoryInput] =
-    useState<CourseCategory>("전공필수/선택 (교육학과)");
+    useState<CourseCategory>("전공필수 (교육학과)");
   const [courseCompletedInput, setCourseCompletedInput] = useState(true);
   const [courseRecognitionInput, setCourseRecognitionInput] = useState<
     "confirmed" | "needs_review"
@@ -256,6 +256,9 @@ export default function GraduationPage() {
     setCourseTitleInput(found.courseTitle);
     setCourseCreditsInput(String(found.credits));
     setCourseCategoryInput(found.category);
+    if (found.defaultSemester) {
+      setCourseSemesterInput(found.defaultSemester);
+    }
     setCourseIsSubjEduInput(Boolean(found.isSubjectEducationCourse));
     setCourseRecognitionInput("confirmed");
   };
@@ -265,7 +268,7 @@ export default function GraduationPage() {
     setCourseCodeInput("");
     setCourseTitleInput("");
     setCourseCreditsInput("3");
-    setCourseCategoryInput("전공필수/선택 (교육학과)");
+    setCourseCategoryInput("전공필수 (교육학과)");
     setCourseCompletedInput(true);
     setCourseRecognitionInput("confirmed");
     setCourseIsSubjEduInput(false);
@@ -1117,18 +1120,15 @@ export default function GraduationPage() {
       </section>
 
       {/* =====================================================================
-          섹션 4. 이수 강좌 목록 관리 및 교육학과 교직이론 대체인정 현황판
+          섹션 4. 이수 강좌 관리
          ===================================================================== */}
       <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
             <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
               <BookOpen className="w-5 h-5 text-orange-600" />
-              4. 이수 강좌 관리 및 교육학과 교직이론 대체인정 현황
+              4. 이수 강좌 관리
             </h2>
-            <p className="text-xs text-slate-500 mt-0.5">
-              등록한 각 강좌의 학점은 <strong>총 졸업학점(130학점)에 1회만 합산</strong>되며, 교육학과 전공 대체인정 과목(3학점)은 전공학점(66/62)과 교직이론 이수 요건(6과목/12학점 상당)을 동시에 충족합니다.
-            </p>
           </div>
           <span className="px-3 py-1 rounded-xl bg-orange-50 text-orange-700 text-xs font-extrabold self-start">
             등록 강좌 총 {studentProgress.courses?.length || 0}개
@@ -1155,14 +1155,46 @@ export default function GraduationPage() {
                 className="px-3 py-1.5 rounded-xl border border-orange-300 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-200"
               >
                 <option value="">
-                  -- 교육학과 전공(대체인정)·교직소양·실습 강좌 선택 --
+                  -- 교육학과 전공필수·전공선택·교직소양·실습 강좌 선택 --
                 </option>
-                {OFFICIAL_COURSE_PRESETS.map((preset) => (
-                  <option key={preset.courseCode} value={preset.courseCode}>
-                    [{preset.category}] {preset.courseTitle} ({preset.credits}학점) -{" "}
-                    {preset.description}
-                  </option>
-                ))}
+                <optgroup label="전공필수 (교육학과 - 12과목 / 총 36학점)">
+                  {OFFICIAL_COURSE_PRESETS.filter(
+                    (preset) => preset.category === "전공필수 (교육학과)"
+                  ).map((preset) => (
+                    <option key={preset.courseCode} value={preset.courseCode}>
+                      [전공필수] {preset.courseTitle} ({preset.courseCode} · {preset.credits}학점) - {preset.description}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="전공선택 (교육학과 - 18과목)">
+                  {OFFICIAL_COURSE_PRESETS.filter(
+                    (preset) => preset.category === "전공선택 (교육학과)"
+                  ).map((preset) => (
+                    <option key={preset.courseCode} value={preset.courseCode}>
+                      [전공선택] {preset.courseTitle} ({preset.courseCode} · {preset.credits}학점) - {preset.description}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="교직소양 (필수 4과목 / 총 6학점)">
+                  {OFFICIAL_COURSE_PRESETS.filter(
+                    (preset) => preset.category === "교직소양"
+                  ).map((preset) => (
+                    <option key={preset.courseCode} value={preset.courseCode}>
+                      [교직소양] {preset.courseTitle} ({preset.courseCode} · {preset.credits}학점) - {preset.description}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="교육실습 및 교육봉사활동">
+                  {OFFICIAL_COURSE_PRESETS.filter(
+                    (preset) =>
+                      preset.category === "교육실습(학교현장실습)" ||
+                      preset.category === "교육봉사활동"
+                  ).map((preset) => (
+                    <option key={preset.courseCode} value={preset.courseCode}>
+                      [{preset.category}] {preset.courseTitle} ({preset.courseCode} · {preset.credits}학점) - {preset.description}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
             </div>
           </div>
@@ -1299,7 +1331,9 @@ export default function GraduationPage() {
                 />
                 <span>이수 완료 과목 (체크 해제 시 수강 중/예정으로 보관)</span>
               </label>
-              {courseCategoryInput === "전공필수/선택 (교육학과)" && (
+              {(courseCategoryInput === "전공필수 (교육학과)" ||
+                courseCategoryInput === "전공선택 (교육학과)" ||
+                courseCategoryInput === "전공필수/선택 (교육학과)") && (
                 <label className="flex items-center gap-2 cursor-pointer text-slate-600">
                   <input
                     type="checkbox"
@@ -1410,7 +1444,7 @@ export default function GraduationPage() {
                 <th className="py-2.5 px-3 font-bold">이수 구분</th>
                 <th className="py-2.5 px-3 font-bold">강좌명 (학수번호)</th>
                 <th className="py-2.5 px-3 font-bold">학점</th>
-                <th className="py-2.5 px-3 font-bold">교직이론 대체 / 상태</th>
+                <th className="py-2.5 px-3 font-bold">이수 상태</th>
                 <th className="py-2.5 px-3 font-bold text-right">관리</th>
               </tr>
             </thead>
@@ -1460,11 +1494,6 @@ export default function GraduationPage() {
                         ) : (
                           <span className="px-2 py-0.5 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold">
                             수강 중/예정 (학점 미합산)
-                          </span>
-                        )}
-                        {course.substitutedTeachingSubjectCode && (
-                          <span className="px-2 py-0.5 rounded-full bg-orange-100 text-orange-800 text-[10px] font-bold">
-                            교직이론 대체인정 ({course.substitutedTeachingSubjectCode})
                           </span>
                         )}
                         {course.isSubjectEducationCourse && (

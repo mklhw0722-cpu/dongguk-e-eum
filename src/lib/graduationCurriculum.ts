@@ -122,106 +122,305 @@ export interface OfficialCoursePreset {
   courseTitle: string;
   credits: number;
   category: CourseCategory;
+  defaultSemester?: CourseSemester;
   substitutedTeachingSubjectCode?: string;
   isSubjectEducationCourse?: boolean;
   description: string;
 }
 
 /**
- * 공식 학업이수 가이드(https://edu.dongguk.edu/page/619)에서 확인된 대표 강좌 프리셋
+ * 동국대학교 교육학과 전공필수 12과목 (총 36학점) 학수번호 집합
+ * 출처: https://education.dongguk.edu/page/30467 (전공 교육과정)
+ */
+export const EDU_MAJOR_REQUIRED_CODES = new Set<string>([
+  "EDU2013", // 교육학개론 (1학기, 1학년)
+  "EDU2017", // 평생교육론 (1학기, 1·2학년)
+  "EDU2002", // 교육철학 (1학기, 2학년)
+  "EDU2010", // 교육사회학 (1학기, 2학년)
+  "EDU2016", // 교육행정 (1학기, 2학년)
+  "EDU4030", // 교육학교재연구및지도법 (1학기, 3·4학년)
+  "EDU2015", // 교육심리 (2학기, 1학년)
+  "EDU2012", // 사고와표현 (2학기, 2학년)
+  "EDU2014", // 교육과정 (2학기, 2학년)
+  "EDU4003", // 교육공학 (2학기, 3·4학년)
+  "EDU4029", // 교육학교육론 (2학기, 3·4학년)
+  "EDU4035", // 교육평가 (2학기, 3·4학년)
+]);
+
+/**
+ * 동국대학교 교육학과 전공 교육과정(https://education.dongguk.edu/page/30467) 및
+ * 학업이수 가이드(https://edu.dongguk.edu/page/619) 기반 공식 강좌 프리셋
+ * - 전공필수 12과목 (36학점)
+ * - 전공선택 18과목
+ * - 교직소양 4과목 (6학점) 및 교육실습·교육봉사 5과목
  */
 export const OFFICIAL_COURSE_PRESETS: OfficialCoursePreset[] = [
-  // 교육학과 전공 (교직이론 대체인정 8과목)
+  // =========================================================================
+  // 1. 전공필수 (교육학과) — 총 12과목 (36학점)
+  // =========================================================================
+  // [1학기 개설 전공필수 - 6과목]
   {
     courseCode: "EDU2013",
     courseTitle: "교육학개론",
     credits: 3,
-    category: "전공필수/선택 (교육학과)",
+    category: "전공필수 (교육학과)",
+    defaultSemester: "1학기",
     substitutedTeachingSubjectCode: "ERC0001",
-    description: "교육학과 전공 (교직이론 '교육학개론' 대체인정)",
+    description: "1학기 · 1학년 · 전공기초",
   },
   {
-    courseCode: "EDU2015",
-    courseTitle: "교육심리",
+    courseCode: "EDU2017",
+    courseTitle: "평생교육론",
     credits: 3,
-    category: "전공필수/선택 (교육학과)",
-    substitutedTeachingSubjectCode: "ERC0002",
-    description: "교육학과 전공 (교직이론 '교육심리' 대체인정)",
+    category: "전공필수 (교육학과)",
+    defaultSemester: "1학기",
+    description: "1학기 · 1,2학년 · 전공기초",
   },
   {
     courseCode: "EDU2002",
     courseTitle: "교육철학",
     credits: 3,
-    category: "전공필수/선택 (교육학과)",
+    category: "전공필수 (교육학과)",
+    defaultSemester: "1학기",
     substitutedTeachingSubjectCode: "ERC0003",
-    description: "교육학과 전공 (교직이론 '교육철학 및 교육사' 대체인정)",
+    description: "1학기 · 2학년 · 전공기초",
   },
   {
     courseCode: "EDU2010",
     courseTitle: "교육사회학",
     credits: 3,
-    category: "전공필수/선택 (교육학과)",
+    category: "전공필수 (교육학과)",
+    defaultSemester: "1학기",
     substitutedTeachingSubjectCode: "ERC0005",
-    description: "교육학과 전공 (교직이론 '교육사회' 대체인정)",
-  },
-  {
-    courseCode: "EDU4003",
-    courseTitle: "교육공학",
-    credits: 3,
-    category: "전공필수/선택 (교육학과)",
-    substitutedTeachingSubjectCode: "ERC0006",
-    description: "교육학과 전공 (교직이론 '교육방법 및 교육공학' 대체인정)",
+    description: "1학기 · 2학년 · 전공기초 (2026학년도~ 전선)",
   },
   {
     courseCode: "EDU2016",
     courseTitle: "교육행정",
     credits: 3,
-    category: "전공필수/선택 (교육학과)",
+    category: "전공필수 (교육학과)",
+    defaultSemester: "1학기",
     substitutedTeachingSubjectCode: "ERC0007",
-    description: "교육학과 전공 (교직이론 '교육행정 및 교육경영' 대체인정)",
+    description: "1학기 · 2학년 · 전공기초",
+  },
+  {
+    courseCode: "EDU4030",
+    courseTitle: "교육학교재연구및지도법",
+    credits: 3,
+    category: "전공필수 (교육학과)",
+    defaultSemester: "1학기",
+    isSubjectEducationCourse: true,
+    description: "1학기 · 3,4학년 · 전공전문 (교과교육영역)",
+  },
+  // [2학기 개설 전공필수 - 6과목]
+  {
+    courseCode: "EDU2015",
+    courseTitle: "교육심리",
+    credits: 3,
+    category: "전공필수 (교육학과)",
+    defaultSemester: "2학기",
+    substitutedTeachingSubjectCode: "ERC0002",
+    description: "2학기 · 1학년 · 전공기초",
+  },
+  {
+    courseCode: "EDU2012",
+    courseTitle: "사고와표현",
+    credits: 3,
+    category: "전공필수 (교육학과)",
+    defaultSemester: "2학기",
+    isSubjectEducationCourse: true,
+    description: "2학기 · 2학년 · 전공기초",
   },
   {
     courseCode: "EDU2014",
     courseTitle: "교육과정",
     credits: 3,
-    category: "전공필수/선택 (교육학과)",
+    category: "전공필수 (교육학과)",
+    defaultSemester: "2학기",
     substitutedTeachingSubjectCode: "ERC0011",
-    description: "교육학과 전공 (교직이론 '교육과정' 대체인정)",
+    description: "2학기 · 2학년 · 전공기초",
+  },
+  {
+    courseCode: "EDU4003",
+    courseTitle: "교육공학",
+    credits: 3,
+    category: "전공필수 (교육학과)",
+    defaultSemester: "2학기",
+    substitutedTeachingSubjectCode: "ERC0006",
+    description: "2학기 · 3,4학년 · 전공전문",
+  },
+  {
+    courseCode: "EDU4029",
+    courseTitle: "교육학교육론",
+    credits: 3,
+    category: "전공필수 (교육학과)",
+    defaultSemester: "2학기",
+    isSubjectEducationCourse: true,
+    description: "2학기 · 3,4학년 · 전공전문 (교과교육영역)",
   },
   {
     courseCode: "EDU4035",
     courseTitle: "교육평가",
     credits: 3,
-    category: "전공필수/선택 (교육학과)",
+    category: "전공필수 (교육학과)",
+    defaultSemester: "2학기",
     substitutedTeachingSubjectCode: "ERC0012",
-    description: "교육학과 전공 (교직이론 '교육평가' 대체인정)",
+    description: "2학기 · 3,4학년 · 전공전문 (2026학년도~ 전선)",
   },
-  // 교과교육영역 (전공 9학점 필수 영역)
+
+  // =========================================================================
+  // 2. 전공선택 (교육학과) — 총 18과목
+  // =========================================================================
+  // [1학기 개설 전공선택 - 7과목]
   {
-    courseCode: "EDU_SUBJ1",
-    courseTitle: "교육학교과교육론",
+    courseCode: "EDU4012",
+    courseTitle: "상담심리학",
     credits: 3,
-    category: "전공필수/선택 (교육학과)",
-    isSubjectEducationCourse: true,
-    description: "교과교육영역 (2009학년도 이후 입학자 전공 필수영역 3과목 중 1)",
-  },
-  {
-    courseCode: "EDU_SUBJ2",
-    courseTitle: "교육학교재연구및지도법",
-    credits: 3,
-    category: "전공필수/선택 (교육학과)",
-    isSubjectEducationCourse: true,
-    description: "교과교육영역 (2009학년도 이후 입학자 전공 필수영역 3과목 중 1)",
+    category: "전공선택 (교육학과)",
+    defaultSemester: "1학기",
+    description: "1학기 · 3,4학년 · 전공전문",
   },
   {
-    courseCode: "EDU_SUBJ3",
-    courseTitle: "교육학논리및논술",
+    courseCode: "EDU4018",
+    courseTitle: "원격교육론",
     credits: 3,
-    category: "전공필수/선택 (교육학과)",
-    isSubjectEducationCourse: true,
-    description: "교과교육영역 (2009학년도 이후 입학자 전공 필수영역 3과목 중 1)",
+    category: "전공선택 (교육학과)",
+    defaultSemester: "1학기",
+    description: "1학기 · 3,4학년 · 전공전문",
   },
-  // 교직소양 (직필, 4과목 6학점)
+  {
+    courseCode: "EDU4024",
+    courseTitle: "기업교육론",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "1학기",
+    description: "1학기 · 3,4학년 · 전공전문",
+  },
+  {
+    courseCode: "EDU4028",
+    courseTitle: "통합교육론",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "1학기",
+    description: "1학기 · 3,4학년 · 전공전문",
+  },
+  {
+    courseCode: "EDU4042",
+    courseTitle: "빅데이터시대의교육통계분석",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "1학기",
+    description: "1학기 · 3,4학년 · 전공전문",
+  },
+  {
+    courseCode: "EDU4043",
+    courseTitle: "인간발달과학습에대한융합적이해",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "1학기",
+    description: "1학기 · 3,4학년 · 전공전문",
+  },
+  {
+    courseCode: "EDU4038",
+    courseTitle: "한국현대교육문제사",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "1학기",
+    description: "1학기 · 3,4학년 · 전공전문 (격년개설)",
+  },
+  // [2학기 개설 전공선택 - 11과목]
+  {
+    courseCode: "EDU2005",
+    courseTitle: "한국교육사",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "2학기",
+    description: "2학기 · 2학년 · 전공기초 (격년개설)",
+  },
+  {
+    courseCode: "EDU4015",
+    courseTitle: "서양교육사",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "2학기",
+    description: "2학기 · 3,4학년 · 전공전문 (격년개설)",
+  },
+  {
+    courseCode: "EDU4020",
+    courseTitle: "특수교육론",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "2학기",
+    description: "2학기 · 3,4학년 · 전공전문 (격년개설)",
+  },
+  {
+    courseCode: "EDU4026",
+    courseTitle: "인적자원개발론",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "2학기",
+    description: "2학기 · 3,4학년 · 전공전문",
+  },
+  {
+    courseCode: "EDU4027",
+    courseTitle: "긍정적행동지원",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "2학기",
+    description: "2학기 · 3,4학년 · 전공전문 (격년개설)",
+  },
+  {
+    courseCode: "EDU4033",
+    courseTitle: "심리검사",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "2학기",
+    description: "2학기 · 3,4학년 · 전공전문",
+  },
+  {
+    courseCode: "EDU4039",
+    courseTitle: "교육현장의실제와지도",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "2학기",
+    description: "2학기 · 3,4학년 · 전공전문",
+  },
+  {
+    courseCode: "EDU4040",
+    courseTitle: "인공지능시대와포스트휴먼교육론",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "2학기",
+    description: "2학기 · 3,4학년 · 전공전문 (격년개설)",
+  },
+  {
+    courseCode: "EDU4044",
+    courseTitle: "다문화사회와시민교육",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "2학기",
+    description: "2학기 · 3,4학년 · 전공전문 (격년개설)",
+  },
+  {
+    courseCode: "EDU4045",
+    courseTitle: "의사결정과교육정책",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "2학기",
+    description: "2학기 · 3,4학년 · 전공전문",
+  },
+  {
+    courseCode: "EDU4046",
+    courseTitle: "영화로배우는교육",
+    credits: 3,
+    category: "전공선택 (교육학과)",
+    defaultSemester: "2학기",
+    description: "2학기 · 3,4학년 · 전공전문 (격년개설)",
+  },
+
+  // =========================================================================
+  // 3. 교직소양 (직필, 4과목 6학점)
+  // =========================================================================
   {
     courseCode: "ERC0013",
     courseTitle: "교직실무",
@@ -250,48 +449,16 @@ export const OFFICIAL_COURSE_PRESETS: OfficialCoursePreset[] = [
     category: "교직소양",
     description: "교직소양 필수 (2학점)",
   },
-  // 교직이론 (직선 2학점 과목 - 직접 수강 시)
-  {
-    courseCode: "ERC0018",
-    courseTitle: "생활지도및상담",
-    credits: 2,
-    category: "교직이론",
-    description: "교직이론 선택 (2학점, 교육학과 전공 대체과목 없음)",
-  },
-  {
-    courseCode: "ERC3009",
-    courseTitle: "에듀테크와미래교육",
-    credits: 2,
-    category: "교직이론",
-    description: "교직이론 선택 (2학점)",
-  },
-  {
-    courseCode: "ERC3010",
-    courseTitle: "메이커교육의이론과실천",
-    credits: 2,
-    category: "교직이론",
-    description: "교직이론 선택 (2학점)",
-  },
-  {
-    courseCode: "ERC3011",
-    courseTitle: "교육현장의이해",
-    credits: 2,
-    category: "교직이론",
-    description: "교직이론 선택 (2학점)",
-  },
-  {
-    courseCode: "ERC3013",
-    courseTitle: "학교안전의이론과실제",
-    credits: 2,
-    category: "교직이론",
-    description: "교직이론 선택 (2학점)",
-  },
-  // 교육실습 (학교현장실습 및 교육봉사활동)
+
+  // =========================================================================
+  // 4. 교육실습 (학교현장실습 및 교육봉사활동)
+  // =========================================================================
   {
     courseCode: "ERC0024",
     courseTitle: "학교현장실습Ⅰ(참관실습)",
     credits: 1,
     category: "교육실습(학교현장실습)",
+    defaultSemester: "1학기",
     description: "학교현장실습Ⅰ (1학점, 2주, 3학기 개설)",
   },
   {
@@ -299,6 +466,7 @@ export const OFFICIAL_COURSE_PRESETS: OfficialCoursePreset[] = [
     courseTitle: "학교현장실습Ⅱ(수업실습)",
     credits: 1,
     category: "교육실습(학교현장실습)",
+    defaultSemester: "1학기",
     description: "학교현장실습Ⅱ (1학점, 2주, 5학기 개설 - Ⅰ 선이수 필수)",
   },
   {
@@ -306,6 +474,7 @@ export const OFFICIAL_COURSE_PRESETS: OfficialCoursePreset[] = [
     courseTitle: "학교현장실습Ⅲ(종합실습)",
     credits: 2,
     category: "교육실습(학교현장실습)",
+    defaultSemester: "1학기",
     description: "학교현장실습Ⅲ (2학점, 4주, 7학기 이상 개설)",
   },
   {
@@ -699,7 +868,12 @@ export function matchTeachingSubstitution(course: {
   }
 
   // 학수번호가 없거나 다르더라도 교육학과 전공 구분이면서 공식 대체인정 과목명과 일치하는 경우 매칭
-  if (!course.category || course.category === "전공필수/선택 (교육학과)") {
+  if (
+    !course.category ||
+    course.category === "전공필수 (교육학과)" ||
+    course.category === "전공선택 (교육학과)" ||
+    course.category === "전공필수/선택 (교육학과)"
+  ) {
     for (const item of EDU_TEACHING_SUBSTITUTION_MAP) {
       if (normTitle === normalizeCourseText(item.eduCourseTitle)) {
         return item;
@@ -967,8 +1141,24 @@ export function migrateStudentProgress(
     ? sortCoursesBySemester(
         raw!.courses.map((c) => {
           const matchedSub = matchTeachingSubstitution(c);
+          let normalizedCategory: CourseCategory = c.category;
+          if (c.category === "전공필수/선택 (교육학과)") {
+            const normCode = normalizeCourseText(c.courseCode);
+            const normTitle = normalizeCourseText(c.courseTitle);
+            const isRequiredMajor =
+              (normCode && EDU_MAJOR_REQUIRED_CODES.has(normCode)) ||
+              OFFICIAL_COURSE_PRESETS.some(
+                (p) =>
+                  p.category === "전공필수 (교육학과)" &&
+                  normalizeCourseText(p.courseTitle) === normTitle
+              );
+            normalizedCategory = isRequiredMajor
+              ? "전공필수 (교육학과)"
+              : "전공선택 (교육학과)";
+          }
           return {
             ...c,
+            category: normalizedCategory,
             credits: Number(c.credits) || 0,
             yearTaken: Number(c.yearTaken) || admissionYearNumber,
             isCompleted: c.isCompleted !== false,
@@ -1565,6 +1755,8 @@ export function calculateGraduationAudit(
     const subItem = matchTeachingSubstitution(course);
 
     switch (course.category) {
+      case "전공필수 (교육학과)":
+      case "전공선택 (교육학과)":
       case "전공필수/선택 (교육학과)":
         courseEduMajorCredits += c;
         if (course.isSubjectEducationCourse) {

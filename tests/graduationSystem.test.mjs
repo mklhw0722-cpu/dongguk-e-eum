@@ -6,6 +6,8 @@ import fs from "node:fs";
 import {
   OFFICIAL_GRADUATION_CATALOG,
   OFFICIAL_GUIDE_URL,
+  OFFICIAL_COURSE_PRESETS,
+  EDU_MAJOR_REQUIRED_CODES,
   EDU_TEACHING_SUBSTITUTION_MAP,
   resolveCohortBand,
   resolveApplicableRequirements,
@@ -817,4 +819,26 @@ test("16. [보안 규칙 추가 검증] 사용자가 문서 내부 userId를 타
     rulesText.includes("request.resource.data.userId == request.auth.uid"),
     "graduationRecords 저장 시 문서 내부 userId 필드도 request.auth.uid와 일치해야 합니다"
   );
+});
+
+test("17. [전공필수 12과목·전공선택 18과목 프리셋 및 교직이론 선택 제거 검증] 공식 교육과정표의 전공필수(36학점)와 전공선택 항목이 반영되고 교직이론은 선택지에서 제거된다", () => {
+  const requiredPresets = OFFICIAL_COURSE_PRESETS.filter(
+    (p) => p.category === "전공필수 (교육학과)"
+  );
+  const electivePresets = OFFICIAL_COURSE_PRESETS.filter(
+    (p) => p.category === "전공선택 (교육학과)"
+  );
+  const theoryPresets = OFFICIAL_COURSE_PRESETS.filter(
+    (p) => p.category === "교직이론"
+  );
+
+  assert.equal(EDU_MAJOR_REQUIRED_CODES.size, 12, "전공필수 12과목 코드 확인");
+  assert.equal(requiredPresets.length, 12, "전공필수 프리셋 12과목(36학점) 확인");
+  assert.equal(
+    requiredPresets.reduce((sum, p) => sum + p.credits, 0),
+    36,
+    "전공필수 총 36학점 확인"
+  );
+  assert.equal(electivePresets.length, 18, "전공선택 프리셋 18과목 확인");
+  assert.equal(theoryPresets.length, 0, "교직이론 프리셋은 선택 항목에서 완전히 제거됨");
 });
