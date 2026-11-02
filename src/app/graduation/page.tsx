@@ -1083,14 +1083,14 @@ export default function GraduationPage() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {(
                 [
-                  "졸업 이수 학점",
-                  "전공 이수 학점",
-                  "교양 이수 학점",
-                  "학문기초 이수 학점",
-                  "복수전공 이수 학점",
-                  "교직 이수 학점",
-                ] as RequirementCategory[]
-              ).map((cat) => {
+                  { key: "전공 이수 학점", label: "전공 이수 학점" },
+                  { key: "교양 이수 학점", label: "교양 이수 학점" },
+                  { key: "학문기초 이수 학점", label: "학문기초 이수 학점" },
+                  { key: "복수전공 이수 학점", label: "복수전공 이수 학점" },
+                  { key: "교직 이수 학점", label: "교직 이수 학점" },
+                  { key: "일반교양 및 자선 이수 학점", label: "일반교양 및 자선" },
+                ] as { key: RequirementCategory; label: string }[]
+              ).map(({ key: cat, label }) => {
                 const cur = studentProgress.credits[cat]?.completedValue ?? 0;
                 return (
                   <div
@@ -1098,7 +1098,7 @@ export default function GraduationPage() {
                     className="p-3 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700"
                   >
                     <label className="block font-bold text-slate-600 mb-1">
-                      {cat}
+                      {label}
                     </label>
                     <input
                       type="number"

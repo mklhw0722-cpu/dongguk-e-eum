@@ -1803,12 +1803,28 @@ export function calculateGraduationAudit(
 
   // 기존 숫자 누적 입력(credits)과의 하위 호환:
   // 강좌가 1개 이상 등록된 경우에는 강좌 합산을 우선하되, 기존 숫자 입력값이 더 크다면(아직 개별 강좌로 다 옮기지 않은 경우) 보존 안내와 함께 큰 값을 반영 가능
-  const legacyTotal = Number(progress.credits["졸업 이수 학점"]?.completedValue ?? 0);
+  const legacyTotalInput = Number(progress.credits["졸업 이수 학점"]?.completedValue ?? 0);
   const legacyMajor = Number(progress.credits["전공 이수 학점"]?.completedValue ?? 0);
   const legacyLiberal = Number(progress.credits["교양 이수 학점"]?.completedValue ?? 0);
   const legacyAcademicFoundation = Number(progress.credits["학문기초 이수 학점"]?.completedValue ?? 0);
   const legacyDouble = Number(progress.credits["복수전공 이수 학점"]?.completedValue ?? 0);
   const legacyTeaching = Number(progress.credits["교직 이수 학점"]?.completedValue ?? 0);
+  const legacyGeneralElective = Number(
+    progress.credits["일반교양 및 자선 이수 학점"]?.completedValue ??
+    progress.credits["일반교양 및 자선"]?.completedValue ??
+    0
+  );
+
+  // 직접 입력한 영역별 학점들의 총합 (전공 + 교양 + 학문기초 + 복수전공 + 교직 + 일반교양 및 자선)
+  const manualSumTotal =
+    legacyMajor +
+    legacyLiberal +
+    legacyAcademicFoundation +
+    legacyDouble +
+    legacyTeaching +
+    legacyGeneralElective;
+
+  const legacyTotal = manualSumTotal > 0 ? manualSumTotal : legacyTotalInput;
 
   const eduMajorEarnedCredits = hasCourses
     ? Math.max(courseEduMajorCredits, legacyMajor)
@@ -1822,6 +1838,9 @@ export function calculateGraduationAudit(
   const academicFoundationEarnedCredits = hasCourses
     ? Math.max(courseAcademicFoundationCredits, legacyAcademicFoundation)
     : legacyAcademicFoundation;
+  const generalElectiveEarnedCredits = hasCourses
+    ? Math.max(courseGeneralElectiveCredits, legacyGeneralElective)
+    : legacyGeneralElective;
 
   // 교직이론 대체인정 및 직접이수 평가
   const recognizedSubjectCount = recognizedTheoryKeys.size;
@@ -1979,7 +1998,10 @@ export function calculateGraduationAudit(
         totalEarnedCredits >= cohortRule.totalGraduationCredits
           ? "기준 충족"
           : `잔여 ${Math.max(0, cohortRule.totalGraduationCredits - totalEarnedCredits)}학점`,
-      helperText: "",
+      helperText:
+        !hasCourses && manualSumTotal > 0
+          ? "직접 입력한 각 영역 학점의 합계가 자동 반영됩니다"
+          : "",
       sourceUrl: cohortRule.sourceUrl,
       lastVerifiedAt: cohortRule.lastVerifiedAt,
     },
@@ -2488,7 +2510,7 @@ export function calculateGraduationAudit(
     doubleMajorEarnedCredits,
     commonLiberalArtsEarnedCredits,
     academicFoundationEarnedCredits,
-    generalElectiveEarnedCredits: courseGeneralElectiveCredits,
+    generalElectiveEarnedCredits,
     teachingLiteracyEarnedCredits: courseTeachingLiteracyCredits,
     teachingTheoryAudit,
     practicumEvaluation,

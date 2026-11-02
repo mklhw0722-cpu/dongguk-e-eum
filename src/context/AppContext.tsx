@@ -2572,9 +2572,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   ) => {
     const today = new Date().toISOString().slice(0, 10);
     applyStudentProgressUpdate(
-      (migrated) => ({
-        ...migrated,
-        credits: {
+      (migrated) => {
+        const nextCredits = {
           ...migrated.credits,
           [category]: {
             completedValue,
@@ -2582,8 +2581,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             isCompletedBoolean,
             lastUpdated: today,
           },
-        },
-      }),
+        };
+
+        // 직접 입력한 영역별 학점 합계 자동 계산 (전공 + 교양 + 학문기초 + 복수전공 + 교직 + 일반교양 및 자선)
+        const subTotal =
+          (Number(nextCredits["전공 이수 학점"]?.completedValue) || 0) +
+          (Number(nextCredits["교양 이수 학점"]?.completedValue) || 0) +
+          (Number(nextCredits["학문기초 이수 학점"]?.completedValue) || 0) +
+          (Number(nextCredits["복수전공 이수 학점"]?.completedValue) || 0) +
+          (Number(nextCredits["교직 이수 학점"]?.completedValue) || 0) +
+          (Number(nextCredits["일반교양 및 자선 이수 학점"]?.completedValue) ||
+            Number(nextCredits["일반교양 및 자선"]?.completedValue) ||
+            0);
+
+        if (subTotal > 0 || category !== "졸업 이수 학점") {
+          nextCredits["졸업 이수 학점"] = {
+            completedValue: subTotal,
+            userCustomTarget: null,
+            lastUpdated: today,
+          };
+        }
+
+        return {
+          ...migrated,
+          credits: nextCredits,
+        };
+      },
       { debounceMs: 500 }
     );
   };

@@ -920,3 +920,28 @@ test("19. [교직이론 미충족 항목 제외 및 7-2 현재 충족 졸업·�
   assert.ok(!unmetIds.includes("unmet-thesis"), "합격한 졸업시험은 미충족 목록에 없어야 함");
 });
 
+test("20. [직접 입력 영역별 학점 합산 및 총 졸업 이수 학점 반영] 전공, 교양, 학문기초, 복수전공, 교직, 일반교양 및 자선 입력값들의 합계가 총 졸업 이수 학점에 반영된다", () => {
+  const student = createEmptyStudentProgress("student-manual-sum-test", {
+    id: "student-manual-sum-test",
+    name: "최합산",
+    studentIdOrYear: "2023학년도 신입학 (23학번)",
+  });
+
+  // 직접 입력한 영역별 학점들
+  student.credits["전공 이수 학점"] = { completedValue: 57, userCustomTarget: null, lastUpdated: "2026-11-02" };
+  student.credits["교양 이수 학점"] = { completedValue: 29, userCustomTarget: null, lastUpdated: "2026-11-02" };
+  student.credits["학문기초 이수 학점"] = { completedValue: 6, userCustomTarget: null, lastUpdated: "2026-11-02" };
+  student.credits["복수전공 이수 학점"] = { completedValue: 0, userCustomTarget: null, lastUpdated: "2026-11-02" };
+  student.credits["교직 이수 학점"] = { completedValue: 8, userCustomTarget: null, lastUpdated: "2026-11-02" };
+  student.credits["일반교양 및 자선 이수 학점"] = { completedValue: 12, userCustomTarget: null, lastUpdated: "2026-11-02" };
+
+  const audit = calculateGraduationAudit(student, OFFICIAL_GRADUATION_CATALOG);
+  const totalCard = audit.categoryCards.find((c) => c.id === "card-total");
+
+  assert.ok(totalCard);
+  // 합계: 57 + 29 + 6 + 0 + 8 + 12 = 112학점
+  assert.equal(audit.totalEarnedCredits, 112, "총 취득 학점 112학점 계산 확인");
+  assert.equal(totalCard.earnedValue, 112, "총 졸업 이수 학점 카드에 합산값 112학점 반영 확인");
+  assert.equal(audit.generalElectiveEarnedCredits, 12, "일반교양 및 자선 취득 학점 12학점 반영 확인");
+});
+
