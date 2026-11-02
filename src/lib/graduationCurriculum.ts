@@ -1148,7 +1148,7 @@ export function resolveApplicableRequirements(
       targetDisplay: `${cohortRule.academicFoundationCredits}학점 이상 (외국어영역)`,
       unit: "학점",
       reviewStatus: cohortRule.academicFoundationStatus,
-      applicableTarget: "교육학과·국어교육과·역사교육과·지리교육과 신입학생",
+      applicableTarget: "교육학과 신입학생",
       description:
         "공식 학업이수 가이드 '나. 학문기초': 교육학과는 학문기초(외국어영역, PRI5*** 등) 6학점 이수 필수",
       sourceUrl: cohortRule.sourceUrl,
