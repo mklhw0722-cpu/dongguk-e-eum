@@ -88,6 +88,7 @@ import {
   subscribeToStudentGraduationRecordInFirestore,
   saveStudentGraduationRecordInFirestore,
   updateUserAcademicProfileInFirestore,
+  assignStudentAdvisorInFirestore,
 } from "@/lib/firebase";
 import { unreadCountForUser, effectiveReadSeq } from "@/lib/chatReadReceipts";
 import officialNoticesJson from "@/data/officialNotices.json";
@@ -152,6 +153,15 @@ interface AppContextValue extends PlatformDataState {
     status: ApprovalStatus,
     adminComment?: string,
     role?: UserRole
+  ) => Promise<void>;
+  approvedProfessors: (PublicChatUser | User)[];
+  myAdvisorInfo: {
+    professor: (PublicChatUser | User | UserProfileDoc) | null;
+    status: "assigned" | "unassigned" | "invalid_status";
+  };
+  handleAdminAssignAdvisor: (
+    studentId: string,
+    professorId: string | null
   ) => Promise<void>;
 
   // 기능 A. 대화창 액션
@@ -806,6 +816,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               careerTrack: u.careerTrack || "",
               doubleMajor: u.doubleMajor || "",
               bio: u.bio || "",
+              specialty: u.specialty || "",
+              consultationAvailable: u.consultationAvailable !== false,
+              studentIdOrYear: u.studentIdOrYear || "",
+              photoUrl: u.photoUrl || "",
+              advisorProfessorId: u.advisorProfessorId || "",
             });
           }
         }
@@ -885,6 +900,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           (authUserProfile.name ? authUserProfile.name.slice(0, 2) : authUserProfile.role === "admin" ? "이혜" : "학"),
         approvalStatus: authUserProfile.approvalStatus || "pending",
         joinedAt: authUserProfile.joinedAt || new Date().toISOString().slice(0, 10),
+        advisorProfessorId: authUserProfile.advisorProfessorId,
+        advisorAssignedAt: authUserProfile.advisorAssignedAt,
+        specialty: authUserProfile.specialty,
+        consultationAvailable: authUserProfile.consultationAvailable,
+        photoUrl: authUserProfile.photoUrl,
       }
     : state.users.find((u) => u.id === ROLE_DEFAULT_USER_ID[currentRole]) || state.users[0];
 
@@ -1082,6 +1102,155 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       role,
     });
   };
+
+  const handleAdminAssignAdvisor = async (
+    studentId: string,
+    professorId: string | null
+  ) => {
+    if (isRealAuthActive && isFirestoreConnected) {
+      await assignStudentAdvisorInFirestore({
+        studentUid: studentId,
+        advisorProfessorId: professorId,
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+
+    // 1. 관리자용 실제 회원 목록 즉각 반영
+    setRealUsersForAdmin((prev) =>
+      prev.map((u) =>
+        u.id === studentId
+          ? {
+              ...u,
+              advisorProfessorId: professorId || "",
+              advisorAssignedAt: professorId ? nowIso : "",
+              updatedAt: nowIso,
+            }
+          : u
+      )
+    );
+
+    // 2. state.users 로컬 상태 즉각 반영
+    setState((prev: PlatformDataState) => ({
+      ...prev,
+      users: prev.users.map((u: User) =>
+        u.id === studentId
+          ? {
+              ...u,
+              advisorProfessorId: professorId || undefined,
+              advisorAssignedAt: professorId ? nowIso : undefined,
+            }
+          : u
+      ),
+    }));
+
+    // 3. 현재 로그인된 학생이 대상인 경우 활성 세션 즉각 동기화
+    if (authUserProfile && authUserProfile.id === studentId) {
+      setAuthUserProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              advisorProfessorId: professorId || "",
+              advisorAssignedAt: professorId ? nowIso : "",
+              updatedAt: nowIso,
+            }
+          : prev
+      );
+    }
+  };
+
+  const approvedProfessors = useMemo(() => {
+    // 1. Firebase 연동 상태인 경우: Firestore에서 승인된 교수 계정만 반환
+    if (isRealAuthActive) {
+      const profs: (PublicChatUser | User)[] = [];
+      const seen = new Set<string>();
+
+      approvedMembers.forEach((m) => {
+        if (m.role === "professor" && m.approvalStatus === "approved" && !seen.has(m.id)) {
+          seen.add(m.id);
+          profs.push(m);
+        }
+      });
+
+      if (authUserProfile?.role === "admin" && Array.isArray(realUsersForAdmin)) {
+        realUsersForAdmin.forEach((u) => {
+          if (u.role === "professor" && u.approvalStatus === "approved" && !seen.has(u.id)) {
+            seen.add(u.id);
+            profs.push(u);
+          }
+        });
+      }
+
+      return profs.sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
+    }
+
+    // 2. 로컬 데모/목 데이터 상태인 경우: 목 데이터 내 승인된 교수 계정 반환
+    const mockProfs = (state.users || []).filter(
+      (u: User) => u.role === "professor" && u.approvalStatus === "approved"
+    );
+    return mockProfs;
+  }, [isRealAuthActive, approvedMembers, realUsersForAdmin, authUserProfile, state.users]);
+
+  const myAdvisorInfo = useMemo(() => {
+    const advisorId =
+      authUserProfile?.advisorProfessorId || currentUser?.advisorProfessorId;
+
+    if (!advisorId) {
+      return {
+        professor: null,
+        status: "unassigned" as const,
+      };
+    }
+
+    let foundProf: (PublicChatUser | User | UserProfileDoc) | null = null;
+
+    foundProf =
+      approvedProfessors.find(
+        (p: PublicChatUser | User) => p.id === advisorId || (p as any).uid === advisorId
+      ) || null;
+
+    if (!foundProf && Array.isArray(realUsersForAdmin)) {
+      foundProf =
+        realUsersForAdmin.find(
+          (u) => u.id === advisorId || (u as any).uid === advisorId
+        ) || null;
+    }
+
+    if (!foundProf && Array.isArray(state.users)) {
+      foundProf =
+        state.users.find(
+          (u: User) => u.id === advisorId || (u as any).uid === advisorId
+        ) || null;
+    }
+
+    if (!foundProf) {
+      return {
+        professor: null,
+        status: "invalid_status" as const,
+      };
+    }
+
+    const isApprovedProf =
+      foundProf.role === "professor" && foundProf.approvalStatus === "approved";
+
+    if (isApprovedProf) {
+      return {
+        professor: foundProf,
+        status: "assigned" as const,
+      };
+    } else {
+      return {
+        professor: foundProf,
+        status: "invalid_status" as const,
+      };
+    }
+  }, [
+    authUserProfile?.advisorProfessorId,
+    currentUser?.advisorProfessorId,
+    approvedProfessors,
+    realUsersForAdmin,
+    state.users,
+  ]);
 
   // --- 대화창 액션 ---
   // 중복 읽음 쓰기 방지용 ref (방 ID -> 마지막으로 요청한 순번)
@@ -2604,6 +2773,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handleUpdateUserName,
         realUsersForAdmin,
         handleAdminUpdateApproval,
+        approvedProfessors,
+        myAdvisorInfo,
+        handleAdminAssignAdvisor,
         sendMessage,
         markConversationRead,
         startOrOpenDirectChat,

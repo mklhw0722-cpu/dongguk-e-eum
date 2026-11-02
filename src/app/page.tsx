@@ -20,6 +20,11 @@ import {
   UserCheck,
   ShieldCheck,
   Briefcase,
+  GraduationCap,
+  Calendar,
+  AlertCircle,
+  Clock,
+  X,
 } from "lucide-react";
 
 export default function HomePage() {
@@ -35,7 +40,17 @@ export default function HomePage() {
     graduationCatalog,
     mentoringRequests,
     approvalRequests,
+    approvedProfessors,
+    myAdvisorInfo,
   } = useApp();
+
+  // 교수 상담 신청 모달 상태 (1단계 프로필/지도교수 연동 및 2단계 신청 폼 가이드)
+  const [consultationModalOpen, setConsultationModalOpen] = React.useState(false);
+  const [selectedProfessorForConsultation, setSelectedProfessorForConsultation] = React.useState<any>(null);
+  const [consultationType, setConsultationType] = React.useState("학업 상담");
+  const [preferredDate, setPreferredDate] = React.useState("");
+  const [preferredTime, setPreferredTime] = React.useState("");
+  const [consultationPurpose, setConsultationPurpose] = React.useState("");
 
   // 읽지 않은 채팅 목록
   const unreadConversations = conversations.filter((conv) => {
@@ -491,6 +506,196 @@ export default function HomePage() {
         </section>
       </div>
 
+      {/* 학생 전용: 나의 지도교수 영역 */}
+      {(currentUser.role === "student" || currentRole === "student") && (
+        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-orange-600" />
+              <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
+                나의 지도교수
+              </h2>
+            </div>
+            <span className="text-xs text-slate-400 font-semibold">
+              교육학과 학생 지도 시스템
+            </span>
+          </div>
+
+          {myAdvisorInfo.status === "assigned" && myAdvisorInfo.professor ? (
+            <div className="p-4 rounded-xl border border-orange-200 dark:border-orange-900/60 bg-gradient-to-r from-orange-50/50 via-white to-orange-50/30 dark:from-slate-800/60 dark:to-slate-800/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-xl bg-orange-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
+                  {myAdvisorInfo.professor.avatarInitials || myAdvisorInfo.professor.name.slice(0, 2)}
+                </div>
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-base font-black text-slate-900 dark:text-white">
+                      {myAdvisorInfo.professor.name}
+                    </span>
+                    <span className="text-xs font-bold text-orange-700 dark:text-orange-300">
+                      {myAdvisorInfo.professor.studentIdOrYear || "교육학과 전임교원"}
+                    </span>
+                    {((myAdvisorInfo.professor as any).id === "u-prof-1" || (myAdvisorInfo.professor as any).email?.includes("@sample.dgu.edu")) && (
+                      <span className="px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold">
+                        테스트 계정
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    소속: 동국대학교 사범대학 교육학과
+                  </p>
+                  {myAdvisorInfo.professor.specialty && (
+                    <p className="text-xs text-slate-500">
+                      전문 분야: {myAdvisorInfo.professor.specialty}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
+                <span
+                  className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                    myAdvisorInfo.professor.consultationAvailable !== false
+                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                      : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                  }`}
+                >
+                  {myAdvisorInfo.professor.consultationAvailable !== false
+                    ? "● 상담 가능"
+                    : "현재 상담 불가"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedProfessorForConsultation(myAdvisorInfo.professor);
+                    setConsultationModalOpen(true);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-xs transition"
+                >
+                  상담 신청
+                </button>
+              </div>
+            </div>
+          ) : myAdvisorInfo.status === "invalid_status" ? (
+            <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                <div>
+                  <p className="font-bold">지정된 지도교수 계정의 이용 상태를 확인할 수 없습니다.</p>
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                    교수 계정 권한이 변경되었거나 이용 정지 상태일 수 있습니다. 학과사무실(관리자)에 문의해 주세요.
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="p-6 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center space-y-1 bg-slate-50/50 dark:bg-slate-800/20">
+              <p className="text-sm font-bold text-slate-700 dark:text-slate-300">지도교수 미등록</p>
+              <p className="text-xs text-slate-400">
+                아직 배정된 지도교수님이 없습니다. 학과사무실 또는 관리자에게 지도교수 지정을 요청해 주세요.
+              </p>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 교수 상담 영역 */}
+      <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <UserCheck className="w-5 h-5 text-orange-600" />
+            <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
+              교수 상담
+            </h2>
+          </div>
+          <span className="text-xs text-slate-400">
+            교육학과 승인 전임교원
+          </span>
+        </div>
+
+        {approvedProfessors.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {approvedProfessors.map((prof) => (
+              <div
+                key={prof.id}
+                className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-orange-300 transition flex flex-col justify-between space-y-3 bg-white dark:bg-slate-900 shadow-2xs"
+              >
+                <div className="space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 font-extrabold text-xs flex items-center justify-center shrink-0">
+                        {prof.avatarInitials || prof.name.slice(0, 2)}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-extrabold text-sm text-slate-900 dark:text-white">
+                            {prof.name}
+                          </span>
+                          {(prof.id === "u-prof-1" || (prof as any).email?.includes("@sample.dgu.edu")) && (
+                            <span className="px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold">
+                              테스트 계정
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-500">
+                          동국대학교 사범대학 교육학과
+                        </p>
+                      </div>
+                    </div>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-bold shrink-0 ${
+                        prof.consultationAvailable !== false
+                          ? "bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                      }`}
+                    >
+                      {prof.consultationAvailable !== false ? "● 상담 가능" : "상담 불가"}
+                    </span>
+                  </div>
+
+                  {prof.specialty && (
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 line-clamp-1">
+                      전문 분야: {prof.specialty}
+                    </p>
+                  )}
+                  {prof.bio && (
+                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+                      {prof.bio}
+                    </p>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400">
+                    {prof.studentIdOrYear || "교육학과 전임교원"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedProfessorForConsultation(prof);
+                      setConsultationModalOpen(true);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-2xs transition"
+                  >
+                    상담 신청
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="p-8 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center space-y-1">
+            <UserCheck className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">
+              현재 등록된 교수님이 없습니다
+            </p>
+            <p className="text-xs text-slate-400">
+              교수 계정이 가입 후 관리자 승인을 받으면 이곳에 자동으로 표시됩니다.
+            </p>
+          </div>
+        )}
+      </section>
+
       {/* 추천 졸업생 멘토 */}
       <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
         <div className="flex items-center justify-between">
@@ -533,6 +738,145 @@ export default function HomePage() {
           ))}
         </div>
       </section>
+
+      {/* 교수 상담 신청 모달 (1단계 연동 안내 및 2단계 신청 폼 가이드) */}
+      {consultationModalOpen && selectedProfessorForConsultation && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <GraduationCap className="w-5 h-5 text-orange-600" />
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                  교수 상담 신청
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConsultationModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 교수 정보 요약 */}
+            <div className="p-3.5 rounded-2xl bg-orange-50/70 dark:bg-orange-950/30 border border-orange-100 dark:border-orange-900/40 flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-orange-600 text-white font-extrabold text-sm flex items-center justify-center shrink-0">
+                {selectedProfessorForConsultation.avatarInitials || selectedProfessorForConsultation.name.slice(0, 2)}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    {selectedProfessorForConsultation.name}
+                  </span>
+                  <span className="text-xs text-orange-700 dark:text-orange-300 font-bold">
+                    {selectedProfessorForConsultation.studentIdOrYear || "교육학과 전임교원"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  동국대학교 사범대학 교육학과
+                  {selectedProfessorForConsultation.specialty ? ` · ${selectedProfessorForConsultation.specialty}` : ""}
+                </p>
+              </div>
+            </div>
+
+            {/* 상담 신청 폼 */}
+            <div className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  상담 유형
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {["학업 상담", "진로 상담", "복수전공 상담", "대학원 진학 상담", "기타"].map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setConsultationType(type)}
+                      className={`p-2 rounded-xl font-bold border transition text-center ${
+                        consultationType === type
+                          ? "border-orange-600 bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300"
+                          : "border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    희망 날짜 (학생 제안)
+                  </label>
+                  <input
+                    type="date"
+                    value={preferredDate}
+                    onChange={(e) => setPreferredDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-orange-500 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    희망 시간대 (학생 제안)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="예: 14:00 또는 화요일 오후"
+                    value={preferredTime}
+                    onChange={(e) => setPreferredTime(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-orange-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  상담 목적 또는 질문 내용
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="교수님께 여쭙고 싶은 내용이나 질문을 구체적으로 적어주세요."
+                  value={consultationPurpose}
+                  onChange={(e) => setConsultationPurpose(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-orange-500 font-medium resize-none"
+                />
+              </div>
+
+              {/* 1단계 완료 및 2단계 연동 안내 알림 */}
+              <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
+                  <span>1단계 교수 프로필 및 지도교수 연동 완료</span>
+                </div>
+                <p className="text-[11px] text-blue-700 dark:text-blue-400 leading-relaxed">
+                  교수 프로필 확인과 지도교수 연결이 정상 작동하고 있습니다. Firestore 접수 및 교수 전용 수락/일정조정 관리 시스템은 다음 2단계에서 연동될 예정입니다.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setConsultationModalOpen(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+              >
+                닫기
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  alert(`[1단계 안내] ${selectedProfessorForConsultation.name} 교수님과의 상담 신청 정보가 준비되었습니다.\n\n다음 2단계에서 Firestore 실시간 저장 및 교수 전용 관리 화면 연동이 진행됩니다.`);
+                  setConsultationModalOpen(false);
+                }}
+                className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-xs transition"
+              >
+                신청 내용 확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

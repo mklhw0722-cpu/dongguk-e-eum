@@ -720,6 +720,11 @@ export interface PublicChatUser {
   careerTrack?: string;
   doubleMajor?: string;
   bio?: string;
+  specialty?: string;
+  consultationAvailable?: boolean;
+  studentIdOrYear?: string;
+  photoUrl?: string;
+  advisorProfessorId?: string;
 }
 
 /**
@@ -826,6 +831,11 @@ export function subscribeToApprovedUsers(
               careerTrack: d.careerTrack || "",
               doubleMajor: d.doubleMajor || "",
               bio: d.bio || "",
+              specialty: d.specialty || "",
+              consultationAvailable: d.consultationAvailable !== false,
+              studentIdOrYear: d.studentIdOrYear || "",
+              photoUrl: d.photoUrl || "",
+              advisorProfessorId: d.advisorProfessorId || "",
             });
           }
         });
@@ -861,6 +871,11 @@ export function subscribeToApprovedUsers(
             careerTrack: d.careerTrack || "",
             doubleMajor: d.doubleMajor || "",
             bio: d.bio || "",
+            specialty: d.specialty || "",
+            consultationAvailable: d.consultationAvailable !== false,
+            studentIdOrYear: d.studentIdOrYear || "",
+            photoUrl: d.photoUrl || "",
+            advisorProfessorId: d.advisorProfessorId || "",
           });
         });
         emitMerged();
@@ -1668,5 +1683,29 @@ export async function updateUserAcademicProfileInFirestore(
       : "단일전공(교육학)",
     studentIdOrYear: safeProfile.admissionYearLabel,
     updatedAt: new Date().toISOString(),
+  });
+}
+
+/**
+ * 관리자 전용: 학생별 지도교수 지정 또는 변경
+ * - 관리자 권한으로 Firestore users/{studentUid} 문서의 advisorProfessorId를 업데이트합니다.
+ * - advisorProfessorId가 null이거나 빈 문자열이면 지도교수 배정을 해제합니다.
+ */
+export async function assignStudentAdvisorInFirestore(params: {
+  studentUid: string;
+  advisorProfessorId: string | null;
+}): Promise<void> {
+  const { db } = getFirebaseInstances();
+  if (!db) {
+    throw new Error("Firestore 데이터베이스가 연결되어 있지 않습니다.");
+  }
+
+  const studentRef = doc(db, USERS_COLLECTION, params.studentUid);
+  const nowIso = new Date().toISOString();
+
+  await updateDoc(studentRef, {
+    advisorProfessorId: params.advisorProfessorId || "",
+    advisorAssignedAt: params.advisorProfessorId ? nowIso : "",
+    updatedAt: nowIso,
   });
 }

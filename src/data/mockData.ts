@@ -30,6 +30,8 @@ export const MOCK_USERS: User[] = [
     avatarInitials: "김동",
     approvalStatus: "approved",
     joinedAt: "2026-03-02",
+    advisorProfessorId: "u-prof-1",
+    advisorAssignedAt: "2026-03-05",
   },
   {
     id: "u-student-2",
@@ -156,6 +158,8 @@ export const MOCK_USERS: User[] = [
     avatarInitials: "백교",
     approvalStatus: "approved",
     joinedAt: "2026-02-01",
+    specialty: "교육공학·HRD 연구실",
+    consultationAvailable: true,
   },
   {
     id: "u-admin-1",

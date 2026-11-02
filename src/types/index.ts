@@ -63,6 +63,46 @@ export interface User {
   approvalStatus: ApprovalStatus;
   joinedAt: string;
   academicProfile?: StudentAcademicProfile;
+  advisorProfessorId?: string; // 학생의 지도교수 UID
+  advisorAssignedAt?: string; // 지도교수 배정일자
+  specialty?: string; // 교수의 전문 분야 (예: "교육공학·HRD 연구실")
+  consultationAvailable?: boolean; // 교수의 상담 가능 여부
+  photoUrl?: string; // 프로필 이미지 URL (선택)
+}
+
+// 교수 상담 신청 시스템 모델 정의
+export type ConsultationType =
+  | "학업 상담"
+  | "진로 상담"
+  | "복수전공 상담"
+  | "대학원 진학 상담"
+  | "기타";
+
+export type ConsultationStatus =
+  | "pending" // 신청 대기
+  | "accepted" // 수락
+  | "reschedule_requested" // 일정 조정 요청
+  | "rejected" // 거절
+  | "completed" // 완료
+  | "cancelled"; // 취소
+
+export interface ConsultationRequest {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentEmail?: string;
+  studentIdOrYear?: string;
+  professorId: string;
+  professorName: string;
+  consultationType: ConsultationType;
+  preferredDate: string; // YYYY-MM-DD
+  preferredTime: string; // HH:MM 또는 시간대
+  purpose: string;
+  status: ConsultationStatus;
+  rescheduleNote?: string; // 교수의 일정 조정 메모 또는 거절 사유
+  conversationId?: string; // 승인 시 연결된 1:1 대화방 ID
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ApprovalRequest {

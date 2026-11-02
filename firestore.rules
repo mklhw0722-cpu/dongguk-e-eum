@@ -72,11 +72,11 @@ service cloud.firestore {
           )
         )
         || (
-          // 본인 수정: 승인 상태·역할·UID·이메일·관리자 코멘트는 바꿀 수 없음
-          // (필드가 원래 없던 문서도 안전하게 비교하도록 diff 사용 — 기존보다 완화하지 않음)
+          // 본인 수정: 승인 상태·역할·UID·이메일·관리자 코멘트·지도교수 배정 정보는 바꿀 수 없음
+          // (필드가 원래 없던 문서도 안전하게 비교하도록 diff 사용 — 학생 자가 지도교수 지정 원천 차단)
           request.auth.uid == userId
           && !request.resource.data.diff(resource.data).affectedKeys()
-                .hasAny(['approvalStatus', 'role', 'uid', 'id', 'email', 'adminComment'])
+                .hasAny(['approvalStatus', 'role', 'uid', 'id', 'email', 'adminComment', 'advisorProfessorId', 'advisorAssignedAt'])
         )
       );
 
@@ -242,6 +242,47 @@ service cloud.firestore {
 
       // 일반 사용자는 공지를 등록·수정·삭제할 수 없으며, 오직 승인된 관리자(isApprovedAdmin)만 가능합니다.
       allow create, update, delete: if isApprovedAdmin();
+    }
+
+    // ==============================================================
+    // 7. 교수 상담 신청 시스템 (consultations 컬렉션)
+    // ==============================================================
+    match /consultations/{consultationId} {
+      // 신청 학생 본인, 접수된 담당 교수님, 승인된 관리자만 상담 내역을 열람할 수 있습니다.
+      allow read: if isApprovedUser() && (
+        request.auth.uid == resource.data.studentId
+        || request.auth.uid == resource.data.professorId
+        || isApprovedAdmin()
+      );
+
+      // 승인된 학생은 본인의 UID를 studentId로 지정하여 초기 'pending(신청 대기)' 상태로만 신청서를 접수할 수 있습니다.
+      allow create: if isApprovedUser()
+                    && request.resource.data.studentId == request.auth.uid
+                    && request.resource.data.status == 'pending'
+                    && request.resource.data.professorId is string;
+
+      // 상태 변경 및 일정 조율:
+      // 1) 학생: 본인이 신청한 건에 대해 'cancelled(취소)' 처리 가능 (자가 승인은 불가능)
+      // 2) 교수: 본인에게 접수된 상담 건에 대해 'accepted(수락)', 'rejected(거절)', 'reschedule_requested(조정 요청)', 'completed(완료)' 처리
+      // 3) 관리자: 전체 수정 가능
+      allow update: if isApprovedUser() && (
+        isApprovedAdmin()
+        || (
+          request.auth.uid == resource.data.studentId
+          && request.resource.data.studentId == resource.data.studentId
+          && request.resource.data.professorId == resource.data.professorId
+          && request.resource.data.status in ['pending', 'cancelled']
+        )
+        || (
+          request.auth.uid == resource.data.professorId
+          && request.resource.data.studentId == resource.data.studentId
+          && request.resource.data.professorId == resource.data.professorId
+        )
+      );
+
+      // 삭제는 관리자 또는 학생의 대기(pending) 상태 철회 시에만 허용
+      allow delete: if isApprovedAdmin()
+                    || (isApprovedUser() && request.auth.uid == resource.data.studentId && resource.data.status == 'pending');
     }
 
     // 그 외 지정되지 않은 모든 컬렉션과 문서는 전면 차단
