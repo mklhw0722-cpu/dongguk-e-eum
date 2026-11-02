@@ -14,6 +14,9 @@ import {
   detectDuplicateCourses,
   evaluateSchoolPracticum,
   calculateGraduationAudit,
+  createEmptyStudentProgress,
+  getStudentGraduationCacheKey,
+  shouldApplyCloudGraduationSnapshot,
 } from "../src/lib/graduationCurriculum.ts";
 
 test("1. [입학 연도별 졸업요건 적용] 2014~2026학년도 신입학 연도 구간별 공식 학점 및 성인지 교육 횟수(2회 vs 4회)가 정확히 적용된다", () => {
@@ -609,4 +612,209 @@ test("13. [교육학과 개편 요건 검증] 전공필수 36학점, 교직 10�
 
   const audit = calculateGraduationAudit(progress, OFFICIAL_GRADUATION_CATALOG);
   assert.equal(audit.teachingChecklistAudit.examCompleted, true, "졸업시험 합격 확인");
+});
+
+test("14. [학생별 데이터 완전 분리 및 신규 회원 초기화] 학생 A의 기록이나 데모 데이터가 학생 B 또는 신규 회원에게 절대 섞이지 않는다", () => {
+  // 1) UID별 로컬 캐시 키 분리 확인
+  const keyA = getStudentGraduationCacheKey("uid-student-a");
+  const keyB = getStudentGraduationCacheKey("uid-student-b");
+  assert.notEqual(keyA, keyB);
+  assert.equal(keyA, "dongguk_e_eum_grad_record_v2_uid-student-a");
+  assert.equal(keyB, "dongguk_e_eum_grad_record_v2_uid-student-b");
+
+  // 2) 신규 학생 B 초기 상태: 데모 강좌·봉사·체크리스트 없이 깨끗한 빈 배열로 시작
+  const emptyB = createEmptyStudentProgress("uid-student-b", {
+    id: "uid-student-b",
+    name: "박신입",
+    studentIdOrYear: "2025학년도 신입학 (25학번)",
+    doubleMajor: "단일전공(교육학)",
+  });
+  assert.equal(emptyB.userId, "uid-student-b");
+  assert.equal(emptyB.academicProfile.admissionYearNumber, 2025);
+  assert.equal(emptyB.courses.length, 0, "신규 회원은 데모 강좌가 없어야 함");
+  assert.equal(emptyB.volunteeringRecords.length, 0, "신규 회원은 데모 봉사 기록이 없어야 함");
+  assert.equal(emptyB.checklist.length, 0, "신규 회원은 데모 체크리스트가 없어야 함");
+  assert.equal(emptyB.teachingChecklist.graduationExamCompleted, false);
+
+  const auditB = calculateGraduationAudit(emptyB, OFFICIAL_GRADUATION_CATALOG);
+  assert.equal(auditB.totalEarnedCredits, 0);
+  assert.equal(auditB.eduMajorEarnedCredits, 0);
+  assert.equal(auditB.volunteeringAudit.effectiveHours, 0);
+});
+
+test("15. [자동 저장 시나리오 1~9 & 12 검증] 학사정보·강좌·교육봉사·교직체크리스트·졸업시험 수정 후 저장·복원 및 빠른 연속 수정 시 최신 버전(clientRevision)이 보존된다", () => {
+  // 학생 A 초기 생성
+  let studentA = createEmptyStudentProgress("uid-student-a", {
+    id: "uid-student-a",
+    name: "김교육",
+    studentIdOrYear: "2023학년도 신입학 (23학번)",
+  });
+
+  // 시나리오 1: 학사정보 수정 (2023학번, 복수전공 심리학과, 주전공 교직 이수)
+  studentA = migrateStudentProgress({
+    ...studentA,
+    academicProfile: {
+      admissionYearNumber: 2023,
+      admissionYearLabel: "2023학년도 신입학 (23학번)",
+      majorPlanType: "double_general",
+      hasDoubleMajor: true,
+      doubleMajorDepartment: "심리학과",
+      teachingTrackStatus: "educational_major",
+      isEnglishTrack: false,
+      specialConditionMemo: "2025-1 진입",
+      updatedAt: "2026-11-02",
+    },
+    isProfileComplete: true,
+    clientRevision: 1,
+  });
+  assert.equal(studentA.academicProfile.doubleMajorDepartment, "심리학과");
+  assert.equal(studentA.clientRevision, 1);
+
+  // 시나리오 2: 강좌 추가·수정·삭제
+  studentA = migrateStudentProgress({
+    ...studentA,
+    courses: [
+      {
+        id: "c-1",
+        courseCode: "EDU2013",
+        courseTitle: "교육학개론",
+        credits: 3,
+        yearTaken: 2023,
+        semesterTaken: "1학기",
+        category: "전공필수/선택 (교육학과)",
+        isCompleted: true,
+        createdAt: "2026-11-02",
+      },
+      {
+        id: "c-2",
+        courseCode: "PRI5001",
+        courseTitle: "영어강독",
+        credits: 3,
+        yearTaken: 2023,
+        semesterTaken: "1학기",
+        category: "학문기초(외국어영역)",
+        isCompleted: true,
+        createdAt: "2026-11-02",
+      },
+    ],
+    clientRevision: 2,
+  });
+  // 강좌 수정 (영어강독 3학점 -> 6학점) 및 강좌 삭제 시뮬레이션
+  studentA = migrateStudentProgress({
+    ...studentA,
+    courses: studentA.courses.map((c) => (c.id === "c-2" ? { ...c, credits: 6 } : c)),
+    clientRevision: 3,
+  });
+  assert.equal(studentA.courses.find((c) => c.id === "c-2").credits, 6);
+
+  // 시나리오 3: 교육봉사 시간 및 과목 상태 변경
+  studentA = migrateStudentProgress({
+    ...studentA,
+    volunteeringState: {
+      eduVolunteering1Completed: true,
+      eduVolunteering1Semester: "2024-1학기",
+      eduVolunteering2Completed: true,
+      eduVolunteering2Semester: "2024-2학기",
+      confirmationSubmitted: true,
+    },
+    volunteeringRecords: [
+      {
+        id: "v-a1",
+        institutionName: "장충중학교",
+        activityDate: "2024-03 ~ 2024-12",
+        hours: 60,
+        verifiedBySelf: true,
+        note: "교육봉사 60시간 완료",
+      },
+    ],
+    clientRevision: 4,
+  });
+
+  // 시나리오 4 & 5: 교직 체크리스트 및 졸업시험 합격 상태 변경
+  studentA = migrateStudentProgress({
+    ...studentA,
+    teachingChecklist: {
+      personalityTestPassCount: 2,
+      cprCompletedCount: 2,
+      cprExternalCount: 0,
+      genderSensitivityCount: 4,
+      majorGpa: 3.95,
+      teachingGpa: 4.15,
+      graduationThesisCompleted: true,
+      graduationExamCompleted: true,
+      disqualificationGuidanceAcknowledged: true,
+      officialVerificationConfirmedByAdmin: false,
+    },
+    checklist: [
+      {
+        id: "chk-a1",
+        label: "졸업시험 합격 확인",
+        category: "기타 졸업요건",
+        completed: true,
+        memo: "2026-2학기 통과",
+      },
+    ],
+    clientRevision: 5,
+  });
+
+  // 시나리오 6, 7, 8: Firestore 직렬화 저장 후 새로고침 / 재로그인 / 다른 브라우저에서 다시 불러오기 시뮬레이션
+  const serializedInFirestore = JSON.parse(JSON.stringify(studentA));
+  const reloadedStudentA = migrateStudentProgress(serializedInFirestore, {
+    id: "uid-student-a",
+  });
+
+  assert.equal(reloadedStudentA.userId, "uid-student-a");
+  assert.equal(reloadedStudentA.academicProfile.doubleMajorDepartment, "심리학과");
+  assert.equal(reloadedStudentA.courses.length, 2);
+  assert.equal(reloadedStudentA.volunteeringRecords[0].hours, 60);
+  assert.equal(reloadedStudentA.teachingChecklist.graduationExamCompleted, true);
+  assert.equal(reloadedStudentA.teachingChecklist.majorGpa, 3.95);
+  assert.equal(reloadedStudentA.checklist.length, 1);
+  assert.equal(reloadedStudentA.clientRevision, 5);
+
+  // 시나리오 9: 다른 학생 B가 스냅샷을 받을 때 학생 A의 스냅샷은 거부되어야 함
+  assert.equal(
+    shouldApplyCloudGraduationSnapshot({
+      cloudRecord: reloadedStudentA,
+      currentUid: "uid-student-b",
+      localProgress: createEmptyStudentProgress("uid-student-b"),
+      hasPendingWrites: false,
+    }),
+    false,
+    "타 학생(uid-student-a)의 스냅샷은 uid-student-b 화면에 절대 반영되면 안 됨"
+  );
+
+  // 시나리오 12: 빠른 연속 수정 중(hasPendingWrites=true, localRevision=5) 이전 저장 요청의 응답(clientRevision=3)이 뒤늦게 도착하면 무시되어야 함
+  assert.equal(
+    shouldApplyCloudGraduationSnapshot({
+      cloudRecord: { ...reloadedStudentA, clientRevision: 3 },
+      currentUid: "uid-student-a",
+      localProgress: reloadedStudentA, // clientRevision: 5
+      hasPendingWrites: true,
+    }),
+    false,
+    "이전(stale) 저장 응답(rev 3)이 최신 로컬 상태(rev 5)를 덮어쓰면 안 됨"
+  );
+
+  // 최신 저장 응답(clientRevision=5)이 도착하면 정상 반영 허용
+  assert.equal(
+    shouldApplyCloudGraduationSnapshot({
+      cloudRecord: { ...reloadedStudentA, clientRevision: 5 },
+      currentUid: "uid-student-a",
+      localProgress: reloadedStudentA,
+      hasPendingWrites: true,
+    }),
+    true
+  );
+});
+
+test("16. [보안 규칙 추가 검증] 사용자가 문서 내부 userId를 타인의 UID로 위조해 저장하는 행위가 차단된다", () => {
+  const rulesText = fs.readFileSync(
+    new URL("../firestore.rules", import.meta.url),
+    "utf8"
+  );
+  assert.ok(
+    rulesText.includes("request.resource.data.userId == request.auth.uid"),
+    "graduationRecords 저장 시 문서 내부 userId 필드도 request.auth.uid와 일치해야 합니다"
+  );
 });

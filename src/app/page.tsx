@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { useApp } from "@/context/AppContext";
 import { canAccessGraduation } from "@/lib/accessGate";
+import { calculateGraduationAudit } from "@/lib/graduationCurriculum";
 import { ROLE_LABELS } from "@/components/common/Cards";
 import { formatUnreadBadge } from "@/lib/chatReadReceipts";
 import {
@@ -31,6 +32,7 @@ export default function HomePage() {
     communityPosts,
     alumniProfiles,
     studentProgress,
+    graduationCatalog,
     mentoringRequests,
     approvalRequests,
   } = useApp();
@@ -374,24 +376,31 @@ export default function HomePage() {
             </div>
 
             <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700 space-y-2 text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-500">적용 기준 정보</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">
-                  {studentProgress.admissionYear} · {studentProgress.majorType}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">내가 기록한 총 이수 학점</span>
-                <span className="font-bold text-orange-600">
-                  {studentProgress.credits["졸업 이수 학점"]?.completedValue ?? 0}학점 (기준 미설정)
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">내가 기록한 교육봉사 시간</span>
-                <span className="font-bold text-orange-600">
-                  {studentProgress.credits["교육봉사 시간"]?.completedValue ?? 0}시간 (기준 미설정)
-                </span>
-              </div>
+              {(() => {
+                const homeAudit = calculateGraduationAudit(studentProgress, graduationCatalog);
+                return (
+                  <>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">적용 기준 정보</span>
+                      <span className="font-bold text-slate-800 dark:text-slate-200">
+                        {homeAudit.profile.admissionYearLabel} · {studentProgress.majorType}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">내가 기록한 총 이수 학점</span>
+                      <span className="font-bold text-orange-600">
+                        {homeAudit.totalEarnedCredits}학점 / {homeAudit.applicable.cohortRule.totalGraduationCredits}학점
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">내가 기록한 교육봉사 시간</span>
+                      <span className="font-bold text-orange-600">
+                        {homeAudit.volunteeringAudit.effectiveHours}시간 / {homeAudit.volunteeringAudit.targetHours}시간
+                      </span>
+                    </div>
+                  </>
+                );
+              })()}
               <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-700">
                 ※ 공식 학사 시스템 연동 결과가 아닌 학생 개인의 자가점검 메모입니다.
               </p>

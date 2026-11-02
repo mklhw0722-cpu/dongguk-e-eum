@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { canAccessGraduation } from "@/lib/accessGate";
 import { useApp } from "@/context/AppContext";
@@ -40,6 +40,9 @@ import {
   Award,
   Sparkles,
   FileCheck2,
+  Loader2,
+  RefreshCw,
+  Cloud,
 } from "lucide-react";
 
 const COURSE_CATEGORIES: CourseCategory[] = [
@@ -77,7 +80,16 @@ export default function GraduationPage() {
   const {
     currentUser,
     authUserProfile,
+    isRealAuthActive,
     graduationCatalog,
+    graduationLoadStatus,
+    graduationLoadError,
+    graduationSaveStatus,
+    graduationSaveError,
+    graduationLastSavedAt,
+    retrySaveGraduationRecord,
+    retryLoadGraduationRecord,
+    resetLegacyManualCredits,
     studentProgress,
     updateStudentAcademicProfile,
     addEnrolledCourse,
@@ -129,6 +141,44 @@ export default function GraduationPage() {
   const [profileSaveFeedback, setProfileSaveFeedback] = useState<string | null>(
     null
   );
+
+  // 사용자 계정이 바뀌거나 Firestore에서 저장된 기록 로딩이 완료되면 학사정보 입력 폼 상태를 동기화
+  useEffect(() => {
+    setAdmissionYearInput(profile.admissionYearNumber);
+    setMajorPlanInput(profile.majorPlanType);
+    setDoubleMajorDeptInput(profile.doubleMajorDepartment);
+    setTeachingStatusInput(profile.teachingTrackStatus);
+    setIsEnglishTrackInput(profile.isEnglishTrack);
+    setSpecialMemoInput(profile.specialConditionMemo || "");
+    if (graduationLoadStatus === "loaded") {
+      setIsEditingProfile(!studentProgress.isProfileComplete);
+    }
+  }, [
+    studentProgress.userId,
+    graduationLoadStatus,
+    studentProgress.isProfileComplete,
+    profile.admissionYearNumber,
+    profile.majorPlanType,
+    profile.doubleMajorDepartment,
+    profile.teachingTrackStatus,
+    profile.isEnglishTrack,
+    profile.specialConditionMemo,
+  ]);
+
+  const formattedSavedTime = useMemo(() => {
+    if (!graduationLastSavedAt) return null;
+    try {
+      const d = new Date(graduationLastSavedAt);
+      if (Number.isNaN(d.getTime())) return null;
+      return d.toLocaleTimeString("ko-KR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    } catch {
+      return null;
+    }
+  }, [graduationLastSavedAt]);
 
   const openProfileEditor = () => {
     setAdmissionYearInput(profile.admissionYearNumber);
@@ -427,16 +477,168 @@ export default function GraduationPage() {
           </p>
         </div>
 
-        <a
-          href={OFFICIAL_GUIDE_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 shadow-xs transition self-start sm:self-auto"
-        >
-          공식 학업이수 가이드 원문 보기
-          <ExternalLink className="w-4 h-4" />
-        </a>
+        <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+          {/* 실시간 자동 저장 상태 표시 배지 */}
+          <div
+            data-testid="graduation-save-status"
+            aria-live="polite"
+            className={`px-3.5 py-2 rounded-xl border text-xs font-extrabold inline-flex items-center gap-2 transition ${
+              graduationLoadStatus === "loading"
+                ? "bg-slate-100 border-slate-300 text-slate-700"
+                : graduationSaveStatus === "saving"
+                ? "bg-amber-50 border-amber-300 text-amber-800"
+                : graduationSaveStatus === "error" || graduationLoadStatus === "error"
+                ? "bg-rose-50 border-rose-300 text-rose-800"
+                : graduationSaveStatus === "saved"
+                ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                : "bg-slate-50 border-slate-200 text-slate-600"
+            }`}
+          >
+            {graduationLoadStatus === "loading" ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-orange-600" />
+                <span>기록 불러오는 중...</span>
+              </>
+            ) : graduationSaveStatus === "saving" ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                <span>저장 중...</span>
+              </>
+            ) : graduationSaveStatus === "error" ? (
+              <>
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                <span>저장 실패</span>
+                <button
+                  type="button"
+                  onClick={() => void retrySaveGraduationRecord()}
+                  className="ml-1 px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold inline-flex items-center gap-1"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  재시도
+                </button>
+              </>
+            ) : graduationLoadStatus === "error" ? (
+              <>
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                <span>불러오기 실패</span>
+                <button
+                  type="button"
+                  onClick={retryLoadGraduationRecord}
+                  className="ml-1 px-2 py-0.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold inline-flex items-center gap-1"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  다시 시도
+                </button>
+              </>
+            ) : graduationSaveStatus === "saved" ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>
+                  저장됨{formattedSavedTime ? ` (${formattedSavedTime})` : ""}
+                </span>
+              </>
+            ) : (
+              <>
+                <Cloud className="w-3.5 h-3.5 text-slate-500" />
+                <span>
+                  {isRealAuthActive
+                    ? formattedSavedTime
+                      ? `저장됨 (${formattedSavedTime})`
+                      : "자동 저장 활성화됨"
+                    : "자동 저장 준비됨"}
+                </span>
+              </>
+            )}
+          </div>
+
+          <a
+            href={OFFICIAL_GUIDE_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 shadow-xs transition"
+          >
+            공식 학업이수 가이드 원문 보기
+            <ExternalLink className="w-4 h-4" />
+          </a>
+        </div>
       </div>
+
+      {/* 초기 데이터 로딩 안내 배너 (로딩 완료 전 기본값 덮어쓰기 방지) */}
+      {isRealAuthActive && graduationLoadStatus === "loading" && (
+        <div
+          data-testid="graduation-loading-banner"
+          className="p-4 rounded-2xl bg-orange-50 border border-orange-200 text-orange-950 text-xs sm:text-sm font-bold flex items-center gap-3"
+        >
+          <Loader2 className="w-5 h-5 animate-spin text-orange-600 shrink-0" />
+          <div>
+            <p className="font-extrabold">
+              Firestore에서 내 졸업요건 및 이수 기록을 불러오는 중입니다...
+            </p>
+            <p className="text-xs text-orange-800 font-normal mt-0.5">
+              기존 기록을 안전하게 보호하기 위해 데이터 로딩이 완료된 직후부터 수정 및 자동 저장이 활성화됩니다.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Firestore 초기 조회 실패 시 경고 및 재시도 배너 */}
+      {isRealAuthActive && graduationLoadStatus === "error" && (
+        <div
+          data-testid="graduation-load-error-banner"
+          className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-950 text-xs sm:text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-extrabold text-rose-900">
+                저장된 졸업요건 데이터를 불러오지 못했습니다
+              </p>
+              <p className="text-xs text-rose-800 mt-0.5">
+                {graduationLoadError ||
+                  "네트워크 연결 불안정 또는 권한 확인 지연으로 인해 클라우드 기록을 조회하지 못했습니다."}{" "}
+                기존 기록이 빈 데이터로 덮어쓰여지지 않도록 자동 저장이 일시 잠금되었습니다.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={retryLoadGraduationRecord}
+            className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold inline-flex items-center gap-1.5 shrink-0"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            다시 불러오기
+          </button>
+        </div>
+      )}
+
+      {/* Firestore 자동 저장 실패 시 오류 메시지 및 재시도 버튼 배너 */}
+      {graduationSaveStatus === "error" && (
+        <div
+          data-testid="graduation-save-error-banner"
+          className="p-4 rounded-2xl bg-rose-50 border-2 border-rose-300 text-rose-950 text-xs sm:text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-extrabold text-rose-900">
+                변경 사항을 Firestore에 저장하지 못했습니다
+              </p>
+              <p className="text-xs text-rose-800 mt-0.5">
+                {graduationSaveError ||
+                  "네트워크 오류로 인해 클라우드 저장이 실패했습니다. 입력하신 내용은 브라우저에 임시 보관되어 있으니 재시도 버튼을 눌러 주세요."}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => void retrySaveGraduationRecord()}
+            className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold inline-flex items-center gap-1.5 shrink-0"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            저장 재시도
+          </button>
+        </div>
+      )}
 
       {/* 공식 안내 및 자가점검 고지 배너 */}
       <DemoInfoBanner
@@ -858,12 +1060,21 @@ export default function GraduationPage() {
         {showLegacyCreditEditor && (
           <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3 text-xs">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <p className="font-extrabold text-slate-900 dark:text-white">
-                영역별 누적 취득 학점 직접 보정 (기존 자가점검 기록 보존용)
-              </p>
-              <span className="text-slate-500">
-                ※ 아래 강좌 목록의 합산 학점과 여기 입력한 누적 학점 중 더 큰 값이 현황 카드에 안전하게 반영됩니다.
-              </span>
+              <div>
+                <p className="font-extrabold text-slate-900 dark:text-white">
+                  영역별 누적 취득 학점 직접 보정 (기존 자가점검 기록 보존용)
+                </p>
+                <span className="text-slate-500 block mt-0.5">
+                  ※ 아래 강좌 목록의 합산 학점과 여기 입력한 누적 학점 중 더 큰 값이 현황 카드에 반영됩니다 (이중 합산되지 않음).
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={resetLegacyManualCredits}
+                className="px-3 py-1.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold text-[11px] transition"
+              >
+                수동 보정값 0으로 초기화 (등록 강좌 학점만 사용)
+              </button>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               {(

@@ -212,16 +212,21 @@ service cloud.firestore {
     // ==============================================================
     match /graduationRecords/{userId} {
       // 오직 본인(재학생: role == 'student') 또는 승인된 관리자만 조회·수정 가능 (교수, 졸업생, 타 학생, 미승인 원천 차단)
-      // 학생 본인은 학교/관리자 공식 인정 여부(officialAdminVerified)를 임의로 true로 변경할 수 없습니다.
+      // 학생 본인은 타인의 UID를 지정해 수정할 수 없으며, 학교/관리자 공식 인정 여부(officialAdminVerified)를 임의로 true로 변경할 수 없습니다.
       allow read, write: if isApprovedUser() && (
         (
           request.auth.uid == userId
           && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'student'
           && (
             request.resource == null
-            || !('officialAdminVerified' in request.resource.data)
-            || request.resource.data.officialAdminVerified == false
-            || (resource != null && request.resource.data.officialAdminVerified == resource.data.get('officialAdminVerified', false))
+            || (
+              (!('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid)
+              && (
+                !('officialAdminVerified' in request.resource.data)
+                || request.resource.data.officialAdminVerified == false
+                || (resource != null && request.resource.data.officialAdminVerified == resource.data.get('officialAdminVerified', false))
+              )
+            )
           )
         )
         || isApprovedAdmin()

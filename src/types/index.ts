@@ -428,7 +428,12 @@ export interface StudentProgress {
   teachingChecklist?: TeachingChecklistState;
   isProfileComplete?: boolean;
   officialAdminVerified?: boolean;
+  clientRevision?: number;
+  updatedAt?: string;
 }
+
+export type GraduationLoadStatus = "idle" | "loading" | "loaded" | "error";
+export type GraduationSaveStatus = "idle" | "saving" | "saved" | "error";
 
 export interface ReportItem {
   id: string;

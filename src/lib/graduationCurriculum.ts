@@ -822,7 +822,11 @@ export function migrateStudentProgress(
   raw: Partial<StudentProgress> | null | undefined,
   userProfile?: Partial<User> | null
 ): StudentProgress {
-  const userId = raw?.userId || userProfile?.id || "user-student-1";
+  const userId =
+    userProfile?.id &&
+    (!raw?.userId || raw.userId === "u-student-1" || raw.userId === "user-student-1")
+      ? userProfile.id
+      : raw?.userId || userProfile?.id || "user-student-1";
   const rawYearSource =
     raw?.academicProfile?.admissionYearNumber ||
     raw?.admissionYear ||
@@ -998,7 +1002,107 @@ export function migrateStudentProgress(
     teachingChecklist,
     isProfileComplete,
     officialAdminVerified: Boolean(raw?.officialAdminVerified),
+    clientRevision:
+      typeof raw?.clientRevision === "number" && Number.isFinite(raw.clientRevision)
+        ? Math.max(0, Math.floor(raw.clientRevision))
+        : 0,
+    updatedAt: raw?.updatedAt || undefined,
   };
+}
+
+/**
+ * 학생별(UID 기준) 로컬 백업 스토리지 키를 반환합니다.
+ * 다른 계정과 데이터가 절대 섞이지 않도록 UID별로 완전히 분리합니다.
+ */
+export function getStudentGraduationCacheKey(uid: string): string {
+  return `dongguk_e_eum_grad_record_v2_${(uid || "").trim()}`;
+}
+
+/**
+ * 저장된 기록이 없는 신규 회원을 위해 공식 기준에 맞춘 빈 초기 졸업요건 상태를 생성합니다.
+ * 데모(MOCK) 데이터가 신규 학생이나 다른 계정에 섞이지 않도록 보장합니다.
+ */
+export function createEmptyStudentProgress(
+  uid: string,
+  userProfile?: Partial<User> | null
+): StudentProgress {
+  const safeUid = (uid || userProfile?.id || "").trim() || "user-student-empty";
+  return migrateStudentProgress(
+    {
+      userId: safeUid,
+      credits: {},
+      courses: [],
+      volunteeringRecords: [],
+      checklist: [],
+      volunteeringState: {
+        eduVolunteering1Completed: false,
+        eduVolunteering1Semester: "",
+        eduVolunteering2Completed: false,
+        eduVolunteering2Semester: "",
+        confirmationSubmitted: false,
+      },
+      practicumState: {
+        practicum1Completed: false,
+        practicum1Semester: "",
+        practicum2Completed: false,
+        practicum2Semester: "",
+        practicum3Completed: false,
+        practicum3Semester: "",
+        humanRightsEducationCompleted: false,
+      },
+      teachingChecklist: {
+        personalityTestPassCount: 0,
+        cprCompletedCount: 0,
+        cprExternalCount: 0,
+        genderSensitivityCount: 0,
+        majorGpa: null,
+        teachingGpa: null,
+        graduationThesisCompleted: false,
+        graduationExamCompleted: false,
+        disqualificationGuidanceAcknowledged: false,
+        officialVerificationConfirmedByAdmin: false,
+      },
+      isProfileComplete: Boolean(userProfile?.academicProfile),
+      officialAdminVerified: false,
+      clientRevision: 0,
+    },
+    {
+      ...(userProfile || {}),
+      id: safeUid,
+    }
+  );
+}
+
+/**
+ * Firestore 실시간 스냅샷 수신 시, 현재 사용자의 대기 중인 최신 수정본(pending write)을
+ * 이전(stale) 네트워크 응답이 덮어쓰지 않도록 판별합니다.
+ */
+export function shouldApplyCloudGraduationSnapshot(params: {
+  cloudRecord: Partial<StudentProgress> | null;
+  currentUid: string;
+  localProgress: StudentProgress | null;
+  hasPendingWrites: boolean;
+}): boolean {
+  const { cloudRecord, currentUid, localProgress, hasPendingWrites } = params;
+  if (!currentUid) return false;
+  if (cloudRecord && cloudRecord.userId && cloudRecord.userId !== currentUid) {
+    return false;
+  }
+  if (hasPendingWrites) {
+    if (!cloudRecord) return false;
+    const cloudRev =
+      typeof cloudRecord.clientRevision === "number" ? cloudRecord.clientRevision : 0;
+    const localRev =
+      localProgress &&
+      localProgress.userId === currentUid &&
+      typeof localProgress.clientRevision === "number"
+        ? localProgress.clientRevision
+        : 0;
+    if (cloudRev < localRev) {
+      return false;
+    }
+  }
+  return true;
 }
 
 export interface ApplicableRequirementItem {

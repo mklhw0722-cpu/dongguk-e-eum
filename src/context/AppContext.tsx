@@ -27,10 +27,15 @@ import {
   VolunteeringCourseState,
   SchoolPracticumState,
   TeachingChecklistState,
+  GraduationLoadStatus,
+  GraduationSaveStatus,
 } from "@/types";
 import {
   OFFICIAL_GRADUATION_CATALOG,
   migrateStudentProgress,
+  createEmptyStudentProgress,
+  getStudentGraduationCacheKey,
+  shouldApplyCloudGraduationSnapshot,
   deriveLegacyFieldsFromAcademicProfile,
   matchTeachingSubstitution,
   sortCoursesBySemester,
@@ -198,6 +203,14 @@ interface AppContextValue extends PlatformDataState {
 
   // 기능 D. 졸업요건 자가점검 및 공식 학업이수 기준 관리 액션
   graduationCatalog: OfficialGraduationCatalog;
+  graduationLoadStatus: GraduationLoadStatus;
+  graduationLoadError: string | null;
+  graduationSaveStatus: GraduationSaveStatus;
+  graduationSaveError: string | null;
+  graduationLastSavedAt: string | null;
+  retrySaveGraduationRecord: () => Promise<void>;
+  retryLoadGraduationRecord: () => void;
+  resetLegacyManualCredits: () => void;
   updateGraduationCatalogByAdmin: (catalog: OfficialGraduationCatalog) => Promise<void>;
   updateStudentAcademicProfile: (profile: StudentAcademicProfile) => Promise<void>;
   addEnrolledCourse: (course: Omit<EnrolledCourse, "id" | "createdAt">) => void;
@@ -301,6 +314,71 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [graduationCatalog, setGraduationCatalog] = useState<OfficialGraduationCatalog>(
     OFFICIAL_GRADUATION_CATALOG
   );
+
+  // 학생 개인별 졸업요건 Firestore 로딩·자동 저장 상태 및 동시성(Race Condition) 제어
+  const [graduationLoadStatus, setGraduationLoadStatus] = useState<GraduationLoadStatus>("idle");
+  const [graduationLoadError, setGraduationLoadError] = useState<string | null>(null);
+  const [graduationSaveStatus, setGraduationSaveStatus] = useState<GraduationSaveStatus>("idle");
+  const [graduationSaveError, setGraduationSaveError] = useState<string | null>(null);
+  const [graduationLastSavedAt, setGraduationLastSavedAt] = useState<string | null>(null);
+  const [graduationReloadTick, setGraduationReloadTick] = useState(0);
+
+  const activeGraduationUidRef = useRef<string>("");
+  const localRevisionRef = useRef<number>(0);
+  const hasPendingLocalWritesRef = useRef<boolean>(false);
+  const latestProgressStateRef = useRef<StudentProgress>(state.studentProgress);
+  const latestUnsavedProgressRef = useRef<StudentProgress | null>(null);
+  const pendingAcademicProfileRef = useRef<StudentAcademicProfile | null>(null);
+  const saveDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isSavingInFlightRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    latestProgressStateRef.current = state.studentProgress;
+  }, [state.studentProgress]);
+
+  const loadPerUserGraduationCache = (
+    uid: string,
+    userProfile?: Partial<User> | null
+  ): StudentProgress | null => {
+    if (typeof window === "undefined" || !uid) return null;
+    try {
+      const raw = window.localStorage.getItem(getStudentGraduationCacheKey(uid));
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<StudentProgress>;
+        if (parsed && (!parsed.userId || parsed.userId === uid)) {
+          return migrateStudentProgress({ ...parsed, userId: uid }, userProfile);
+        }
+      }
+      // 기존 공유 로컬 스토리지(dongguk_e_eum_demo_state_v1)에 해당 학생의 실제 UID로 저장된 기록이 있다면 손실 없이 이관
+      const legacyRaw = window.localStorage.getItem("dongguk_e_eum_demo_state_v1");
+      if (legacyRaw && uid !== "u-student-1" && uid !== "user-student-1") {
+        const legacyParsed = JSON.parse(legacyRaw) as Partial<PlatformDataState>;
+        if (legacyParsed?.studentProgress?.userId === uid) {
+          const migrated = migrateStudentProgress(legacyParsed.studentProgress, userProfile);
+          window.localStorage.setItem(
+            getStudentGraduationCacheKey(uid),
+            JSON.stringify(migrated)
+          );
+          return migrated;
+        }
+      }
+    } catch {
+      // ignore local storage read errors
+    }
+    return null;
+  };
+
+  const savePerUserGraduationCache = (uid: string, progress: StudentProgress) => {
+    if (typeof window === "undefined" || !uid) return;
+    try {
+      window.localStorage.setItem(
+        getStudentGraduationCacheKey(uid),
+        JSON.stringify({ ...progress, userId: uid })
+      );
+    } catch {
+      // ignore quota errors
+    }
+  };
 
   useEffect(() => {
     const loaded = PlatformRepository.loadState();
@@ -525,7 +603,30 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     let unsubGradCatalog: (() => void) | null = null;
     let unsubGradRecord: (() => void) | null = null;
 
-    if (isGraduationAllowed) {
+    if (isGraduationAllowed && currentUid) {
+      // 사용자 UID가 변경된 경우 이전 사용자의 타이머/대기 큐 및 화면 상태를 즉시 초기화하여 계정 간 데이터 혼선 원천 차단
+      if (activeGraduationUidRef.current !== currentUid) {
+        if (saveDebounceTimerRef.current) {
+          clearTimeout(saveDebounceTimerRef.current);
+          saveDebounceTimerRef.current = null;
+        }
+        latestUnsavedProgressRef.current = null;
+        pendingAcademicProfileRef.current = null;
+        hasPendingLocalWritesRef.current = false;
+        localRevisionRef.current = 0;
+        activeGraduationUidRef.current = currentUid;
+
+        const cleanInitial = createEmptyStudentProgress(currentUid, authUserProfile);
+        latestProgressStateRef.current = cleanInitial;
+        setState((prev) => ({
+          ...prev,
+          studentProgress: cleanInitial,
+        }));
+      }
+
+      setGraduationLoadStatus("loading");
+      setGraduationLoadError(null);
+
       // 4. 공식 공통 졸업요건 카탈로그(graduationRulesCatalog/current) 실시간 구독
       unsubGradCatalog = subscribeToGraduationCatalogInFirestore(
         (cloudCatalog) => {
@@ -548,29 +649,121 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       unsubGradRecord = subscribeToStudentGraduationRecordInFirestore(
         currentUid,
         (cloudRecord) => {
+          if (activeGraduationUidRef.current !== currentUid) return;
+
+          // 로컬에서 빠른 연속 입력/저장이 진행 중일 때 이전(stale) 클라우드 스냅샷이 최신 입력값을 덮어쓰지 않도록 보호
+          if (
+            !shouldApplyCloudGraduationSnapshot({
+              cloudRecord,
+              currentUid,
+              localProgress: latestProgressStateRef.current,
+              hasPendingWrites: hasPendingLocalWritesRef.current,
+            })
+          ) {
+            return;
+          }
+
+          const cached = loadPerUserGraduationCache(currentUid, authUserProfile);
+
           if (cloudRecord) {
+            // 중요: 이전 계정이나 데모 상태(prev.studentProgress)를 절대 합치지 않고 오직 해당 UID의 클라우드 기록만 마이그레이션
+            const cloudMigrated = migrateStudentProgress(
+              {
+                ...cloudRecord,
+                userId: currentUid,
+              },
+              authUserProfile
+            );
+
+            const cloudRev = cloudMigrated.clientRevision || 0;
+            const cachedRev = cached?.clientRevision || 0;
+
+            // 디바운스 중 새로고침 등으로 로컬 UID 캐시에 더 최신 버전이 남아있는 경우 이를 복원하고 즉시 클라우드에 동기화
+            if (cached && cached.userId === currentUid && cachedRev > cloudRev) {
+              localRevisionRef.current = cachedRev;
+              latestProgressStateRef.current = cached;
+              setState((prev) => ({
+                ...prev,
+                studentProgress: cached,
+              }));
+              setGraduationLoadStatus("loaded");
+              setGraduationLoadError(null);
+              latestUnsavedProgressRef.current = cached;
+              hasPendingLocalWritesRef.current = true;
+              setGraduationSaveStatus("saving");
+              void flushGraduationSaveQueue(currentUid);
+              return;
+            }
+
+            localRevisionRef.current = Math.max(localRevisionRef.current, cloudRev);
+            latestProgressStateRef.current = cloudMigrated;
+            savePerUserGraduationCache(currentUid, cloudMigrated);
+
             setState((prev) => ({
               ...prev,
-              studentProgress: migrateStudentProgress(
-                {
-                  ...prev.studentProgress,
-                  ...cloudRecord,
-                },
-                authUserProfile
-              ),
+              studentProgress: cloudMigrated,
             }));
+            setGraduationLoadStatus("loaded");
+            setGraduationLoadError(null);
+            if (cloudMigrated.updatedAt) {
+              setGraduationLastSavedAt(cloudMigrated.updatedAt);
+            }
+            setGraduationSaveStatus((prev) => (prev === "idle" ? "saved" : prev));
           } else {
-            // 클라우드 기록이 아직 없다면 가입 시 입력한 프로필(authUserProfile)과 기존 로컬 기록을 합쳐 마이그레이션
-            setState((prev) => ({
-              ...prev,
-              studentProgress: migrateStudentProgress(prev.studentProgress, authUserProfile),
-            }));
+            // Firestore에 아직 문서가 없는 신규 회원:
+            // 해당 UID 전용 로컬 캐시가 있으면 복원하여 클라우드에 저장하고, 없으면 데모 데이터 없이 깨끗한 초기 상태 표시
+            if (cached && cached.userId === currentUid) {
+              const nextRev = Math.max(1, cached.clientRevision || 1);
+              const restored: StudentProgress = {
+                ...cached,
+                userId: currentUid,
+                clientRevision: nextRev,
+              };
+              localRevisionRef.current = nextRev;
+              latestProgressStateRef.current = restored;
+              setState((prev) => ({
+                ...prev,
+                studentProgress: restored,
+              }));
+              setGraduationLoadStatus("loaded");
+              setGraduationLoadError(null);
+              latestUnsavedProgressRef.current = restored;
+              hasPendingLocalWritesRef.current = true;
+              setGraduationSaveStatus("saving");
+              void flushGraduationSaveQueue(currentUid);
+            } else {
+              const freshProgress = createEmptyStudentProgress(currentUid, authUserProfile);
+              localRevisionRef.current = 0;
+              latestProgressStateRef.current = freshProgress;
+              setState((prev) => ({
+                ...prev,
+                studentProgress: freshProgress,
+              }));
+              setGraduationLoadStatus("loaded");
+              setGraduationLoadError(null);
+            }
           }
         },
-        () => {
-          // 보안 규칙 적용 전이거나 초기 빈 상태인 경우 로컬 상태 유지
+        (errMessage) => {
+          if (activeGraduationUidRef.current !== currentUid) return;
+          // 조회 실패 시 기존 기록이 없는 것으로 오판하지 않으며, 빈 데이터를 자동 저장하여 덮어쓰지 않도록 'error' 상태로 잠금
+          setGraduationLoadStatus("error");
+          setGraduationLoadError(
+            errMessage || "저장된 졸업요건 데이터를 불러오는 중 오류가 발생했습니다."
+          );
+          const cached = loadPerUserGraduationCache(currentUid, authUserProfile);
+          if (cached && cached.userId === currentUid) {
+            latestProgressStateRef.current = cached;
+            setState((prev) => ({
+              ...prev,
+              studentProgress: cached,
+            }));
+          }
         }
       );
+    } else {
+      setGraduationLoadStatus("idle");
+      setGraduationLoadError(null);
     }
 
     return () => {
@@ -580,7 +773,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (unsubGradCatalog) unsubGradCatalog();
       if (unsubGradRecord) unsubGradRecord();
     };
-  }, [hydrated, firebaseVersionTick, rawFirebaseUser, authUserProfile]);
+  }, [hydrated, firebaseVersionTick, rawFirebaseUser, authUserProfile, graduationReloadTick]);
 
   // 승인된 정회원 통합 목록 (Firestore 구독 결과 + 관리자의 경우 실시간 관리자 회원 목록의 승인자 자동 병합)
   const approvedMembers = useMemo(() => {
@@ -641,11 +834,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return [];
   };
 
+  // 실제 Firebase Auth 로그인 여부
+  const isRealAuthActive = Boolean(rawFirebaseUser);
+
   useEffect(() => {
     if (hydrated) {
-      PlatformRepository.saveState(state);
+      if (isRealAuthActive) {
+        // 실제 로그인 사용자의 개인 졸업요건 기록은 UID별 전용 캐시와 Firestore에만 저장하며, 공용 데모 스토리지에 덮어쓰지 않음
+        PlatformRepository.saveState({
+          ...state,
+          studentProgress: getInitialDataState().studentProgress,
+        });
+      } else {
+        PlatformRepository.saveState(state);
+      }
     }
-  }, [state, hydrated]);
+  }, [state, hydrated, isRealAuthActive]);
 
   // 항상 라이트모드 유지: 브라우저나 시스템 설정에 다크모드가 켜져 있어도 dark 클래스를 제거하여 항상 라이트모드로 고정
   useEffect(() => {
@@ -653,9 +857,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       document.documentElement.classList.remove("dark");
     }
   }, []);
-
-  // 실제 Firebase Auth 로그인 여부
-  const isRealAuthActive = Boolean(rawFirebaseUser);
 
   // 폐쇄형 학과 플랫폼 접근 제어: 로그인 → 회원 문서 → 승인 상태 순서로 판정
   const accessGate: AccessGateState = resolveAccessGate({
@@ -792,17 +993,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setAuthUserProfile(createdProfile);
     setProfileStatus("loaded");
     if (params.academicProfile) {
+      const cleanNewProgress = migrateStudentProgress(
+        {
+          ...createEmptyStudentProgress(createdProfile.id, createdProfile),
+          userId: createdProfile.id,
+          academicProfile: params.academicProfile,
+          isProfileComplete: true,
+        },
+        createdProfile
+      );
+      latestProgressStateRef.current = cleanNewProgress;
+      savePerUserGraduationCache(createdProfile.id, cleanNewProgress);
       setState((prev) => ({
         ...prev,
-        studentProgress: migrateStudentProgress(
-          {
-            ...prev.studentProgress,
-            userId: createdProfile.id,
-            academicProfile: params.academicProfile,
-            isProfileComplete: true,
-          },
-          createdProfile
-        ),
+        studentProgress: cleanNewProgress,
       }));
     }
   };
@@ -812,10 +1016,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleLogout = async () => {
+    // 로그아웃 직전 대기 중인 디바운스 저장이 있다면 즉시 플러시
+    if (saveDebounceTimerRef.current && activeGraduationUidRef.current) {
+      clearTimeout(saveDebounceTimerRef.current);
+      saveDebounceTimerRef.current = null;
+      await flushGraduationSaveQueue(activeGraduationUidRef.current);
+    }
     await logoutUser();
+    activeGraduationUidRef.current = "";
+    localRevisionRef.current = 0;
+    hasPendingLocalWritesRef.current = false;
+    latestUnsavedProgressRef.current = null;
+    pendingAcademicProfileRef.current = null;
+    setGraduationLoadStatus("idle");
+    setGraduationLoadError(null);
+    setGraduationSaveStatus("idle");
+    setGraduationSaveError(null);
+    setGraduationLastSavedAt(null);
     setRawFirebaseUser(null);
     setAuthUserProfile(null);
     setProfileStatus("idle");
+    const demoInitial = migrateStudentProgress(getInitialDataState().studentProgress);
+    latestProgressStateRef.current = demoInitial;
+    setState((prev) => ({
+      ...prev,
+      studentProgress: demoInitial,
+    }));
   };
 
   const handleResetPassword = async (email: string) => {
@@ -1542,19 +1768,203 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // --- 졸업요건 자가점검 및 공식 학업이수 기준 관리 액션 ---
-  const syncStudentProgressToCloud = (nextProgress: StudentProgress) => {
+  /**
+   * 직렬화된 단일 실행(Single-Flight) Firestore 저장 큐
+   * - 사용자가 빠르게 여러 값을 연속 수정하더라도 이전 요청이 나중에 도착해 최신 값을 덮어쓰는 경쟁 상태(Race Condition)를 원천 방지합니다.
+   * - 항상 가장 마지막에 수정된 최신 스냅샷(latestUnsavedProgressRef)이 최종적으로 Firestore에 반영됩니다.
+   */
+  const flushGraduationSaveQueue = async (uid: string): Promise<void> => {
+    if (!uid || isSavingInFlightRef.current) return;
+    isSavingInFlightRef.current = true;
+
+    try {
+      while (
+        latestUnsavedProgressRef.current !== null &&
+        activeGraduationUidRef.current === uid
+      ) {
+        const snapshotToSave = latestUnsavedProgressRef.current;
+        const profileToSync = pendingAcademicProfileRef.current;
+        latestUnsavedProgressRef.current = null;
+        pendingAcademicProfileRef.current = null;
+
+        try {
+          await saveStudentGraduationRecordInFirestore(uid, snapshotToSave);
+          if (profileToSync) {
+            await updateUserAcademicProfileInFirestore(uid, profileToSync);
+          }
+        } catch (err) {
+          // 실패 시 아직 더 새로운 스냅샷이 들어오지 않았다면 재시도를 위해 복원
+          if (!latestUnsavedProgressRef.current) {
+            latestUnsavedProgressRef.current = snapshotToSave;
+          }
+          if (profileToSync && !pendingAcademicProfileRef.current) {
+            pendingAcademicProfileRef.current = profileToSync;
+          }
+          throw err;
+        }
+      }
+
+      if (activeGraduationUidRef.current === uid) {
+        if (!saveDebounceTimerRef.current) {
+          hasPendingLocalWritesRef.current = false;
+          const savedIso = new Date().toISOString();
+          setGraduationSaveStatus("saved");
+          setGraduationSaveError(null);
+          setGraduationLastSavedAt(savedIso);
+        }
+      }
+    } catch (err: any) {
+      if (activeGraduationUidRef.current === uid) {
+        hasPendingLocalWritesRef.current = false;
+        setGraduationSaveStatus("error");
+        setGraduationSaveError(
+          err?.message ||
+            "Firestore 저장 중 오류가 발생했습니다. 네트워크 연결을 확인한 뒤 재시도해 주세요."
+        );
+      }
+    } finally {
+      isSavingInFlightRef.current = false;
+    }
+  };
+
+  // 페이지 새로고침·종료 시 대기 중인 디바운스 저장 요청 즉시 전송
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleBeforeUnload = () => {
+      if (saveDebounceTimerRef.current && activeGraduationUidRef.current) {
+        clearTimeout(saveDebounceTimerRef.current);
+        saveDebounceTimerRef.current = null;
+        void flushGraduationSaveQueue(activeGraduationUidRef.current);
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handleBeforeUnload);
+    };
+  }, []);
+
+  /**
+   * 학생 졸업요건 상태 변경 및 자동 저장 스케줄러
+   * - 초기 데이터 로딩 완료 전이나 조회 오류 상태에서는 기본값이 기존 클라우드 기록을 덮어쓰지 않도록 차단합니다.
+   * - 텍스트/숫자 타이핑은 디바운스(기본 500ms)를 적용하고, 체크박스·선택·강좌 추가/삭제는 즉시(0ms) 저장합니다.
+   */
+  const applyStudentProgressUpdate = (
+    updater: (migratedBase: StudentProgress) => StudentProgress,
+    options?: {
+      debounceMs?: number;
+      profileToSync?: StudentAcademicProfile;
+    }
+  ) => {
+    const uid =
+      isRealAuthActive && authUserProfile
+        ? authUserProfile.id || rawFirebaseUser?.uid || ""
+        : "";
+
+    if (isRealAuthActive && authUserProfile?.approvalStatus === "approved") {
+      if (graduationLoadStatus === "loading") {
+        // 초기 데이터 로딩이 완료되기 전에 기본값이 Firestore에 자동 저장되는 문제 방지
+        return;
+      }
+      if (graduationLoadStatus === "error") {
+        // 조회 실패 상황에서 빈 데이터를 자동 저장하여 기존 기록을 덮어쓰지 않기
+        setGraduationSaveStatus("error");
+        setGraduationSaveError(
+          "저장된 기록을 먼저 불러오지 못해 기존 데이터 보호를 위해 자동 저장이 중지되었습니다. 상단의 [다시 불러오기]를 눌러 주세요."
+        );
+        return;
+      }
+    }
+
+    localRevisionRef.current += 1;
+    const nextRev = localRevisionRef.current;
+    const nowIso = new Date().toISOString();
+
+    const base = migrateStudentProgress(latestProgressStateRef.current, currentUser);
+    const updated = updater(base);
+    const nextProgress: StudentProgress = {
+      ...updated,
+      userId: uid || updated.userId,
+      officialAdminVerified: Boolean(base.officialAdminVerified),
+      clientRevision: nextRev,
+      updatedAt: nowIso,
+    };
+
+    latestProgressStateRef.current = nextProgress;
+    setState((prev) => ({
+      ...prev,
+      studentProgress: nextProgress,
+    }));
+
+    if (uid) {
+      savePerUserGraduationCache(uid, nextProgress);
+    }
+
     if (
       isRealAuthActive &&
       authUserProfile &&
-      authUserProfile.approvalStatus === "approved"
+      authUserProfile.approvalStatus === "approved" &&
+      uid
     ) {
-      const uid = authUserProfile.id || rawFirebaseUser?.uid || nextProgress.userId;
-      if (uid) {
-        saveStudentGraduationRecordInFirestore(uid, nextProgress).catch((err) => {
-          console.warn("졸업요건 기록 클라우드 동기화 안내:", err);
-        });
+      activeGraduationUidRef.current = uid;
+      latestUnsavedProgressRef.current = nextProgress;
+      if (options?.profileToSync) {
+        pendingAcademicProfileRef.current = options.profileToSync;
+      }
+      hasPendingLocalWritesRef.current = true;
+      setGraduationSaveStatus("saving");
+      setGraduationSaveError(null);
+
+      if (saveDebounceTimerRef.current) {
+        clearTimeout(saveDebounceTimerRef.current);
+        saveDebounceTimerRef.current = null;
+      }
+
+      const debounceMs = options?.debounceMs ?? 0;
+      if (debounceMs > 0) {
+        saveDebounceTimerRef.current = setTimeout(() => {
+          saveDebounceTimerRef.current = null;
+          void flushGraduationSaveQueue(uid);
+        }, debounceMs);
+      } else {
+        void flushGraduationSaveQueue(uid);
       }
     }
+  };
+
+  const retrySaveGraduationRecord = async (): Promise<void> => {
+    const uid =
+      authUserProfile?.id ||
+      rawFirebaseUser?.uid ||
+      activeGraduationUidRef.current ||
+      "";
+    if (!uid) return;
+    if (saveDebounceTimerRef.current) {
+      clearTimeout(saveDebounceTimerRef.current);
+      saveDebounceTimerRef.current = null;
+    }
+    if (!latestUnsavedProgressRef.current) {
+      latestUnsavedProgressRef.current = latestProgressStateRef.current;
+    }
+    hasPendingLocalWritesRef.current = true;
+    setGraduationSaveStatus("saving");
+    setGraduationSaveError(null);
+    await flushGraduationSaveQueue(uid);
+  };
+
+  const retryLoadGraduationRecord = () => {
+    setGraduationReloadTick((t) => t + 1);
+  };
+
+  const resetLegacyManualCredits = () => {
+    applyStudentProgressUpdate(
+      (migrated) => ({
+        ...migrated,
+        credits: {},
+      }),
+      { debounceMs: 0 }
+    );
   };
 
   const updateGraduationCatalogByAdmin = async (
@@ -1611,35 +2021,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           ? ""
           : profile.doubleMajorDepartment.trim(),
       adminVerifiedSpecialCondition: Boolean(
-        state.studentProgress.academicProfile?.adminVerifiedSpecialCondition
+        latestProgressStateRef.current.academicProfile?.adminVerifiedSpecialCondition
       ),
       updatedAt: new Date().toISOString().slice(0, 10),
     };
     const legacyFields = deriveLegacyFieldsFromAcademicProfile(safeProfile);
 
-    let nextSnapshot: StudentProgress | null = null;
-    setState((prev) => {
-      const migrated = migrateStudentProgress(prev.studentProgress, currentUser);
-      const nextProgress: StudentProgress = {
+    applyStudentProgressUpdate(
+      (migrated) => ({
         ...migrated,
         ...legacyFields,
         academicProfile: safeProfile,
         isProfileComplete: true,
         officialAdminVerified: false,
-      };
-      nextSnapshot = nextProgress;
-      return {
-        ...prev,
-        studentProgress: nextProgress,
-      };
-    });
-
-    if (nextSnapshot) {
-      syncStudentProgressToCloud(nextSnapshot);
-    }
+      }),
+      { debounceMs: 0, profileToSync: safeProfile }
+    );
 
     if (isRealAuthActive && authUserProfile) {
-      const uid = authUserProfile.id || rawFirebaseUser?.uid || "";
       setAuthUserProfile((prev) =>
         prev
           ? {
@@ -1652,11 +2051,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
           : null
       );
-      if (uid) {
-        updateUserAcademicProfileInFirestore(uid, safeProfile).catch((err) =>
-          console.warn("프로필 학사정보 동기화 안내:", err)
-        );
-      }
     }
   };
 
@@ -1676,135 +2070,114 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       createdAt: new Date().toISOString().slice(0, 10),
     };
 
-    let nextSnapshot: StudentProgress | null = null;
-    setState((prev) => {
-      const migrated = migrateStudentProgress(prev.studentProgress, currentUser);
-      const nextCourses = sortCoursesBySemester([
-        ...(migrated.courses || []),
-        newCourse,
-      ]);
-      const nextProgress: StudentProgress = {
+    applyStudentProgressUpdate(
+      (migrated) => ({
         ...migrated,
-        courses: nextCourses,
-      };
-      nextSnapshot = nextProgress;
-      return {
-        ...prev,
-        studentProgress: nextProgress,
-      };
-    });
-
-    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+        courses: sortCoursesBySemester([...(migrated.courses || []), newCourse]),
+      }),
+      { debounceMs: 0 }
+    );
   };
 
   const updateEnrolledCourse = (
     courseId: string,
     patch: Partial<EnrolledCourse>
   ) => {
-    let nextSnapshot: StudentProgress | null = null;
-    setState((prev) => {
-      const migrated = migrateStudentProgress(prev.studentProgress, currentUser);
-      const nextCourses = sortCoursesBySemester(
-        (migrated.courses || []).map((c) => {
-          if (c.id !== courseId) return c;
-          const merged = { ...c, ...patch };
-          const subMatch = matchTeachingSubstitution(merged);
-          return {
-            ...merged,
-            credits: Math.max(0, Number(merged.credits) || 0),
-            yearTaken: Number(merged.yearTaken) || c.yearTaken,
-            substitutedTeachingSubjectCode: subMatch
-              ? subMatch.ercCourseCodes[0]
-              : undefined,
-          };
-        })
-      );
-      const nextProgress: StudentProgress = {
-        ...migrated,
-        courses: nextCourses,
-      };
-      nextSnapshot = nextProgress;
-      return {
-        ...prev,
-        studentProgress: nextProgress,
-      };
-    });
+    const isTextPatchOnly =
+      Object.keys(patch).every((k) => k === "note" || k === "courseTitle" || k === "courseCode") &&
+      Object.keys(patch).length === 1;
 
-    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+    applyStudentProgressUpdate(
+      (migrated) => ({
+        ...migrated,
+        courses: sortCoursesBySemester(
+          (migrated.courses || []).map((c) => {
+            if (c.id !== courseId) return c;
+            const merged = { ...c, ...patch };
+            const subMatch = matchTeachingSubstitution(merged);
+            return {
+              ...merged,
+              credits: Math.max(0, Number(merged.credits) || 0),
+              yearTaken: Number(merged.yearTaken) || c.yearTaken,
+              substitutedTeachingSubjectCode: subMatch
+                ? subMatch.ercCourseCodes[0]
+                : undefined,
+            };
+          })
+        ),
+      }),
+      { debounceMs: isTextPatchOnly ? 500 : 0 }
+    );
   };
 
   const removeEnrolledCourse = (courseId: string) => {
-    let nextSnapshot: StudentProgress | null = null;
-    setState((prev) => {
-      const migrated = migrateStudentProgress(prev.studentProgress, currentUser);
-      const nextCourses = (migrated.courses || []).filter(
-        (c) => c.id !== courseId
-      );
-      const nextProgress: StudentProgress = {
+    applyStudentProgressUpdate(
+      (migrated) => ({
         ...migrated,
-        courses: nextCourses,
-      };
-      nextSnapshot = nextProgress;
-      return {
-        ...prev,
-        studentProgress: nextProgress,
-      };
-    });
-
-    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+        courses: (migrated.courses || []).filter((c) => c.id !== courseId),
+      }),
+      { debounceMs: 0 }
+    );
   };
 
   const updateVolunteeringCourseState = (
     patch: Partial<VolunteeringCourseState>
   ) => {
-    let nextSnapshot: StudentProgress | null = null;
-    setState((prev) => {
-      const migrated = migrateStudentProgress(prev.studentProgress, currentUser);
-      const nextProgress: StudentProgress = {
+    const keys = Object.keys(patch);
+    const isTextOnly =
+      keys.length > 0 &&
+      keys.every(
+        (k) => k === "eduVolunteering1Semester" || k === "eduVolunteering2Semester"
+      );
+
+    applyStudentProgressUpdate(
+      (migrated) => ({
         ...migrated,
         volunteeringState: {
           ...migrated.volunteeringState!,
           ...patch,
         },
-      };
-      nextSnapshot = nextProgress;
-      return {
-        ...prev,
-        studentProgress: nextProgress,
-      };
-    });
-
-    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+      }),
+      { debounceMs: isTextOnly ? 500 : 0 }
+    );
   };
 
   const updateSchoolPracticumState = (patch: Partial<SchoolPracticumState>) => {
-    let nextSnapshot: StudentProgress | null = null;
-    setState((prev) => {
-      const migrated = migrateStudentProgress(prev.studentProgress, currentUser);
-      const nextProgress: StudentProgress = {
+    const keys = Object.keys(patch);
+    const isTextOnly =
+      keys.length > 0 &&
+      keys.every(
+        (k) =>
+          k === "practicum1Semester" ||
+          k === "practicum2Semester" ||
+          k === "practicum3Semester"
+      );
+
+    applyStudentProgressUpdate(
+      (migrated) => ({
         ...migrated,
         practicumState: {
           ...migrated.practicumState!,
           ...patch,
         },
-      };
-      nextSnapshot = nextProgress;
-      return {
-        ...prev,
-        studentProgress: nextProgress,
-      };
-    });
-
-    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+      }),
+      { debounceMs: isTextOnly ? 500 : 0 }
+    );
   };
 
   const updateTeachingChecklistState = (
     patch: Partial<TeachingChecklistState>
   ) => {
-    let nextSnapshot: StudentProgress | null = null;
-    setState((prev) => {
-      const migrated = migrateStudentProgress(prev.studentProgress, currentUser);
-      const nextProgress: StudentProgress = {
+    const keys = Object.keys(patch);
+    const isImmediateCheckbox = keys.some(
+      (k) =>
+        k === "graduationThesisCompleted" ||
+        k === "graduationExamCompleted" ||
+        k === "disqualificationGuidanceAcknowledged"
+    );
+
+    applyStudentProgressUpdate(
+      (migrated) => ({
         ...migrated,
         teachingChecklist: {
           ...migrated.teachingChecklist!,
@@ -1814,15 +2187,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             migrated.teachingChecklist?.officialVerificationConfirmedByAdmin
           ),
         },
-      };
-      nextSnapshot = nextProgress;
-      return {
-        ...prev,
-        studentProgress: nextProgress,
-      };
-    });
-
-    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+      }),
+      { debounceMs: isImmediateCheckbox ? 0 : 500 }
+    );
   };
 
   const updateStudentCredit = (
@@ -1832,12 +2199,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     isCompletedBoolean?: boolean
   ) => {
     const today = new Date().toISOString().slice(0, 10);
-    let nextSnapshot: StudentProgress | null = null;
-    setState((prev) => {
-      const nextProgress: StudentProgress = {
-        ...prev.studentProgress,
+    applyStudentProgressUpdate(
+      (migrated) => ({
+        ...migrated,
         credits: {
-          ...prev.studentProgress.credits,
+          ...migrated.credits,
           [category]: {
             completedValue,
             userCustomTarget,
@@ -1845,14 +2211,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             lastUpdated: today,
           },
         },
-      };
-      nextSnapshot = nextProgress;
-      return {
-        ...prev,
-        studentProgress: nextProgress,
-      };
-    });
-    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+      }),
+      { debounceMs: 500 }
+    );
   };
 
   const updateStudentProfileMeta = (
@@ -1861,25 +2222,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     doubleMajorName: string,
     isTeacherTrack: boolean
   ) => {
-    let nextSnapshot: StudentProgress | null = null;
-    setState((prev) => {
-      const nextProgress = migrateStudentProgress(
-        {
-          ...prev.studentProgress,
-          admissionYear,
-          majorType,
-          doubleMajorName,
-          isTeacherTrack,
-        },
-        currentUser
-      );
-      nextSnapshot = nextProgress;
-      return {
-        ...prev,
-        studentProgress: nextProgress,
-      };
-    });
-    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+    applyStudentProgressUpdate(
+      (migrated) =>
+        migrateStudentProgress(
+          {
+            ...migrated,
+            admissionYear,
+            majorType,
+            doubleMajorName,
+            isTeacherTrack,
+          },
+          currentUser
+        ),
+      { debounceMs: 0 }
+    );
   };
 
   const addVolunteeringRecord = (
@@ -1896,96 +2252,73 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       verifiedBySelf: true,
       note,
     };
-    let nextSnapshot: StudentProgress | null = null;
-    setState((prev) => {
-      const updatedRecords = [
-        newRec,
-        ...prev.studentProgress.volunteeringRecords,
-      ];
-      const totalHours = updatedRecords.reduce((acc, r) => acc + r.hours, 0);
-      const prevVolCredit = prev.studentProgress.credits["교육봉사 시간"];
-      const nextProgress: StudentProgress = {
-        ...prev.studentProgress,
-        volunteeringRecords: updatedRecords,
-        credits: {
-          ...prev.studentProgress.credits,
-          "교육봉사 시간": {
-            completedValue: totalHours,
-            userCustomTarget: prevVolCredit?.userCustomTarget ?? null,
-            lastUpdated: new Date().toISOString().slice(0, 10),
+    applyStudentProgressUpdate(
+      (migrated) => {
+        const updatedRecords = [newRec, ...(migrated.volunteeringRecords || [])];
+        const totalHours = updatedRecords.reduce((acc, r) => acc + r.hours, 0);
+        const prevVolCredit = migrated.credits["교육봉사 시간"];
+        return {
+          ...migrated,
+          volunteeringRecords: updatedRecords,
+          credits: {
+            ...migrated.credits,
+            "교육봉사 시간": {
+              completedValue: totalHours,
+              userCustomTarget: prevVolCredit?.userCustomTarget ?? null,
+              lastUpdated: new Date().toISOString().slice(0, 10),
+            },
           },
-        },
-      };
-      nextSnapshot = nextProgress;
-      return {
-        ...prev,
-        studentProgress: nextProgress,
-      };
-    });
-    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+        };
+      },
+      { debounceMs: 0 }
+    );
   };
 
   const removeVolunteeringRecord = (id: string) => {
-    let nextSnapshot: StudentProgress | null = null;
-    setState((prev) => {
-      const updatedRecords = prev.studentProgress.volunteeringRecords.filter(
-        (r) => r.id !== id
-      );
-      const totalHours = updatedRecords.reduce((acc, r) => acc + r.hours, 0);
-      const prevVolCredit = prev.studentProgress.credits["교육봉사 시간"];
-      const nextProgress: StudentProgress = {
-        ...prev.studentProgress,
-        volunteeringRecords: updatedRecords,
-        credits: {
-          ...prev.studentProgress.credits,
-          "교육봉사 시간": {
-            completedValue: totalHours,
-            userCustomTarget: prevVolCredit?.userCustomTarget ?? null,
-            lastUpdated: new Date().toISOString().slice(0, 10),
+    applyStudentProgressUpdate(
+      (migrated) => {
+        const updatedRecords = (migrated.volunteeringRecords || []).filter(
+          (r) => r.id !== id
+        );
+        const totalHours = updatedRecords.reduce((acc, r) => acc + r.hours, 0);
+        const prevVolCredit = migrated.credits["교육봉사 시간"];
+        return {
+          ...migrated,
+          volunteeringRecords: updatedRecords,
+          credits: {
+            ...migrated.credits,
+            "교육봉사 시간": {
+              completedValue: totalHours,
+              userCustomTarget: prevVolCredit?.userCustomTarget ?? null,
+              lastUpdated: new Date().toISOString().slice(0, 10),
+            },
           },
-        },
-      };
-      nextSnapshot = nextProgress;
-      return {
-        ...prev,
-        studentProgress: nextProgress,
-      };
-    });
-    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+        };
+      },
+      { debounceMs: 0 }
+    );
   };
 
   const removeChecklistItem = (id: string) => {
-    let nextSnapshot: StudentProgress | null = null;
-    setState((prev) => {
-      const nextProgress: StudentProgress = {
-        ...prev.studentProgress,
-        checklist: prev.studentProgress.checklist.filter((item) => item.id !== id),
-      };
-      nextSnapshot = nextProgress;
-      return {
-        ...prev,
-        studentProgress: nextProgress,
-      };
-    });
-    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+    applyStudentProgressUpdate(
+      (migrated) => ({
+        ...migrated,
+        checklist: (migrated.checklist || []).filter((item) => item.id !== id),
+      }),
+      { debounceMs: 0 }
+    );
   };
 
   const toggleChecklistItem = (id: string) => {
-    let nextSnapshot: StudentProgress | null = null;
-    setState((prev) => {
-      const nextProgress: StudentProgress = {
-        ...prev.studentProgress,
-        checklist: prev.studentProgress.checklist.map((item) =>
+    applyStudentProgressUpdate(
+      (migrated) => ({
+        ...migrated,
+        checklist: (migrated.checklist || []).map((item) =>
           item.id === id ? { ...item, completed: !item.completed } : item
         ),
-      };
-      nextSnapshot = nextProgress;
-      return {
-        ...prev,
-        studentProgress: nextProgress,
-      };
-    });
-    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+      }),
+      { debounceMs: 0 }
+    );
   };
 
   const addChecklistItem = (
@@ -2000,19 +2333,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       completed: false,
       memo,
     };
-    let nextSnapshot: StudentProgress | null = null;
-    setState((prev) => {
-      const nextProgress: StudentProgress = {
-        ...prev.studentProgress,
-        checklist: [...prev.studentProgress.checklist, newItem],
-      };
-      nextSnapshot = nextProgress;
-      return {
-        ...prev,
-        studentProgress: nextProgress,
-      };
-    });
-    if (nextSnapshot) syncStudentProgressToCloud(nextSnapshot);
+    applyStudentProgressUpdate(
+      (migrated) => ({
+        ...migrated,
+        checklist: [...(migrated.checklist || []), newItem],
+      }),
+      { debounceMs: 0 }
+    );
   };
 
   // --- 진로 및 복수전공 공유방 액션 (Firestore 실시간 연동) ---
@@ -2288,6 +2615,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateMentoringStatus,
         upsertAlumniProfile,
         graduationCatalog,
+        graduationLoadStatus,
+        graduationLoadError,
+        graduationSaveStatus,
+        graduationSaveError,
+        graduationLastSavedAt,
+        retrySaveGraduationRecord,
+        retryLoadGraduationRecord,
+        resetLegacyManualCredits,
         updateGraduationCatalogByAdmin,
         updateStudentAcademicProfile,
         addEnrolledCourse,

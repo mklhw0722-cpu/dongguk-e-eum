@@ -1617,15 +1617,26 @@ export async function saveStudentGraduationRecordInFirestore(
   progress: StudentProgress
 ): Promise<void> {
   const { db } = getFirestoreInstance();
-  if (!db || !uid) return;
+  if (!db) {
+    throw new Error("Firestore 데이터베이스에 연결되어 있지 않습니다.");
+  }
+  const cleanUid = (uid || "").trim();
+  if (!cleanUid) {
+    throw new Error("유효한 사용자 식별자(UID)가 없어 저장할 수 없습니다.");
+  }
 
-  const docRef = doc(db, GRADUATION_RECORDS_COLLECTION, uid);
+  const docRef = doc(db, GRADUATION_RECORDS_COLLECTION, cleanUid);
+  const nowIso = new Date().toISOString();
   const safePayload = JSON.parse(
     JSON.stringify({
       ...progress,
-      userId: uid,
+      userId: cleanUid,
       officialAdminVerified: false,
-      updatedAt: new Date().toISOString(),
+      clientRevision:
+        typeof progress.clientRevision === "number" && Number.isFinite(progress.clientRevision)
+          ? Math.max(0, Math.floor(progress.clientRevision))
+          : 0,
+      updatedAt: progress.updatedAt || nowIso,
     })
   );
 
