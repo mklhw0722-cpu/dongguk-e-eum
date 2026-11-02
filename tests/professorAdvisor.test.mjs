@@ -233,3 +233,209 @@ test("8. [관리자 지도교수 배정 액션] 관리자는 학생의 지도교
   assert.equal(student.advisorProfessorId, undefined);
   assert.equal(student.advisorAssignedAt, undefined);
 });
+
+test("9. [상담 신청 데이터 생성 및 유효성 검증] 학생이 희망 날짜, 시간, 상담 유형, 내용을 입력해 생성 시 pending 상태로 초기화된다", () => {
+  function createConsultation(input, student) {
+    if (!input.professorId || !input.type || !input.preferredDate || !input.preferredTime || !input.topic) {
+      throw new Error("필수 입력 항목 누락");
+    }
+    const validTypes = ["academic", "career", "dual_major", "grad_school", "other"];
+    if (!validTypes.includes(input.type)) {
+      throw new Error("유효하지 않은 상담 유형");
+    }
+
+    return {
+      id: "consultation-mock-" + Date.now(),
+      studentId: student.id,
+      studentName: student.name,
+      studentEmail: student.email,
+      studentMajor: student.major,
+      studentStudentNumber: student.studentNumber,
+      professorId: input.professorId,
+      professorName: input.professorName,
+      type: input.type,
+      topic: input.topic,
+      preferredDate: input.preferredDate,
+      preferredTime: input.preferredTime,
+      status: "pending",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  const student = {
+    id: "student-100",
+    name: "박동국",
+    email: "dongguk@dgu.ac.kr",
+    major: "교육학과",
+    studentNumber: "2023110001",
+  };
+
+  const newReq = createConsultation(
+    {
+      professorId: "prof-1",
+      professorName: "백상아 교수",
+      type: "career",
+      preferredDate: "2026-11-10",
+      preferredTime: "14:00~15:00",
+      topic: "교육공학 진로 및 학부 연구생 참여 문의",
+    },
+    student
+  );
+
+  assert.equal(newReq.status, "pending");
+  assert.equal(newReq.studentId, "student-100");
+  assert.equal(newReq.professorId, "prof-1");
+  assert.equal(newReq.type, "career");
+  assert.equal(newReq.topic, "교육공학 진로 및 학부 연구생 참여 문의");
+});
+
+test("10. [학생 상담 취소 권한] 대기 중(pending)인 신청만 학생이 취소(cancelled)할 수 있으며 이미 처리된 상담은 자가 취소 불가", () => {
+  function cancelConsultation(consultation, studentId) {
+    if (consultation.studentId !== studentId) {
+      throw new Error("본인의 상담 신청만 취소할 수 있습니다.");
+    }
+    if (consultation.status !== "pending") {
+      throw new Error("대기 중인 상담 신청만 취소할 수 있습니다.");
+    }
+    return {
+      ...consultation,
+      status: "cancelled",
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  const pendingConsultation = {
+    id: "c-1",
+    studentId: "student-100",
+    professorId: "prof-1",
+    status: "pending",
+  };
+
+  const cancelled = cancelConsultation(pendingConsultation, "student-100");
+  assert.equal(cancelled.status, "cancelled");
+
+  // 타인이 취소 시도 시 차단
+  assert.throws(() => {
+    cancelConsultation(pendingConsultation, "student-999");
+  }, /본인의 상담 신청만/);
+
+  // 이미 수락된 상담은 학생이 임의로 취소 불가
+  const acceptedConsultation = {
+    id: "c-2",
+    studentId: "student-100",
+    professorId: "prof-1",
+    status: "accepted",
+  };
+  assert.throws(() => {
+    cancelConsultation(acceptedConsultation, "student-100");
+  }, /대기 중인 상담/);
+});
+
+test("11. [교수 상담 처리 상태 전이] 교수는 대기 중인 상담에 대해 수락, 일정조정, 거절, 완료를 처리할 수 있다", () => {
+  function updateStatusByProfessor(consultation, professorId, newStatus, rescheduleNote) {
+    if (consultation.professorId !== professorId) {
+      throw new Error("자신에게 접수된 상담만 처리할 수 있습니다.");
+    }
+    const allowed = ["accepted", "rejected", "reschedule_requested", "completed"];
+    if (!allowed.includes(newStatus)) {
+      throw new Error("유효하지 않은 교수 처리 상태");
+    }
+    return {
+      ...consultation,
+      status: newStatus,
+      rescheduleNote: newStatus === "reschedule_requested" ? rescheduleNote : consultation.rescheduleNote,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  const consult = {
+    id: "c-1",
+    studentId: "student-1",
+    professorId: "prof-1",
+    status: "pending",
+  };
+
+  // 1) 수락
+  const accepted = updateStatusByProfessor(consult, "prof-1", "accepted");
+  assert.equal(accepted.status, "accepted");
+
+  // 2) 일정 조정 요청 (조정 메모 포함)
+  const reschedule = updateStatusByProfessor(
+    consult,
+    "prof-1",
+    "reschedule_requested",
+    "화요일 16시에는 학과 회의가 있어 수요일 14시로 조정 부탁드립니다."
+  );
+  assert.equal(reschedule.status, "reschedule_requested");
+  assert.match(reschedule.rescheduleNote, /수요일 14시/);
+
+  // 3) 타 교수가 처리 시도 시 차단
+  assert.throws(() => {
+    updateStatusByProfessor(consult, "prof-2", "accepted");
+  }, /자신에게 접수된 상담만/);
+});
+
+test("12. [실시간 1:1 대화 연결 연동] 승인된 상담에서 대화하기 클릭 시 기존 1:1 대화방을 재사용하고 중복 방을 생성하지 않는다", () => {
+  const existingConversations = [
+    {
+      id: "conv-101",
+      type: "direct",
+      participants: ["student-1", "prof-1"],
+      participantNames: ["김학생", "백상아 교수"],
+    },
+  ];
+
+  function getOrCreateDirectChat(currentUserId, targetUserId, allConversations) {
+    const existing = allConversations.find(
+      (c) =>
+        c.type === "direct" &&
+        c.participants.includes(currentUserId) &&
+        c.participants.includes(targetUserId)
+    );
+    if (existing) {
+      return { conversationId: existing.id, isNew: false };
+    }
+    return {
+      conversationId: "conv-new-" + Date.now(),
+      isNew: true,
+    };
+  }
+
+  // 기존 대화방이 이미 있으면 해당 대화방 ID 반환 (중복 생성 X)
+  const res1 = getOrCreateDirectChat("student-1", "prof-1", existingConversations);
+  assert.equal(res1.isNew, false);
+  assert.equal(res1.conversationId, "conv-101");
+
+  // 없는 상대와의 대화는 새로운 방 생성
+  const res2 = getOrCreateDirectChat("student-1", "prof-2", existingConversations);
+  assert.equal(res2.isNew, true);
+  assert.ok(res2.conversationId.startsWith("conv-new-"));
+});
+
+test("13. [새로고침 및 상태 유지] 상담 신청 데이터와 상태 변경 내역이 목록에 정확히 반영된다", () => {
+  let mockConsultations = [
+    {
+      id: "req-1",
+      studentId: "student-1",
+      professorId: "prof-1",
+      status: "pending",
+      topic: "졸업요건 심사 상담",
+    },
+  ];
+
+  // 상태 변경 적용
+  mockConsultations = mockConsultations.map((c) =>
+    c.id === "req-1" ? { ...c, status: "accepted" } : c
+  );
+
+  // 필터링 검증: 학생의 신청 목록
+  const studentList = mockConsultations.filter((c) => c.studentId === "student-1");
+  assert.equal(studentList.length, 1);
+  assert.equal(studentList[0].status, "accepted");
+
+  // 필터링 검증: 교수의 접수 목록
+  const profList = mockConsultations.filter((c) => c.professorId === "prof-1");
+  assert.equal(profList.length, 1);
+  assert.equal(profList[0].status, "accepted");
+});

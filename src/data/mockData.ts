@@ -11,6 +11,7 @@ import {
   StudentProgress,
   ApprovalRequest,
   ReportItem,
+  ConsultationRequest,
 } from "@/types";
 import { buildLegacyGraduationRequirementsFromCatalog } from "@/lib/graduationCurriculum";
 
@@ -1150,5 +1151,41 @@ export const MOCK_REPORTS: ReportItem[] = [
     reason: "사전 동의 없는 외부 설문 링크 반복 전송",
     status: "처리완료",
     createdAt: "2026-10-17",
+  },
+];
+
+export const MOCK_CONSULTATIONS: ConsultationRequest[] = [
+  {
+    id: "c-req-1",
+    studentId: "u-student-1",
+    studentName: "김동국",
+    studentEmail: "dongguk.kim@sample.dgu.edu",
+    studentIdOrYear: "22학번 (3학년 재학)",
+    professorId: "u-prof-1",
+    professorName: "백상아 교수",
+    consultationType: "진로 상담",
+    preferredDate: "2026-11-10",
+    preferredTime: "14:00 (오후 2시)",
+    purpose: "기업 HRD 및 교수체제설계 분야 대학원 진학과 취업 준비 방향에 대해 조언을 얻고자 합니다.",
+    status: "pending",
+    createdAt: "2026-11-01T10:00:00Z",
+    updatedAt: "2026-11-01T10:00:00Z",
+  },
+  {
+    id: "c-req-2",
+    studentId: "u-student-2",
+    studentName: "이명진",
+    studentEmail: "myungjin.lee@sample.dgu.edu",
+    studentIdOrYear: "23학번 (2학년 재학)",
+    professorId: "u-prof-1",
+    professorName: "백상아 교수",
+    consultationType: "학업 상담",
+    preferredDate: "2026-11-12",
+    preferredTime: "16:00 (오후 4시)",
+    purpose: "에듀테크 복수전공과 교육공학 수업 과제 연계 연구에 대해 여쭙고 싶습니다.",
+    status: "accepted",
+    conversationId: "conv-demo-prof-1",
+    createdAt: "2026-10-28T09:30:00Z",
+    updatedAt: "2026-10-29T11:00:00Z",
   },
 ];

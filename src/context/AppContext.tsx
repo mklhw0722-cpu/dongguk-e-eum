@@ -29,6 +29,9 @@ import {
   TeachingChecklistState,
   GraduationLoadStatus,
   GraduationSaveStatus,
+  ConsultationRequest,
+  ConsultationType,
+  ConsultationStatus,
 } from "@/types";
 import {
   OFFICIAL_GRADUATION_CATALOG,
@@ -89,6 +92,10 @@ import {
   saveStudentGraduationRecordInFirestore,
   updateUserAcademicProfileInFirestore,
   assignStudentAdvisorInFirestore,
+  createConsultationInFirestore,
+  subscribeToConsultationsInFirestore,
+  updateConsultationStatusInFirestore,
+  cancelConsultationInFirestore,
 } from "@/lib/firebase";
 import { unreadCountForUser, effectiveReadSeq } from "@/lib/chatReadReceipts";
 import officialNoticesJson from "@/data/officialNotices.json";
@@ -163,6 +170,24 @@ interface AppContextValue extends PlatformDataState {
     studentId: string,
     professorId: string | null
   ) => Promise<void>;
+
+  // 교수 상담 신청 시스템 액션
+  consultations: ConsultationRequest[];
+  handleCreateConsultation: (payload: {
+    professorId: string;
+    professorName: string;
+    consultationType: ConsultationType;
+    preferredDate: string;
+    preferredTime: string;
+    purpose: string;
+  }) => Promise<ConsultationRequest>;
+  handleUpdateConsultationStatus: (
+    consultationId: string,
+    status: ConsultationStatus,
+    rescheduleNote?: string
+  ) => Promise<void>;
+  handleCancelConsultation: (consultationId: string) => Promise<void>;
+  handleConnectConsultationChat: (consultation: ConsultationRequest) => Promise<string>;
 
   // 기능 A. 대화창 액션
   sendMessage: (conversationId: string, content: string) => Promise<void> | void;
@@ -321,6 +346,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [profileStatus, setProfileStatus] = useState<ProfileFetchStatus>("idle");
   const profileMissingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [realUsersForAdmin, setRealUsersForAdmin] = useState<UserProfileDoc[]>([]);
+  const [cloudConsultations, setCloudConsultations] = useState<ConsultationRequest[]>([]);
   const [graduationCatalog, setGraduationCatalog] = useState<OfficialGraduationCatalog>(
     OFFICIAL_GRADUATION_CATALOG
   );
@@ -776,12 +802,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setGraduationLoadError(null);
     }
 
+    // 6. 교수 상담 신청 목록 실시간 구독
+    let unsubConsultations: (() => void) | null = null;
+    if (currentUid && authUserProfile?.role) {
+      unsubConsultations = subscribeToConsultationsInFirestore(
+        currentUid,
+        authUserProfile.role,
+        (list) => {
+          setCloudConsultations(list);
+        },
+        (err) => {
+          console.warn("상담 신청 목록 실시간 구독 경고:", err);
+        }
+      );
+    }
+
     return () => {
       if (unsubChats) unsubChats();
       if (unsubApprovedUsers) unsubApprovedUsers();
       if (unsubNotices) unsubNotices();
       if (unsubGradCatalog) unsubGradCatalog();
       if (unsubGradRecord) unsubGradRecord();
+      if (unsubConsultations) unsubConsultations();
     };
   }, [hydrated, firebaseVersionTick, rawFirebaseUser, authUserProfile, graduationReloadTick]);
 
@@ -1573,6 +1615,167 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
 
     return newConvId;
+  };
+
+  // --- 교수 상담 신청 시스템 액션 ---
+  const consultations: ConsultationRequest[] = useMemo(() => {
+    if (isRealAuthActive) {
+      return cloudConsultations;
+    }
+    const all = state.consultations || [];
+    if (currentRole === "student" && currentUser) {
+      return all.filter((c) => c.studentId === currentUser.id);
+    }
+    if (currentRole === "professor" && currentUser) {
+      return all.filter((c) => c.professorId === currentUser.id);
+    }
+    return all;
+  }, [isRealAuthActive, cloudConsultations, state.consultations, currentRole, currentUser]);
+
+  const handleCreateConsultation = async (payload: {
+    professorId: string;
+    professorName: string;
+    consultationType: ConsultationType;
+    preferredDate: string;
+    preferredTime: string;
+    purpose: string;
+  }): Promise<ConsultationRequest> => {
+    const studentUid = authUserProfile?.id || (currentUser ? currentUser.id : "u-student-1");
+    const studentName = authUserProfile?.name || (currentUser ? currentUser.name : "학생");
+    const studentEmail = authUserProfile?.email || currentUser?.email || "";
+    const studentIdOrYear = authUserProfile?.studentIdOrYear || currentUser?.studentIdOrYear || "";
+
+    const requestData = {
+      studentId: studentUid,
+      studentName,
+      studentEmail,
+      studentIdOrYear,
+      professorId: payload.professorId,
+      professorName: payload.professorName,
+      consultationType: payload.consultationType,
+      preferredDate: payload.preferredDate,
+      preferredTime: payload.preferredTime,
+      purpose: payload.purpose,
+    };
+
+    let created: ConsultationRequest;
+
+    if (isRealAuthActive && isFirestoreConnected) {
+      created = await createConsultationInFirestore(requestData);
+    } else {
+      const nowIso = new Date().toISOString();
+      created = {
+        ...requestData,
+        id: `c-req-${Date.now()}`,
+        status: "pending",
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+    }
+
+    setState((prev: PlatformDataState) => ({
+      ...prev,
+      consultations: [created, ...(prev.consultations || [])],
+    }));
+
+    if (isRealAuthActive) {
+      setCloudConsultations((prev) => [created, ...prev.filter((c) => c.id !== created.id)]);
+    }
+
+    return created;
+  };
+
+  const handleUpdateConsultationStatus = async (
+    consultationId: string,
+    status: ConsultationStatus,
+    rescheduleNote?: string
+  ): Promise<void> => {
+    if (isRealAuthActive && isFirestoreConnected) {
+      await updateConsultationStatusInFirestore({
+        consultationId,
+        status,
+        rescheduleNote,
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    const updater = (c: ConsultationRequest) =>
+      c.id === consultationId
+        ? {
+            ...c,
+            status,
+            ...(rescheduleNote !== undefined ? { rescheduleNote } : {}),
+            updatedAt: nowIso,
+          }
+        : c;
+
+    setState((prev: PlatformDataState) => ({
+      ...prev,
+      consultations: (prev.consultations || []).map(updater),
+    }));
+
+    setCloudConsultations((prev) => prev.map(updater));
+  };
+
+  const handleCancelConsultation = async (consultationId: string): Promise<void> => {
+    if (isRealAuthActive && isFirestoreConnected) {
+      await cancelConsultationInFirestore(consultationId);
+    }
+
+    const nowIso = new Date().toISOString();
+    const updater = (c: ConsultationRequest) =>
+      c.id === consultationId
+        ? {
+            ...c,
+            status: "cancelled" as ConsultationStatus,
+            updatedAt: nowIso,
+          }
+        : c;
+
+    setState((prev: PlatformDataState) => ({
+      ...prev,
+      consultations: (prev.consultations || []).map(updater),
+    }));
+
+    setCloudConsultations((prev) => prev.map(updater));
+  };
+
+  const handleConnectConsultationChat = async (
+    consultation: ConsultationRequest
+  ): Promise<string> => {
+    const currentId = authUserProfile?.id || currentUser?.id;
+    const targetUserId =
+      currentId === consultation.professorId
+        ? consultation.studentId
+        : consultation.professorId;
+
+    const chatId = await startOrOpenDirectChat(targetUserId, "교수 상담");
+
+    if (consultation.id && consultation.conversationId !== chatId) {
+      if (isRealAuthActive && isFirestoreConnected) {
+        try {
+          await updateConsultationStatusInFirestore({
+            consultationId: consultation.id,
+            status: consultation.status,
+            conversationId: chatId,
+          });
+        } catch (e) {
+          console.warn("상담 문서 채팅방 ID 업데이트 경고:", e);
+        }
+      }
+
+      const updater = (c: ConsultationRequest) =>
+        c.id === consultation.id ? { ...c, conversationId: chatId } : c;
+
+      setState((prev: PlatformDataState) => ({
+        ...prev,
+        consultations: (prev.consultations || []).map(updater),
+      }));
+
+      setCloudConsultations((prev) => prev.map(updater));
+    }
+
+    return chatId;
   };
 
   const inviteUsersToChat = async (
@@ -2776,6 +2979,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         approvedProfessors,
         myAdvisorInfo,
         handleAdminAssignAdvisor,
+        consultations,
+        handleCreateConsultation,
+        handleUpdateConsultationStatus,
+        handleCancelConsultation,
+        handleConnectConsultationChat,
         sendMessage,
         markConversationRead,
         startOrOpenDirectChat,

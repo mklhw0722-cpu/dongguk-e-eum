@@ -43,6 +43,9 @@ import {
   OfficialGraduationCatalog,
   StudentAcademicProfile,
   StudentProgress,
+  ConsultationRequest,
+  ConsultationType,
+  ConsultationStatus,
 } from "@/types";
 import { MOCK_COMMUNITY_POSTS } from "@/data/mockData";
 
@@ -63,6 +66,7 @@ const CHATS_COLLECTION = "chats";
 const NOTICES_COLLECTION = "notices";
 const GRADUATION_CATALOG_COLLECTION = "graduationRulesCatalog";
 const GRADUATION_RECORDS_COLLECTION = "graduationRecords";
+const CONSULTATIONS_COLLECTION = "consultations";
 
 /**
  * 환경변수 또는 브라우저에 저장된 Firebase 설정을 반환합니다.
@@ -1707,5 +1711,147 @@ export async function assignStudentAdvisorInFirestore(params: {
     advisorProfessorId: params.advisorProfessorId || "",
     advisorAssignedAt: params.advisorProfessorId ? nowIso : "",
     updatedAt: nowIso,
+  });
+}
+
+// ==========================================
+// 8. 교수 상담 신청 시스템 (Consultations)
+// ==========================================
+
+/**
+ * 학생: 교수 상담 신청서 작성 및 Firestore 저장
+ * - 초기 상태는 'pending(신청 대기)'으로 등록됩니다.
+ */
+export async function createConsultationInFirestore(payload: {
+  studentId: string;
+  studentName: string;
+  studentEmail?: string;
+  studentIdOrYear?: string;
+  professorId: string;
+  professorName: string;
+  consultationType: ConsultationType;
+  preferredDate: string;
+  preferredTime: string;
+  purpose: string;
+}): Promise<ConsultationRequest> {
+  const { db } = getFirebaseInstances();
+  if (!db) {
+    throw new Error("Firestore 데이터베이스가 연결되어 있지 않습니다.");
+  }
+
+  const colRef = collection(db, CONSULTATIONS_COLLECTION);
+  const nowIso = new Date().toISOString();
+  const newDocRef = doc(colRef);
+
+  const docData: ConsultationRequest = {
+    id: newDocRef.id,
+    studentId: payload.studentId,
+    studentName: payload.studentName,
+    studentEmail: payload.studentEmail || "",
+    studentIdOrYear: payload.studentIdOrYear || "",
+    professorId: payload.professorId,
+    professorName: payload.professorName,
+    consultationType: payload.consultationType,
+    preferredDate: payload.preferredDate,
+    preferredTime: payload.preferredTime,
+    purpose: payload.purpose,
+    status: "pending",
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+
+  await setDoc(newDocRef, docData);
+  return docData;
+}
+
+/**
+ * 사용자별 상담 신청 목록 실시간 구독
+ * - 학생: 자신이 신청한 상담 목록
+ * - 교수: 자신에게 접수된 상담 목록
+ * - 관리자: 전체 상담 목록
+ */
+export function subscribeToConsultationsInFirestore(
+  userId: string,
+  userRole: UserRole,
+  onUpdate: (consultations: ConsultationRequest[]) => void,
+  onError: (err: string) => void
+): (() => void) | null {
+  const { db } = getFirebaseInstances();
+  if (!db || !userId) return null;
+
+  try {
+    const colRef = collection(db, CONSULTATIONS_COLLECTION);
+    let q;
+    if (userRole === "admin") {
+      q = query(colRef);
+    } else if (userRole === "professor") {
+      q = query(colRef, where("professorId", "==", userId));
+    } else {
+      q = query(colRef, where("studentId", "==", userId));
+    }
+
+    return onSnapshot(
+      q,
+      (snap) => {
+        const list: ConsultationRequest[] = [];
+        snap.forEach((d) => {
+          list.push({ id: d.id, ...(d.data() as any) });
+        });
+        list.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+        onUpdate(list);
+      },
+      (err) => {
+        onError(`상담 목록 조회 오류: ${err.message}`);
+      }
+    );
+  } catch (err: any) {
+    onError(`상담 구독 생성 실패: ${err?.message || err}`);
+    return null;
+  }
+}
+
+/**
+ * 교수의 상담 상태 갱신 (수락, 일정 조정 요청, 거절, 완료)
+ */
+export async function updateConsultationStatusInFirestore(params: {
+  consultationId: string;
+  status: ConsultationStatus;
+  rescheduleNote?: string;
+  conversationId?: string;
+}): Promise<void> {
+  const { db } = getFirebaseInstances();
+  if (!db) {
+    throw new Error("Firestore 데이터베이스가 연결되어 있지 않습니다.");
+  }
+
+  const docRef = doc(db, CONSULTATIONS_COLLECTION, params.consultationId);
+  const nowIso = new Date().toISOString();
+  const updateData: Record<string, unknown> = {
+    status: params.status,
+    updatedAt: nowIso,
+  };
+  if (params.rescheduleNote !== undefined) {
+    updateData.rescheduleNote = params.rescheduleNote;
+  }
+  if (params.conversationId !== undefined) {
+    updateData.conversationId = params.conversationId;
+  }
+
+  await updateDoc(docRef, updateData);
+}
+
+/**
+ * 학생의 상담 신청 취소 (대기 중인 건에 한함)
+ */
+export async function cancelConsultationInFirestore(consultationId: string): Promise<void> {
+  const { db } = getFirebaseInstances();
+  if (!db) {
+    throw new Error("Firestore 데이터베이스가 연결되어 있지 않습니다.");
+  }
+
+  const docRef = doc(db, CONSULTATIONS_COLLECTION, consultationId);
+  await updateDoc(docRef, {
+    status: "cancelled",
+    updatedAt: new Date().toISOString(),
   });
 }
