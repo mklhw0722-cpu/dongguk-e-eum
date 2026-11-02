@@ -1709,6 +1709,7 @@ export interface GraduationAuditResult {
   };
   categoryCards: CategoryAuditCard[];
   unmetItems: { id: string; title: string; detail: string; category: string }[];
+  fulfilledItems: { id: string; title: string; detail: string; category: string }[];
   needsReviewItems: { id: string; title: string; detail: string; sourceUrl: string }[];
 }
 
@@ -2111,8 +2112,7 @@ export function calculateGraduationAudit(
           "confirmed"
         ),
         status:
-          effectiveTeachingCredits >= cohortRule.teachingTotalCredits &&
-          teachingTheoryAudit.isFulfilled
+          effectiveTeachingCredits >= cohortRule.teachingTotalCredits
             ? "fulfilled"
             : "in_progress",
         statusBadgeText: effectiveTeachingCredits >= cohortRule.teachingTotalCredits ? "기준 충족" : `잔여 ${Math.max(0, cohortRule.teachingTotalCredits - effectiveTeachingCredits)}학점`,
@@ -2163,8 +2163,9 @@ export function calculateGraduationAudit(
     );
   }
 
-  // 3. 미충족 항목(unmetItems) 및 확인 필요 항목(needsReviewItems) 요약 생성
+  // 3. 미충족 항목(unmetItems), 충족 항목(fulfilledItems), 확인 필요 항목(needsReviewItems) 요약 생성
   const unmetItems: GraduationAuditResult["unmetItems"] = [];
+  const fulfilledItems: GraduationAuditResult["fulfilledItems"] = [];
   const needsReviewItems: GraduationAuditResult["needsReviewItems"] = [];
 
   if (totalEarnedCredits < cohortRule.totalGraduationCredits) {
@@ -2172,6 +2173,13 @@ export function calculateGraduationAudit(
       id: "unmet-total-credits",
       title: "총 졸업 이수 학점 부족",
       detail: `기준 ${cohortRule.totalGraduationCredits}학점 중 현재 ${totalEarnedCredits}학점 취득 (${cohortRule.totalGraduationCredits - totalEarnedCredits}학점 추가 필요)`,
+      category: "졸업 이수 학점",
+    });
+  } else {
+    fulfilledItems.push({
+      id: "fulfilled-total-credits",
+      title: "총 졸업 이수 학점 충족",
+      detail: `기준 ${cohortRule.totalGraduationCredits}학점 중 현재 ${totalEarnedCredits}학점 취득 완료`,
       category: "졸업 이수 학점",
     });
   }
@@ -2183,48 +2191,79 @@ export function calculateGraduationAudit(
       detail: `교육학과 ${profile.majorPlanType === "single" ? "단일전공" : "복수전공 주전공"} 기준 ${applicable.eduMajorTargetCredits}학점 중 현재 ${eduMajorEarnedCredits}학점 취득 (${applicable.eduMajorTargetCredits - eduMajorEarnedCredits}학점 추가 필요)`,
       category: "전공 이수 학점",
     });
-  }
-
-  if (hasCourses && academicFoundationEarnedCredits < applicable.academicFoundationTargetCredits) {
-    unmetItems.push({
-      id: "unmet-academic-foundation",
-      title: "학문기초(외국어영역) 학점 부족",
-      detail: `교육학과 학문기초(외국어영역) 기준 ${applicable.academicFoundationTargetCredits}학점 중 현재 ${academicFoundationEarnedCredits}학점 이수`,
-      category: "교양 이수 학점",
+  } else {
+    fulfilledItems.push({
+      id: "fulfilled-edu-major",
+      title: "교육학과 전공 이수 학점 충족",
+      detail: `교육학과 ${profile.majorPlanType === "single" ? "단일전공" : "복수전공 주전공"} 기준 ${applicable.eduMajorTargetCredits}학점 중 현재 ${eduMajorEarnedCredits}학점 취득 완료`,
+      category: "전공 이수 학점",
     });
   }
 
-  if (
-    applicable.commonLiberalArtsTargetCredits !== null &&
-    commonLiberalArtsEarnedCredits < applicable.commonLiberalArtsTargetCredits
-  ) {
-    unmetItems.push({
-      id: "unmet-common-liberal",
-      title: "공통교양(기초교양) 학점 부족",
-      detail: `기준 ${applicable.commonLiberalArtsTargetCredits}학점 중 현재 ${commonLiberalArtsEarnedCredits}학점 이수`,
-      category: "교양 이수 학점",
-    });
+  if (hasCourses) {
+    if (academicFoundationEarnedCredits < applicable.academicFoundationTargetCredits) {
+      unmetItems.push({
+        id: "unmet-academic-foundation",
+        title: "학문기초(외국어영역) 학점 부족",
+        detail: `교육학과 학문기초(외국어영역) 기준 ${applicable.academicFoundationTargetCredits}학점 중 현재 ${academicFoundationEarnedCredits}학점 이수`,
+        category: "학문기초 이수 학점",
+      });
+    } else {
+      fulfilledItems.push({
+        id: "fulfilled-academic-foundation",
+        title: "학문기초(외국어영역) 학점 충족",
+        detail: `교육학과 학문기초(외국어영역) 기준 ${applicable.academicFoundationTargetCredits}학점 중 현재 ${academicFoundationEarnedCredits}학점 이수 완료`,
+        category: "학문기초 이수 학점",
+      });
+    }
+  }
+
+  if (applicable.commonLiberalArtsTargetCredits !== null) {
+    if (commonLiberalArtsEarnedCredits < applicable.commonLiberalArtsTargetCredits) {
+      unmetItems.push({
+        id: "unmet-common-liberal",
+        title: "공통교양 및 학문기초 학점 부족",
+        detail: `기준 ${applicable.commonLiberalArtsTargetCredits}학점 중 현재 ${commonLiberalArtsEarnedCredits}학점 이수`,
+        category: "교양 이수 학점",
+      });
+    } else {
+      fulfilledItems.push({
+        id: "fulfilled-common-liberal",
+        title: "공통교양 및 학문기초 학점 충족",
+        detail: `기준 ${applicable.commonLiberalArtsTargetCredits}학점 중 현재 ${commonLiberalArtsEarnedCredits}학점 이수 완료`,
+        category: "교양 이수 학점",
+      });
+    }
   }
 
   if (
     profile.majorPlanType === "double_edu" &&
-    applicable.doubleMajorTargetCredits !== null &&
-    doubleMajorEarnedCredits < applicable.doubleMajorTargetCredits
+    applicable.doubleMajorTargetCredits !== null
   ) {
-    unmetItems.push({
-      id: "unmet-double-edu",
-      title: `사범대 복수전공(${profile.doubleMajorDepartment || "타 학과"}) 학점 부족`,
-      detail: `기준 ${applicable.doubleMajorTargetCredits}학점 중 현재 ${doubleMajorEarnedCredits}학점 이수`,
-      category: "복수전공 이수 학점",
-    });
+    if (doubleMajorEarnedCredits < applicable.doubleMajorTargetCredits) {
+      unmetItems.push({
+        id: "unmet-double-edu",
+        title: `사범대 복수전공(${profile.doubleMajorDepartment || "타 학과"}) 학점 부족`,
+        detail: `기준 ${applicable.doubleMajorTargetCredits}학점 중 현재 ${doubleMajorEarnedCredits}학점 이수`,
+        category: "복수전공 이수 학점",
+      });
+    } else {
+      fulfilledItems.push({
+        id: "fulfilled-double-edu",
+        title: `사범대 복수전공(${profile.doubleMajorDepartment || "타 학과"}) 학점 충족`,
+        detail: `기준 ${applicable.doubleMajorTargetCredits}학점 중 현재 ${doubleMajorEarnedCredits}학점 이수 완료`,
+        category: "복수전공 이수 학점",
+      });
+    }
   }
 
   if (applicable.teachingRequired) {
-    if (!teachingTheoryAudit.isFulfilled) {
-      unmetItems.push({
-        id: "unmet-teaching-theory",
-        title: "교직이론(또는 교육학과 전공 대체인정) 과목 부족",
-        detail: `교직이론 6과목(12학점 상당) 이상 필요 — 현재 ${teachingTheoryAudit.recognizedSubjectCount}과목(${teachingTheoryAudit.recognizedEquivalentCredits}학점 상당) 인정`,
+    // 교직이론 조건은 교육학과 전공 연계 특성상 미충족 판정에서 제외하고 총 교직학점 충족 여부 반영
+    if (effectiveTeachingCredits >= cohortRule.teachingTotalCredits) {
+      fulfilledItems.push({
+        id: "fulfilled-teaching-credits",
+        title: "교직과목 최저 이수 학점 충족",
+        detail: `기준 ${cohortRule.teachingTotalCredits}학점(소양6·실습4) 중 현재 ${effectiveTeachingCredits}학점 이수 완료`,
         category: "교직 이수 학점",
       });
     }
@@ -2236,6 +2275,13 @@ export function calculateGraduationAudit(
         detail: `교직소양 필수 6학점(교직실무1·디지털교육1·특수교육학개론2·학교폭력예방2) 중 현재 ${courseTeachingLiteracyCredits}학점 이수`,
         category: "교직 이수 학점",
       });
+    } else if (hasCourses && courseTeachingLiteracyCredits >= cohortRule.teachingLiteracyCredits) {
+      fulfilledItems.push({
+        id: "fulfilled-teaching-literacy",
+        title: "교직소양 필수 과목 충족",
+        detail: `교직소양 필수 6학점 모두 이수 완료 (${courseTeachingLiteracyCredits}학점)`,
+        category: "교직 이수 학점",
+      });
     }
 
     if (!volunteeringAudit.isFulfilled) {
@@ -2243,6 +2289,13 @@ export function calculateGraduationAudit(
         id: "unmet-volunteering",
         title: "교육봉사활동 요건 미충족",
         detail: `교육봉사활동1·2 수강 및 총 60시간 이상 필요 (현재 ${volunteeringAudit.effectiveHours}/60시간, 봉사1: ${volunteeringAudit.course1Completed ? "완료" : "미완료"}, 봉사2: ${volunteeringAudit.course2Completed ? "완료" : "미완료"})`,
+        category: "교육봉사 시간",
+      });
+    } else {
+      fulfilledItems.push({
+        id: "fulfilled-volunteering",
+        title: "교육봉사활동 요건 충족",
+        detail: `교육봉사활동 1·2 이수 및 총 ${volunteeringAudit.effectiveHours}/60시간 완료 (확인서 제출 확인)`,
         category: "교육봉사 시간",
       });
     }
@@ -2256,6 +2309,13 @@ export function calculateGraduationAudit(
           "학교현장실습 ①(Ⅰ+Ⅱ, 2학점), ②(Ⅲ, 2학점), ③(Ⅰ+Ⅱ+Ⅲ, 4학점) 중 1개 이상의 조합을 완료해야 합니다.",
         category: "교육실습 이수 여부",
       });
+    } else {
+      fulfilledItems.push({
+        id: "fulfilled-practicum",
+        title: "학교현장실습 요건 충족",
+        detail: `학교현장실습 공식 이수 조합 완료 (${practicumEvaluation.earnedPracticumCredits}학점 취득)`,
+        category: "교육실습 이수 여부",
+      });
     }
 
     if (!personalityTestPassed) {
@@ -2263,6 +2323,13 @@ export function calculateGraduationAudit(
         id: "unmet-personality-test",
         title: "교직 적성 및 인성검사 적격 횟수 부족",
         detail: `2013학년도 이후 입학자 기준 ${cohortRule.personalityTestMinCount}회 이상 적격 필요 (현재 ${tc.personalityTestPassCount || 0}회)`,
+        category: "기타 졸업요건",
+      });
+    } else {
+      fulfilledItems.push({
+        id: "fulfilled-personality-test",
+        title: "교직 적성 및 인성검사 충족",
+        detail: `기준 ${cohortRule.personalityTestMinCount}회 중 현재 ${tc.personalityTestPassCount || 0}회 적격 판정 완료`,
         category: "기타 졸업요건",
       });
     }
@@ -2274,6 +2341,13 @@ export function calculateGraduationAudit(
         detail: `기준 ${cohortRule.cprMinCount}회 이상 이수 필요 (현재 ${tc.cprCompletedCount || 0}회)`,
         category: "기타 졸업요건",
       });
+    } else {
+      fulfilledItems.push({
+        id: "fulfilled-cpr",
+        title: "응급처치 및 심폐소생술 실습 충족",
+        detail: `기준 ${cohortRule.cprMinCount}회 중 현재 ${tc.cprCompletedCount || 0}회 이수 완료`,
+        category: "기타 졸업요건",
+      });
     }
 
     if (!genderSensitivityPassed) {
@@ -2281,6 +2355,13 @@ export function calculateGraduationAudit(
         id: "unmet-gender-sensitivity",
         title: "성인지 교육 이수 횟수 부족",
         detail: `${profile.admissionYearNumber <= 2020 ? "2020학년도 이전 입학자 2회" : "2021학년도 이후 입학자 4회"} 이상 이수 필요 (현재 ${tc.genderSensitivityCount || 0}회)`,
+        category: "기타 졸업요건",
+      });
+    } else {
+      fulfilledItems.push({
+        id: "fulfilled-gender-sensitivity",
+        title: "성인지 교육 이수 충족",
+        detail: `기준 ${genderSensitivityTarget}회 중 현재 ${tc.genderSensitivityCount || 0}회 이수 완료`,
         category: "기타 졸업요건",
       });
     }
@@ -2292,6 +2373,13 @@ export function calculateGraduationAudit(
         detail: `전공 평점평균 ${cohortRule.majorGpaMin} 이상 필요 (현재 ${tc.majorGpa !== null ? tc.majorGpa.toFixed(2) : "미입력"})`,
         category: "기타 졸업요건",
       });
+    } else {
+      fulfilledItems.push({
+        id: "fulfilled-major-gpa",
+        title: "전공 평점평균 기준 충족",
+        detail: `기준 ${cohortRule.majorGpaMin} 이상 충족 (현재 평점: ${tc.majorGpa !== null ? tc.majorGpa.toFixed(2) : "-"})`,
+        category: "기타 졸업요건",
+      });
     }
 
     if (!teachingGpaPassed) {
@@ -2301,14 +2389,28 @@ export function calculateGraduationAudit(
         detail: `교직 평점평균 ${cohortRule.teachingGpaMin} 이상 필요 (현재 ${tc.teachingGpa !== null ? tc.teachingGpa.toFixed(2) : "미입력"})`,
         category: "기타 졸업요건",
       });
+    } else {
+      fulfilledItems.push({
+        id: "fulfilled-teaching-gpa",
+        title: "교직 평점평균 기준 충족",
+        detail: `기준 ${cohortRule.teachingGpaMin} 이상 충족 (현재 평점: ${tc.teachingGpa !== null ? tc.teachingGpa.toFixed(2) : "-"})`,
+        category: "기타 졸업요건",
+      });
     }
   }
 
-  if (!tc.graduationThesisCompleted) {
+  if (!tc.graduationThesisCompleted && !tc.graduationExamCompleted) {
     unmetItems.push({
       id: "unmet-thesis",
       title: "교육학과 졸업시험 미완료",
       detail: "교육학과는 졸업시험 합격이 필수입니다 (학과 세부 지침 확인 필수).",
+      category: "기타 졸업요건",
+    });
+  } else {
+    fulfilledItems.push({
+      id: "fulfilled-thesis",
+      title: "교육학과 졸업시험 합격 완료",
+      detail: "교육학과 졸업시험 요건을 통과했습니다.",
       category: "기타 졸업요건",
     });
   }
@@ -2416,6 +2518,7 @@ export function calculateGraduationAudit(
     },
     categoryCards,
     unmetItems,
+    fulfilledItems,
     needsReviewItems,
   };
 }
