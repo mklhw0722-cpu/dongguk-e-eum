@@ -1868,7 +1868,11 @@ export function calculateGraduationAudit(
   const course2Completed =
     progress.volunteeringState!.eduVolunteering2Completed || hasCourseCode("ERC0023");
 
-  const effectiveHours = Math.max(loggedHours, legacyVolHours);
+  // 교육봉사활동1(30시간) 또는 2(30시간)를 체크하거나 강좌로 이수한 경우 해당 시간을 봉사 시간에 자동 합산
+  const courseEquivalentHours =
+    (course1Completed ? 30 : 0) + (course2Completed ? 30 : 0);
+
+  const effectiveHours = Math.max(loggedHours, legacyVolHours, courseEquivalentHours);
   const isVolunteeringFulfilled =
     effectiveHours >= cohortRule.volunteeringHours &&
     course1Completed &&
