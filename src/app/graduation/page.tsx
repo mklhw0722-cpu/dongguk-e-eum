@@ -2334,15 +2334,7 @@ export default function GraduationPage() {
             rel="noreferrer"
             className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold inline-flex items-center gap-1.5"
           >
-            학업이수 가이드 (page/619) <ExternalLink className="w-3.5 h-3.5" />
-          </a>
-          <a
-            href="https://edu.dongguk.edu"
-            target="_blank"
-            rel="noreferrer"
-            className="px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-xs font-bold inline-flex items-center gap-1.5 text-slate-700 dark:text-slate-200"
-          >
-            사범대학 · 교육학과 홈페이지 <ExternalLink className="w-3.5 h-3.5" />
+            학업이수 가이드 <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </div>
       </section>
