@@ -2341,31 +2341,6 @@ export default function GraduationPage() {
           )}
         </div>
       </section>
-
-      {/* =====================================================================
-          섹션 8. 공식 학업이수 가이드 바로가기
-         ===================================================================== */}
-      <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="space-y-1">
-          <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-            8. 동국대학교 교육학과 공식 학업이수 가이드 및 학사 안내 바로가기
-          </h2>
-          <p className="text-xs text-slate-500">
-            입학연도별 교육과정 요람, 기본이수과목 상세표, 무시험검정 신청 일정은 반드시 공식 홈페이지에서 최종 대조해 주세요.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap gap-2 shrink-0">
-          <a
-            href={OFFICIAL_GUIDE_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold inline-flex items-center gap-1.5"
-          >
-            학업이수 가이드 <ExternalLink className="w-3.5 h-3.5" />
-          </a>
-        </div>
-      </section>
     </div>
   );
 }
