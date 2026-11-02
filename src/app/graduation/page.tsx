@@ -25,6 +25,7 @@ import {
   GraduationCap,
   AlertTriangle,
   CheckCircle2,
+  Check,
   Plus,
   Trash2,
   ExternalLink,
@@ -2285,30 +2286,57 @@ export default function GraduationPage() {
           )}
         </div>
 
-        {/* 확인 필요 항목 요약 */}
+        {/* 현재 충족 졸업·교직 요건 요약 */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-              <Info className="w-5 h-5 text-amber-600" />
-              7-2. 요람 · 학사운영실 확인 필요 항목 ({audit.needsReviewItems.length}건)
+              <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              7-2. 현재 충족 졸업·교직 요건 ({audit.fulfilledItems.length}건)
             </h2>
+            {audit.fulfilledItems.length > 0 && (
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold">
+                {audit.fulfilledItems.length}건 완료
+              </span>
+            )}
           </div>
 
-          {audit.needsReviewItems.length === 0 ? (
+          {audit.fulfilledItems.length === 0 ? (
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 text-xs">
-              현재 별도로 확인이 필요한 불확실 항목이 없습니다.
+              현재 충족된 졸업·교직 요건이 없습니다. 학점 및 이수 내역을 입력해 주세요.
             </div>
           ) : (
             <div className="space-y-2 text-xs">
-              {audit.needsReviewItems.map((rev) => (
+              {audit.fulfilledItems.map((f) => (
                 <div
-                  key={rev.id}
-                  className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-1"
+                  key={f.id}
+                  className="p-3.5 rounded-xl bg-emerald-50/70 border border-emerald-200 space-y-0.5"
                 >
-                  <p className="font-extrabold text-amber-950">{rev.title}</p>
-                  <p className="text-amber-900 leading-relaxed">{rev.detail}</p>
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-emerald-950 flex items-center gap-1.5">
+                      <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      {f.title}
+                    </span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white text-emerald-700 border border-emerald-100">
+                      {f.category}
+                    </span>
+                  </div>
+                  <p className="text-emerald-900">{f.detail}</p>
                 </div>
               ))}
+            </div>
+          )}
+
+          {audit.needsReviewItems.length > 0 && (
+            <div className="mt-3 p-3 rounded-xl bg-amber-50/80 border border-amber-200 text-xs text-amber-900 space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-amber-950">
+                <Info className="w-4 h-4 text-amber-600 shrink-0" />
+                요람 · 학사운영실 별도 확인 권장 ({audit.needsReviewItems.length}건)
+              </div>
+              <div className="space-y-1 text-[11px] text-amber-800">
+                {audit.needsReviewItems.map((rev) => (
+                  <p key={rev.id}>• {rev.title}: {rev.detail}</p>
+                ))}
+              </div>
             </div>
           )}
         </div>

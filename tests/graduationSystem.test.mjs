@@ -879,3 +879,44 @@ test("18. [학문기초 이수 학점 수동 보정 및 공통교양·학문기�
   assert.equal(liberalCardAfter.status, "fulfilled");
   assert.match(liberalCardAfter.helperText, /학문기초 6\/6학점/);
 });
+
+test("19. [교직이론 미충족 항목 제외 및 7-2 현재 충족 졸업·교직 요건 생성 검증] 교직이론 부족 조건은 미충족에서 제외되고 충족된 항목은 fulfilledItems에 정확히 집계된다", () => {
+  const student = createEmptyStudentProgress("student-fulfilled-test", {
+    id: "student-fulfilled-test",
+    name: "김충족",
+    studentIdOrYear: "2023학년도 신입학 (23학번)",
+  });
+
+  // 1) 초기 상태: 교직이론 미충족 항목이 unmetItems에 없어야 함
+  const initialAudit = calculateGraduationAudit(student, OFFICIAL_GRADUATION_CATALOG);
+  const theoryUnmet = initialAudit.unmetItems.find((u) => u.id === "unmet-teaching-theory");
+  assert.equal(theoryUnmet, undefined, "교직이론 부족 조건은 교육학과 특성에 맞춰 미충족 항목에서 제외되어야 함");
+
+  // 2) 교양 학점(35) 충족 + 봉사 60시간 충족 + 졸업시험 합격 설정
+  student.credits["교양 이수 학점"] = {
+    completedValue: 35,
+    userCustomTarget: null,
+    lastUpdated: new Date().toISOString(),
+  };
+  student.volunteeringState = {
+    eduVolunteering1Completed: true,
+    eduVolunteering2Completed: true,
+    confirmationSubmitted: true,
+  };
+  student.teachingChecklist.graduationExamCompleted = true;
+
+  const audit = calculateGraduationAudit(student, OFFICIAL_GRADUATION_CATALOG);
+  
+  // fulfilledItems 확인
+  const fulfilledIds = audit.fulfilledItems.map((f) => f.id);
+  assert.ok(fulfilledIds.includes("fulfilled-common-liberal"), "공통교양 및 학문기초 학점 충족 포함");
+  assert.ok(fulfilledIds.includes("fulfilled-volunteering"), "교육봉사활동 요건 충족 포함");
+  assert.ok(fulfilledIds.includes("fulfilled-thesis"), "교육학과 졸업시험 합격 완료 포함");
+
+  // unmetItems에서 해당 항목들은 빠져 있어야 함
+  const unmetIds = audit.unmetItems.map((u) => u.id);
+  assert.ok(!unmetIds.includes("unmet-common-liberal"), "충족된 공통교양은 미충족 목록에 없어야 함");
+  assert.ok(!unmetIds.includes("unmet-volunteering"), "충족된 봉사활동은 미충족 목록에 없어야 함");
+  assert.ok(!unmetIds.includes("unmet-thesis"), "합격한 졸업시험은 미충족 목록에 없어야 함");
+});
+
