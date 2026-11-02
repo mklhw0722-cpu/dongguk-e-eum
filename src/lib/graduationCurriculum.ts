@@ -1805,6 +1805,7 @@ export function calculateGraduationAudit(
   const legacyTotal = Number(progress.credits["졸업 이수 학점"]?.completedValue ?? 0);
   const legacyMajor = Number(progress.credits["전공 이수 학점"]?.completedValue ?? 0);
   const legacyLiberal = Number(progress.credits["교양 이수 학점"]?.completedValue ?? 0);
+  const legacyAcademicFoundation = Number(progress.credits["학문기초 이수 학점"]?.completedValue ?? 0);
   const legacyDouble = Number(progress.credits["복수전공 이수 학점"]?.completedValue ?? 0);
   const legacyTeaching = Number(progress.credits["교직 이수 학점"]?.completedValue ?? 0);
 
@@ -1817,7 +1818,9 @@ export function calculateGraduationAudit(
   const commonLiberalArtsEarnedCredits = hasCourses
     ? Math.max(courseCommonLiberalCredits, legacyLiberal)
     : legacyLiberal;
-  const academicFoundationEarnedCredits = courseAcademicFoundationCredits;
+  const academicFoundationEarnedCredits = hasCourses
+    ? Math.max(courseAcademicFoundationCredits, legacyAcademicFoundation)
+    : legacyAcademicFoundation;
 
   // 교직이론 대체인정 및 직접이수 평가
   const recognizedSubjectCount = recognizedTheoryKeys.size;
