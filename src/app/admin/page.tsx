@@ -72,11 +72,29 @@ export default function AdminPage() {
     authUserProfile,
     graduationCatalog,
     updateGraduationCatalogByAdmin,
+    approvedProfessors,
+    handleAdminAssignAdvisor,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
     "approvals" | "users" | "rooms_posts" | "reports" | "graduation_rules"
   >("approvals");
+
+  const [updatingAdvisorStudentId, setUpdatingAdvisorStudentId] = useState<string | null>(null);
+  const [advisorFeedback, setAdvisorFeedback] = useState<string | null>(null);
+
+  const handleAssignAdvisor = async (studentId: string, professorId: string | null) => {
+    try {
+      setUpdatingAdvisorStudentId(studentId);
+      await handleAdminAssignAdvisor(studentId, professorId);
+      setAdvisorFeedback("지도교수 배정 정보가 성공적으로 반영되었습니다.");
+      setTimeout(() => setAdvisorFeedback(null), 3000);
+    } catch (e: any) {
+      alert(`지도교수 변경 중 오류가 발생했습니다: ${e?.message || e}`);
+    } finally {
+      setUpdatingAdvisorStudentId(null);
+    }
+  };
 
   // 공통 졸업요건 관리자 편집 상태
   const [selectedCohortId, setSelectedCohortId] =
@@ -606,6 +624,13 @@ export default function AdminPage() {
       {/* 탭 2: 사용자 역할 관리 */}
       {activeTab === "users" && (
         <div className="space-y-4">
+          {advisorFeedback && (
+            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-bold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{advisorFeedback}</span>
+            </div>
+          )}
+
           {/* 역할별 필터 탭 (전체, 재학생, 졸업생, 교수진, 관리자) */}
           <div className="flex items-center gap-1.5 flex-wrap">
             {[
@@ -685,65 +710,128 @@ export default function AdminPage() {
                   return (
                     <div
                       key={u.id}
-                      className="p-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition"
+                      className="p-4 flex flex-col gap-3 hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition"
                     >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
-                            {u.name}
-                          </span>
-                          <span className="px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-xs font-bold">
-                            {ROLE_LABELS[u.role] || "구성원"}
-                          </span>
-                          {st && (
-                            <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${st.style}`}>
-                              {st.label}
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
+                              {u.name}
                             </span>
-                          )}
-                          <span className="text-xs text-slate-400">
-                            {u.studentIdOrYear}
-                          </span>
+                            <span className="px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-xs font-bold">
+                              {ROLE_LABELS[u.role] || "구성원"}
+                            </span>
+                            {st && (
+                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${st.style}`}>
+                                {st.label}
+                              </span>
+                            )}
+                            <span className="text-xs text-slate-400">
+                              {u.studentIdOrYear}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+                            <span>{u.email}</span>
+                            <span>·</span>
+                            <span className="text-[11px] text-slate-400">UID: {u.id}</span>
+                            {u.joinedAt && (
+                              <>
+                                <span>·</span>
+                                <span className="text-[11px] text-slate-400">가입일: {u.joinedAt}</span>
+                              </>
+                            )}
+                          </p>
                         </div>
-                        <p className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
-                          <span>{u.email}</span>
-                          <span>·</span>
-                          <span className="text-[11px] text-slate-400">UID: {u.id}</span>
-                          {u.joinedAt && (
-                            <>
-                              <span>·</span>
-                              <span className="text-[11px] text-slate-400">가입일: {u.joinedAt}</span>
-                            </>
+
+                        <div className="flex items-center gap-1.5 flex-wrap shrink-0 pt-1 lg:pt-0">
+                          <span className="text-xs text-slate-400 mr-1 font-semibold">역할 변경:</span>
+                          {(["student", "alumni", "professor", "admin"] as UserRole[]).map(
+                            (roleOption) => (
+                              <button
+                                key={roleOption}
+                                type="button"
+                                disabled={isUpdating}
+                                onClick={() =>
+                                  handleUpdateRole(
+                                    u.id,
+                                    roleOption,
+                                    u.approvalStatus,
+                                    (u as any).adminComment
+                                  )
+                                }
+                                className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition disabled:opacity-50 ${
+                                  u.role === roleOption
+                                    ? "bg-orange-600 text-white shadow-xs"
+                                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                                }`}
+                              >
+                                {ROLE_LABELS[roleOption]}
+                              </button>
+                            )
                           )}
-                        </p>
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5 flex-wrap shrink-0 pt-1 lg:pt-0">
-                        <span className="text-xs text-slate-400 mr-1 font-semibold">역할 변경:</span>
-                        {(["student", "alumni", "professor", "admin"] as UserRole[]).map(
-                          (roleOption) => (
-                            <button
-                              key={roleOption}
-                              type="button"
-                              disabled={isUpdating}
-                              onClick={() =>
-                                handleUpdateRole(
-                                  u.id,
-                                  roleOption,
-                                  u.approvalStatus,
-                                  (u as any).adminComment
-                                )
+                      {/* 재학생 전용: 지도교수 배정 및 변경 관리 */}
+                      {u.role === "student" && (
+                        <div className="w-full mt-1 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-orange-50/50 dark:bg-orange-950/20 px-3 py-2 rounded-xl">
+                          <div className="flex items-center gap-2 text-xs flex-wrap">
+                            <GraduationCap className="w-4 h-4 text-orange-600 shrink-0" />
+                            <span className="font-bold text-slate-700 dark:text-slate-300">
+                              배정된 지도교수:
+                            </span>
+                            {(() => {
+                              const assignedProf = approvedProfessors.find(
+                                (p) => p.id === u.advisorProfessorId || (p as any).uid === u.advisorProfessorId
+                              );
+                              if (assignedProf) {
+                                return (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-900/60 text-orange-800 dark:text-orange-200 font-extrabold text-xs">
+                                    {assignedProf.name}
+                                    {assignedProf.specialty ? ` (${assignedProf.specialty})` : ""}
+                                  </span>
+                                );
                               }
-                              className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition disabled:opacity-50 ${
-                                u.role === roleOption
-                                  ? "bg-orange-600 text-white shadow-xs"
-                                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
-                              }`}
+                              if (u.advisorProfessorId) {
+                                return (
+                                  <span className="px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 font-semibold text-[11px]">
+                                    계정 상태 확인 필요 (UID: {u.advisorProfessorId})
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span className="text-slate-400 font-medium">
+                                  지도교수 미등록
+                                </span>
+                              );
+                            })()}
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <label className="text-[11px] font-bold text-slate-500 shrink-0">
+                              지도교수 지정:
+                            </label>
+                            <select
+                              value={u.advisorProfessorId || ""}
+                              disabled={updatingAdvisorStudentId === u.id}
+                              onChange={(e) => handleAssignAdvisor(u.id, e.target.value || null)}
+                              className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-orange-500 disabled:opacity-50"
                             >
-                              {ROLE_LABELS[roleOption]}
-                            </button>
-                          )
-                        )}
-                      </div>
+                              <option value="">-- 미등록 (해제) --</option>
+                              {approvedProfessors.map((prof) => (
+                                <option key={prof.id} value={prof.id}>
+                                  {prof.name} {prof.specialty ? `(${prof.specialty})` : "(교육학과)"}
+                                </option>
+                              ))}
+                            </select>
+                            {updatingAdvisorStudentId === u.id && (
+                              <span className="text-[11px] text-orange-600 animate-pulse font-bold">
+                                저장 중...
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 });

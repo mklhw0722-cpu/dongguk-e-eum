@@ -11,6 +11,7 @@ import {
   StudentProgress,
   ApprovalRequest,
   ReportItem,
+  ConsultationRequest,
 } from "@/types";
 import {
   MOCK_USERS,
@@ -25,6 +26,7 @@ import {
   MOCK_STUDENT_PROGRESS,
   MOCK_APPROVAL_REQUESTS,
   MOCK_REPORTS,
+  MOCK_CONSULTATIONS,
 } from "@/data/mockData";
 
 /**
@@ -48,6 +50,7 @@ export interface PlatformDataState {
   studentProgress: StudentProgress;
   approvalRequests: ApprovalRequest[];
   reports: ReportItem[];
+  consultations: ConsultationRequest[];
 }
 
 export function getInitialDataState(): PlatformDataState {
@@ -64,6 +67,7 @@ export function getInitialDataState(): PlatformDataState {
     studentProgress: MOCK_STUDENT_PROGRESS,
     approvalRequests: MOCK_APPROVAL_REQUESTS,
     reports: MOCK_REPORTS,
+    consultations: MOCK_CONSULTATIONS,
   };
 }
 
