@@ -1636,8 +1636,18 @@ export function calculateGraduationAudit(
     return Math.min(100, Math.round((earned / target) * 100));
   };
 
+  const effectiveCommonLiberalCredits =
+    applicable.commonLiberalArtsTargetCredits !== null
+      ? Math.min(applicable.commonLiberalArtsTargetCredits, commonLiberalArtsEarnedCredits)
+      : commonLiberalArtsEarnedCredits;
+
+  const effectiveAcademicFoundationCredits =
+    applicable.academicFoundationTargetCredits !== null
+      ? Math.min(applicable.academicFoundationTargetCredits, academicFoundationEarnedCredits)
+      : academicFoundationEarnedCredits;
+
   const totalLiberalArtsEarned =
-    commonLiberalArtsEarnedCredits + academicFoundationEarnedCredits;
+    effectiveCommonLiberalCredits + effectiveAcademicFoundationCredits;
   const liberalArtsTarget =
     applicable.commonLiberalArtsTargetCredits !== null
       ? applicable.commonLiberalArtsTargetCredits + applicable.academicFoundationTargetCredits
@@ -1704,25 +1714,39 @@ export function calculateGraduationAudit(
     {
       id: "card-liberal",
       category: "교양 이수 학점",
-      title: "공통교양",
-      earnedValue: commonLiberalArtsEarnedCredits,
-      targetValue: applicable.commonLiberalArtsTargetCredits,
-      targetDisplay: applicable.commonLiberalArtsTargetCredits !== null ? `${applicable.commonLiberalArtsTargetCredits}학점` : applicable.commonLiberalArtsDisplay,
+      title: "공통교양 및 학문기초(외국어 6학점)",
+      earnedValue: totalLiberalArtsEarned,
+      targetValue: liberalArtsTarget,
+      targetDisplay:
+        liberalArtsTarget !== null
+          ? `총 ${liberalArtsTarget}학점 (공통교양 ${applicable.commonLiberalArtsTargetCredits} + 학문기초 ${applicable.academicFoundationTargetCredits})`
+          : `공통교양 ${applicable.commonLiberalArtsDisplay} + 학문기초 ${applicable.academicFoundationTargetCredits}학점`,
       unit: "학점",
-      percentage: makePercentage(commonLiberalArtsEarnedCredits, applicable.commonLiberalArtsTargetCredits, applicable.commonLiberalArtsStatus),
+      percentage: makePercentage(
+        totalLiberalArtsEarned,
+        liberalArtsTarget,
+        applicable.commonLiberalArtsStatus
+      ),
       status:
         applicable.commonLiberalArtsStatus === "needs_admin_review"
           ? "needs_review"
-          : applicable.commonLiberalArtsTargetCredits !== null && commonLiberalArtsEarnedCredits >= applicable.commonLiberalArtsTargetCredits
+          : liberalArtsTarget !== null &&
+            totalLiberalArtsEarned >= liberalArtsTarget &&
+            academicFoundationEarnedCredits >= applicable.academicFoundationTargetCredits
           ? "fulfilled"
           : "in_progress",
       statusBadgeText:
         applicable.commonLiberalArtsStatus === "needs_admin_review"
           ? "요람 세부기준 확인 필요"
-          : applicable.commonLiberalArtsTargetCredits !== null && commonLiberalArtsEarnedCredits >= applicable.commonLiberalArtsTargetCredits
+          : liberalArtsTarget !== null &&
+            totalLiberalArtsEarned >= liberalArtsTarget &&
+            academicFoundationEarnedCredits >= applicable.academicFoundationTargetCredits
           ? "기준 충족"
           : "이수 진행 중",
-      helperText: "",
+      helperText:
+        applicable.commonLiberalArtsTargetCredits !== null
+          ? `공통교양 ${effectiveCommonLiberalCredits}/${applicable.commonLiberalArtsTargetCredits}학점 · 학문기초 ${academicFoundationEarnedCredits}/${applicable.academicFoundationTargetCredits}학점`
+          : `공통교양 ${commonLiberalArtsEarnedCredits}학점 · 학문기초 ${academicFoundationEarnedCredits}/${applicable.academicFoundationTargetCredits}학점`,
       sourceUrl: cohortRule.sourceUrl,
       lastVerifiedAt: cohortRule.lastVerifiedAt,
     },
