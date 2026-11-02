@@ -711,24 +711,6 @@ export default function GraduationPage() {
           </div>
         </div>
 
-        {/* 사범대 일반 전공학점 vs 교육학과 별도 전공학점 비교 안내 박스 */}
-        <div className="p-4 rounded-2xl bg-amber-50/70 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/70 text-xs space-y-1.5">
-          <p className="font-extrabold text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
-            <Info className="w-4 h-4 text-amber-600 shrink-0" />
-            사범대학 일반 기준 vs 교육학과 별도 전공학점 기준 구분 안내
-          </p>
-          <p className="text-amber-900 dark:text-amber-300 leading-relaxed">
-            • <strong>사범대학 일반 학과 기준 ({cohortRule.cohortLabel})</strong>: 단일전공{" "}
-            <strong>{cohortRule.generalSingleMajorCredits}학점</strong> / 복수전공 이수 시 주전공{" "}
-            <strong>{cohortRule.generalDoublePrimaryCredits}학점</strong>
-            <br />• <strong>교육학과 별도 적용 기준 (현재 적용 중)</strong>: 교육학과는 전공과목으로 교직이론(12학점)을 대체이수하므로 대체이수한 12학점만큼 전공학점을 추가 이수하여{" "}
-            <strong className="underline">
-              단일전공 {cohortRule.eduSingleMajorCredits}학점, 복수전공 이수 시 주전공{" "}
-              {cohortRule.eduDoublePrimaryCredits}학점
-            </strong>
-            을 이수해야 합니다 (교과교육영역 9학점 포함).
-          </p>
-        </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
