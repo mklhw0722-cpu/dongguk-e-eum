@@ -1545,7 +1545,11 @@ export default function GraduationPage() {
           <div className="flex items-center justify-between gap-2">
             <div>
               <h2 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                <Clock className="w-5 h-5 text-orange-600" />
+                {audit.volunteeringAudit.isFulfilled ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                ) : (
+                  <Clock className="w-5 h-5 text-orange-600 shrink-0" />
+                )}
                 5-1. 교육봉사활동 관리 (총 60시간 · 2학점)
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
@@ -1553,13 +1557,27 @@ export default function GraduationPage() {
                 <code>ERC0023 교육봉사활동2</code>(1학점/30시간) 및 확인서 제출
               </p>
             </div>
-            <span className="px-3 py-1 rounded-xl bg-orange-50 text-orange-700 text-xs font-extrabold">
-              누적 {audit.volunteeringAudit.effectiveHours} / 60시간
+            <span
+              className={`px-3 py-1 rounded-xl text-xs font-extrabold transition ${
+                audit.volunteeringAudit.isFulfilled
+                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                  : "bg-orange-50 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300"
+              }`}
+            >
+              {audit.volunteeringAudit.isFulfilled
+                ? `이수 완료 (${audit.volunteeringAudit.effectiveHours} / 60시간)`
+                : `누적 ${audit.volunteeringAudit.effectiveHours} / 60시간`}
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
-            <label className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-2 cursor-pointer">
+            <label
+              className={`p-3 rounded-xl border flex items-center gap-2 cursor-pointer transition ${
+                vs.eduVolunteering1Completed
+                  ? "border-emerald-300 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30"
+                  : "border-slate-200 dark:border-slate-800"
+              }`}
+            >
               <input
                 type="checkbox"
                 checked={vs.eduVolunteering1Completed}
@@ -1578,7 +1596,13 @@ export default function GraduationPage() {
               </div>
             </label>
 
-            <label className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-2 cursor-pointer">
+            <label
+              className={`p-3 rounded-xl border flex items-center gap-2 cursor-pointer transition ${
+                vs.eduVolunteering2Completed
+                  ? "border-emerald-300 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30"
+                  : "border-slate-200 dark:border-slate-800"
+              }`}
+            >
               <input
                 type="checkbox"
                 checked={vs.eduVolunteering2Completed}
@@ -1597,7 +1621,13 @@ export default function GraduationPage() {
               </div>
             </label>
 
-            <label className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-2 cursor-pointer">
+            <label
+              className={`p-3 rounded-xl border flex items-center gap-2 cursor-pointer transition ${
+                vs.confirmationSubmitted
+                  ? "border-emerald-300 bg-emerald-50/50 dark:border-emerald-800 dark:bg-emerald-950/30"
+                  : "border-slate-200 dark:border-slate-800"
+              }`}
+            >
               <input
                 type="checkbox"
                 checked={vs.confirmationSubmitted}
@@ -1702,7 +1732,11 @@ export default function GraduationPage() {
           <div className="flex items-center justify-between gap-2">
             <div>
               <h2 className="text-base font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
-                <FileCheck2 className="w-5 h-5 text-orange-600" />
+                {audit.practicumEvaluation.isCombinationValid ? (
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                ) : (
+                  <FileCheck2 className="w-5 h-5 text-orange-600 shrink-0" />
+                )}
                 5-2. 학교현장실습 이수 및 조합 검증 (최소 2학점)
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
