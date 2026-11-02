@@ -623,9 +623,6 @@ export default function GraduationPage() {
                       {TEACHING_STATUS_LABELS.double_teaching}
                     </option>
                   )}
-                  <option value="non_teaching">
-                    {TEACHING_STATUS_LABELS.non_teaching}
-                  </option>
                 </select>
               </div>
             </div>
