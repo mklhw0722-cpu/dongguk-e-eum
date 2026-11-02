@@ -1140,22 +1140,22 @@ export default function GraduationPage() {
           onSubmit={handleCourseFormSubmit}
           className="p-4 sm:p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-4 text-xs"
         >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <span className="font-extrabold text-sm text-slate-900 dark:text-white">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <span className="font-extrabold text-sm text-slate-900 dark:text-white shrink-0">
               {editingCourseId ? "등록 강좌 수정하기" : "새 이수 강좌 추가하기"}
             </span>
 
-            <div className="flex items-center gap-2">
-              <label className="text-slate-500 font-bold whitespace-nowrap">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full md:w-auto min-w-0">
+              <label className="text-slate-500 font-bold whitespace-nowrap shrink-0">
                 공식 강좌 빠른 채우기:
               </label>
               <select
                 value=""
                 onChange={(e) => handleSelectPresetCourse(e.target.value)}
-                className="px-3 py-1.5 rounded-xl border border-orange-300 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-200"
+                className="w-full sm:w-auto max-w-full sm:max-w-md px-3 py-1.5 rounded-xl border border-orange-300 bg-white dark:bg-slate-900 text-xs font-semibold text-slate-800 dark:text-slate-200 truncate"
               >
                 <option value="">
-                  -- 교육학과 전공필수·전공선택·교직소양·실습 강좌 선택 --
+                  -- 공식 추천 강좌 선택 --
                 </option>
                 <optgroup label="전공필수 (교육학과 - 12과목 / 총 36학점)">
                   {OFFICIAL_COURSE_PRESETS.filter(
