@@ -1271,7 +1271,7 @@ export default function HomePage() {
                     {selectedProfessorForConsultation.name}
                   </span>
                   <span className="text-xs text-orange-700 dark:text-orange-300 font-bold">
-                    {selectedProfessorForConsultation.studentIdOrYear || "교육학과 전임교원"}
+                    {selectedProfessorForConsultation.specialty || "교육학과 전임교원"}
                   </span>
                 </div>
                 <p className="text-xs text-slate-600 dark:text-slate-400">
