@@ -117,9 +117,6 @@ export default function EditableCalendar({
   );
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
-  // 학사 공지 함께 보기 토글
-  const [includeOfficial, setIncludeOfficial] = useState<boolean>(true);
-
   // 사용자 일정 상태
   const [userEvents, setUserEvents] = useState<CalendarEvent[]>([]);
 
@@ -200,28 +197,8 @@ export default function EditableCalendar({
     }
   };
 
-  // 공식 공지사항에서 날짜가 있는 항목을 캘린더 이벤트로 변환
-  const officialEvents: CalendarEvent[] = useMemo(() => {
-    if (!includeOfficial) return [];
-    return officialNotices
-      .filter((n) => Boolean(n.eventStartDate))
-      .map((n) => ({
-        id: `official-${n.id}`,
-        title: n.title,
-        date: n.eventStartDate || "",
-        endDate: n.eventEndDate,
-        isAllDay: true,
-        category: "official" as EventCategory,
-        isOfficial: true,
-        location: n.organization || "동국대학교",
-        memo: "공식 홈페이지 학사 공지사항 연동 일정",
-      }));
-  }, [officialNotices, includeOfficial]);
-
-  // 전체 이벤트 통합
-  const allEvents = useMemo(() => {
-    return [...userEvents, ...officialEvents];
-  }, [userEvents, officialEvents]);
+  // 전체 이벤트 통합 (사용자가 직접 등록한 일정만 관리)
+  const allEvents = userEvents;
 
   // 날짜별 이벤트 매핑 (빠른 조회를 위해)
   const eventsByDate = useMemo(() => {
@@ -331,10 +308,7 @@ export default function EditableCalendar({
 
   // 일정 수정 모달 열기
   const handleOpenEditModal = (event: CalendarEvent) => {
-    if (event.isOfficial) {
-      alert("학교 공식 학사공지 일정은 수정할 수 없습니다.");
-      return;
-    }
+    
     setEditingEventId(event.id);
     setFormTitle(event.title);
     setFormDate(event.date);
@@ -443,15 +417,7 @@ export default function EditableCalendar({
 
         {/* 상단 버튼들 */}
         <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
-          <label className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300 cursor-pointer select-none px-2.5 py-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700">
-            <input
-              type="checkbox"
-              checked={includeOfficial}
-              onChange={(e) => setIncludeOfficial(e.target.checked)}
-              className="accent-orange-600 rounded"
-            />
-            <span>학사공지 포함</span>
-          </label>
+          
 
           <button
             type="button"
@@ -686,30 +652,22 @@ export default function EditableCalendar({
 
                   {/* 수정 / 삭제 액션 버튼 */}
                   <div className="flex items-center gap-1 shrink-0 pt-0.5">
-                    {ev.isOfficial ? (
-                      <span className="px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-[10px] font-bold text-slate-500">
-                        공식 공지
-                      </span>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => handleOpenEditModal(ev)}
-                          title="일정 수정"
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-slate-800 transition"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteEvent(ev.id, e)}
-                          title="일정 삭제"
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 transition"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditModal(ev)}
+                      title="일정 수정"
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-slate-800 transition"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteEvent(ev.id, e)}
+                      title="일정 삭제"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-800 transition"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               );

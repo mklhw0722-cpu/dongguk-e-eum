@@ -74,103 +74,7 @@ export default function HomePage() {
   const recommendedAlumni = alumniProfiles.slice(0, 3);
 
   // 역할별 맞춤형 바로가기 구성
-  const roleShortcuts = {
-    student: [
-      {
-        title: "나의 졸업요건 자가점검",
-        desc: "전공·교양·복수전공 학점과 교육봉사 시간을 직접 기록하고 점검하세요.",
-        href: "/graduation",
-        icon: CheckSquare,
-        badge: "재학생 필수",
-      },
-      {
-        title: "진로·복수전공 공유방",
-        desc: "교직, HRD, 에듀테크 및 심리·경영·컴공 복수전공 선배 후기를 확인하세요.",
-        href: "/rooms",
-        icon: Compass,
-        badge: "정보 아카이브",
-      },
-      {
-        title: "졸업생 동문 멘토 찾기",
-        desc: "관심 직무에 재직 중인 교육학과 선배에게 1:1 대화나 멘토링을 요청하세요.",
-        href: "/alumni",
-        icon: Users,
-        badge: "동문 네트워크",
-      },
-    ],
-    alumni: [
-      {
-        title: "내 졸업생 프로필·멘토링 관리",
-        desc: `현재 도착한 멘토링 요청 ${mentoringRequests.length}건을 확인하고 직무 정보를 공유하세요.`,
-        href: "/alumni",
-        icon: Briefcase,
-        badge: "동문 전용",
-      },
-      {
-        title: "후배들과 진로·복전 경험 나누기",
-        desc: "내가 겪은 복수전공 팁과 취업 준비 과정을 공유방에 남겨주세요.",
-        href: "/rooms",
-        icon: Compass,
-        badge: "경험 공유",
-      },
-      {
-        title: "재학생과 1:1 / 그룹 대화",
-        desc: "멘토링 요청을 보낸 후배들과 실시간 대화창에서 소통하세요.",
-        href: "/chat",
-        icon: MessageSquare,
-        badge: "메신저",
-      },
-    ],
-    professor: [
-      {
-        title: "학생 검색 및 면담 대화 요청",
-        desc: "재학생·졸업생을 검색해 1:1 면담을 요청하거나 연구/수업 단체방을 개설하세요.",
-        href: "/chat",
-        icon: MessageSquare,
-        badge: "교수진 전용",
-      },
-      {
-        title: "진로 트랙별 공유방 참여",
-        desc: "학생들의 진로 고민 질문에 코멘트를 남기고 연구실 소식을 전하세요.",
-        href: "/rooms",
-        icon: Compass,
-        badge: "학업·진로 지도",
-      },
-      {
-        title: "학과 공지 및 학사 안내 확인",
-        desc: "학과 주요 행사와 교직·학사 공지 현황을 살펴보세요.",
-        href: "/notices",
-        icon: Megaphone,
-        badge: "학과 소식",
-      },
-    ],
-    admin: [
-      {
-        title: "신규 가입 승인 및 역할 관리",
-        desc: `현재 승인 대기 중인 가입 신청 ${
-          approvalRequests.filter((r) => r.status === "pending").length
-        }건을 검토하고 처리하세요.`,
-        href: "/admin",
-        icon: ShieldCheck,
-        badge: "관리자 전용",
-      },
-      {
-        title: "학과 공지사항 작성 및 고정",
-        desc: "새로운 교육학과 공지나 교직 안내를 등록하고 상단에 고정하세요.",
-        href: "/notices",
-        icon: Megaphone,
-        badge: "공지 관리",
-      },
-      {
-        title: "복수전공 공유방 개설·신고 관리",
-        desc: "새로운 복수전공 공유방을 추가하거나 신고된 게시글을 관리하세요.",
-        href: "/admin",
-        icon: UserCheck,
-        badge: "커뮤니티 운영",
-      },
-    ],
-  }[currentRole];
-
+  
   return (
     <div className="space-y-6">
       {/* 환영 배너 */}
@@ -190,76 +94,15 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="flex flex-wrap sm:flex-col gap-2 shrink-0">
-            <Link
-              href="/chat"
-              className="px-4 py-2.5 rounded-xl bg-white text-orange-700 font-bold text-xs sm:text-sm shadow-xs hover:bg-orange-50 transition inline-flex items-center justify-center gap-1.5"
-            >
-              <MessageSquare className="w-4 h-4" />
-              대화창 열기
-              {unreadConversations.length > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-orange-600 text-white text-[10px]">
-                  {unreadConversations.length}
-                </span>
-              )}
-            </Link>
-          </div>
+          
         </div>
       </section>
 
-      {/* 역할별 맞춤 바로가기 3종 */}
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-slate-100">
-            {ROLE_LABELS[currentRole]} 맞춤 바로가기
-          </h2>
-          <span className="text-xs text-slate-500">
-            현재 선택된 역할: {ROLE_LABELS[currentRole]}
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {roleShortcuts.map((item) => {
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.title}
-                href={item.href}
-                className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 hover:border-orange-400 transition flex flex-col justify-between shadow-xs"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/60 text-orange-600 flex items-center justify-center">
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <span className="px-2.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-[11px] font-bold">
-                      {item.badge}
-                    </span>
-                  </div>
-                  <h3 className="font-bold text-slate-900 dark:text-slate-100 text-sm sm:text-base mb-1 group-hover:text-orange-600 transition">
-                    {item.title}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                    {item.desc}
-                  </p>
-                </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-semibold text-orange-600">
-                  <span>바로 이동하기</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      </section>
-
+      
       {/* 중단 2단 그리드: 최근 학과 공지 & 읽지 않은 채팅 + 졸업요건 바로가기 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* 직접 일정 수정 가능한 캘린더 (기존 홈화면 공지란 대체) */}
-        <EditableCalendar
-          className="lg:col-span-7"
-          officialNotices={notices}
-        />
+        <EditableCalendar className="lg:col-span-7" />
 
         {/* 우측: 지도교수 & 읽지 않은 채팅 & 나의 졸업요건 확인 바로가기 */}
         <div className="lg:col-span-5 space-y-6">
