@@ -95,9 +95,30 @@ export default function ChatPage() {
     };
   }, []);
 
+  // 방금 사용자가 선택하거나 새로 생성한 대화방 ID 보존 (실시간 목록 동기화 지연 시 첫 번째 방으로 튕김 방지)
+  const newlySelectedConvIdRef = useRef<string | null>(null);
+
+  // URL query parameter (?convId=...) 지원
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const qConvId = new URLSearchParams(window.location.search).get("convId");
+      if (qConvId) {
+        newlySelectedConvIdRef.current = qConvId;
+        setActiveConvId(qConvId);
+      }
+    }
+  }, []);
+
   // 대화방 목록 변경 시 기본 활성 방 유지
   useEffect(() => {
-    if (conversations.length > 0 && !conversations.some((c) => c.id === activeConvId)) {
+    if (conversations.length === 0) return;
+    if (newlySelectedConvIdRef.current) {
+      if (conversations.some((c) => c.id === newlySelectedConvIdRef.current)) {
+        newlySelectedConvIdRef.current = null;
+      }
+      return;
+    }
+    if (!activeConvId || !conversations.some((c) => c.id === activeConvId)) {
       setActiveConvId(conversations[0].id);
     }
   }, [conversations, activeConvId]);
@@ -278,6 +299,7 @@ export default function ChatPage() {
         : "학과 구성원 1:1 대화";
     try {
       const convId = await startOrOpenDirectChat(targetUserId, tag);
+      newlySelectedConvIdRef.current = convId;
       setActiveConvId(convId);
       markConversationRead(convId);
       setModalMode(null);
@@ -303,6 +325,7 @@ export default function ChatPage() {
         selectedUserIds,
         groupCategory
       );
+      newlySelectedConvIdRef.current = convId;
       setActiveConvId(convId);
       setSelectedUserIds([]);
       setGroupTitle("");

@@ -1080,9 +1080,16 @@ export async function getOrCreateDirectChatInFirestore(
   const chatId = `direct_${uid1}_${uid2}`;
   const chatDocRef = doc(db, CHATS_COLLECTION, chatId);
 
-  const snap = await getDoc(chatDocRef);
-  if (snap.exists()) {
-    return chatId;
+  try {
+    const snap = await getDoc(chatDocRef);
+    if (snap.exists()) {
+      return chatId;
+    }
+  } catch (readErr) {
+    // Firestore 보안 규칙 상 아직 존재하지 않는 대화방(resource == null)에 getDoc을 시도하면
+    // permission-denied (Missing or insufficient permissions)가 반환될 수 있습니다.
+    // 이는 정상적인 신규 대화방 생성 흐름이므로 예외를 무시하고 생성을 계속 진행합니다.
+    console.info("기존 대화방 문서 없음 또는 조회 권한 예외(신규 대화방 개설 진행):", readErr);
   }
 
   const nowTime = new Date().toLocaleTimeString("ko-KR", {
@@ -1135,19 +1142,23 @@ export async function getOrCreateDirectChatInFirestore(
 
   await setDoc(chatDocRef, newChat);
 
-  // 초기 시스템 안내 메시지 생성
-  const initMsgRef = doc(collection(db, CHATS_COLLECTION, chatId, "messages"));
-  await setDoc(initMsgRef, {
-    id: initMsgRef.id,
-    chatId,
-    senderId: currentUser.id,
-    senderName: currentUser.name,
-    senderRole: currentUser.role,
-    content: `${currentUser.name}님이 ${targetUser.name}님과의 대화를 시작했습니다.`,
-    createdAt: nowTime,
-    timestamp: serverTimestamp(),
-    isSystemMessage: true,
-  });
+  // 초기 시스템 안내 메시지 생성 (실패하더라도 방 개설은 보장)
+  try {
+    const initMsgRef = doc(collection(db, CHATS_COLLECTION, chatId, "messages"));
+    await setDoc(initMsgRef, {
+      id: initMsgRef.id,
+      chatId,
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      senderRole: currentUser.role,
+      content: `${currentUser.name}님이 ${targetUser.name}님과의 대화를 시작했습니다.`,
+      createdAt: nowTime,
+      timestamp: serverTimestamp(),
+      isSystemMessage: true,
+    });
+  } catch (msgErr) {
+    console.warn("초기 시스템 안내 메시지 등록 경고(대화방은 정상 개설됨):", msgErr);
+  }
 
   return chatId;
 }
@@ -1223,18 +1234,22 @@ export async function createGroupChatInFirestore(
 
   await setDoc(chatDocRef, newChat);
 
-  const initMsgRef = doc(collection(db, CHATS_COLLECTION, chatId, "messages"));
-  await setDoc(initMsgRef, {
-    id: initMsgRef.id,
-    chatId,
-    senderId: currentUser.id,
-    senderName: currentUser.name,
-    senderRole: currentUser.role,
-    content: `${currentUser.name}님이 '${newChat.title}' 대화방을 만들었습니다.`,
-    createdAt: nowTime,
-    timestamp: serverTimestamp(),
-    isSystemMessage: true,
-  });
+  try {
+    const initMsgRef = doc(collection(db, CHATS_COLLECTION, chatId, "messages"));
+    await setDoc(initMsgRef, {
+      id: initMsgRef.id,
+      chatId,
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      senderRole: currentUser.role,
+      content: `${currentUser.name}님이 '${newChat.title}' 대화방을 만들었습니다.`,
+      createdAt: nowTime,
+      timestamp: serverTimestamp(),
+      isSystemMessage: true,
+    });
+  } catch (msgErr) {
+    console.warn("단체방 초기 안내 메시지 등록 경고(대화방은 정상 개설됨):", msgErr);
+  }
 
   return chatId;
 }
