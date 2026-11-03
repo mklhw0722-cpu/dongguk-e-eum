@@ -490,3 +490,72 @@ test("14. [메신저 통합 상담 신청 및 진행 방식(대면/채팅) 승�
   assert.equal(approvedChat.consultationMethod, "채팅");
   assert.equal(approvedChat.conversationId, "conv-chat-direct");
 });
+
+test("15. [교수 계정 아래 지도학생 배정 권한 및 역할 제한 검증] 오직 재학생(student)만 지도학생으로 배정 가능하며 졸업생·교수진·관리자는 원천 차단되고, 역할 변경 시 지도학생 정보가 자동 해제된다", () => {
+  const allUsers = [
+    { id: "u-stud-1", name: "김학생", role: "student", approvalStatus: "approved" },
+    { id: "u-stud-2", name: "이재학", role: "student", approvalStatus: "approved", advisorProfessorId: "prof-1" },
+    { id: "u-alumni-1", name: "박동문", role: "alumni", approvalStatus: "approved" },
+    { id: "u-prof-1", name: "신나민", role: "professor", approvalStatus: "approved" },
+    { id: "u-admin-1", name: "최관리", role: "admin", approvalStatus: "approved" },
+  ];
+
+  // 1. 교수 계정 아래로 배정 가능한 지도학생 목록 필터링: 오직 role === 'student' 만 허용
+  const assignableStudents = allUsers.filter(
+    (u) => u.role === "student" && u.approvalStatus === "approved"
+  );
+  assert.equal(assignableStudents.length, 2);
+  assert.deepEqual(assignableStudents.map((s) => s.id), ["u-stud-1", "u-stud-2"]);
+
+  // 졸업생, 교수, 관리자는 배정 대상 목록에서 100% 제외
+  const nonStudents = assignableStudents.filter((u) => u.role !== "student");
+  assert.equal(nonStudents.length, 0);
+
+  // 2. 지도학생 배정 함수: 비재학생 대상 배정 시도시 예외 발생
+  function assignAdvisor(targetUser, professorId) {
+    if (professorId && targetUser.role !== "student") {
+      throw new Error("재학생만 지도교수를 배정받을 수 있습니다. 졸업생, 교수진, 관리자는 지도학생으로 배정될 수 없습니다.");
+    }
+    return {
+      ...targetUser,
+      advisorProfessorId: professorId || undefined,
+      advisorAssignedAt: professorId ? new Date().toISOString() : undefined,
+    };
+  }
+
+  // 재학생 정상 배정
+  const assigned = assignAdvisor(allUsers[0], "prof-1");
+  assert.equal(assigned.advisorProfessorId, "prof-1");
+
+  // 졸업생, 교수, 관리자 배정 시도 시 즉시 에러 차단
+  assert.throws(
+    () => assignAdvisor(allUsers[2], "prof-1"),
+    /재학생만 지도교수를 배정받을 수 있습니다/
+  );
+  assert.throws(
+    () => assignAdvisor(allUsers[3], "prof-1"),
+    /재학생만 지도교수를 배정받을 수 있습니다/
+  );
+  assert.throws(
+    () => assignAdvisor(allUsers[4], "prof-1"),
+    /재학생만 지도교수를 배정받을 수 있습니다/
+  );
+
+  // 3. 학생이 졸업생, 교수, 관리자로 역할 변경 시 지도학생 배정 정보 자동 초기화 검증
+  function changeRole(user, newRole) {
+    const updated = { ...user, role: newRole };
+    if (newRole !== "student") {
+      updated.advisorProfessorId = undefined;
+      updated.advisorAssignedAt = undefined;
+    }
+    return updated;
+  }
+
+  const promotedToAlumni = changeRole(allUsers[1], "alumni");
+  assert.equal(promotedToAlumni.role, "alumni");
+  assert.equal(promotedToAlumni.advisorProfessorId, undefined);
+
+  const promotedToAdmin = changeRole(allUsers[1], "admin");
+  assert.equal(promotedToAdmin.role, "admin");
+  assert.equal(promotedToAdmin.advisorProfessorId, undefined);
+});

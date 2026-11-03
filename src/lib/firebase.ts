@@ -475,6 +475,11 @@ export async function updateUserApprovalStatusByAdmin(params: {
 
   if (params.role) {
     updateData.role = params.role;
+    // 재학생이 아닌 역할(졸업생, 교수진, 관리자)로 변경될 경우, 지도학생으로 남아있지 않도록 배정 정보 완전 제거
+    if (params.role !== "student") {
+      updateData.advisorProfessorId = "";
+      updateData.advisorAssignedAt = "";
+    }
   }
 
   await updateDoc(userRef, updateData);
@@ -1721,6 +1726,24 @@ export async function assignStudentAdvisorInFirestore(params: {
 
   const studentRef = doc(db, USERS_COLLECTION, params.studentUid);
   const nowIso = new Date().toISOString();
+
+  // 지도교수 배정 시 대상 계정이 재학생(student)인지 검증 (졸업생, 교수진, 관리자 배정 원천 방지)
+  if (params.advisorProfessorId) {
+    try {
+      const snap = await getDoc(studentRef);
+      if (snap.exists()) {
+        const udata = snap.data();
+        if (udata.role && udata.role !== "student") {
+          throw new Error("재학생만 지도교수를 배정받을 수 있습니다. (졸업생, 교수진, 관리자는 지도학생이 될 수 없습니다)");
+        }
+      }
+    } catch (checkErr: any) {
+      if (checkErr?.message?.includes("재학생만 지도교수")) {
+        throw checkErr;
+      }
+      console.warn("지도학생 대상 권한 검증 경고:", checkErr);
+    }
+  }
 
   await updateDoc(studentRef, {
     advisorProfessorId: params.advisorProfessorId || "",
