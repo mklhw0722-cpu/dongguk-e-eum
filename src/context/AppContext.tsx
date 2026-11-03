@@ -1148,12 +1148,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       adminComment,
       role,
     });
+
+    // 재학생이 아닌 역할(졸업생, 교수진, 관리자)로 변경된 경우 지도학생 배정 정보 로컬 즉시 초기화
+    if (role && role !== "student") {
+      setRealUsersForAdmin((prev) =>
+        prev.map((u) =>
+          u.id === targetUid
+            ? { ...u, role, advisorProfessorId: "", advisorAssignedAt: "" }
+            : u
+        )
+      );
+      setState((prev: PlatformDataState) => ({
+        ...prev,
+        users: prev.users.map((u: User) =>
+          u.id === targetUid
+            ? {
+                ...u,
+                role,
+                advisorProfessorId: undefined,
+                advisorAssignedAt: undefined,
+              }
+            : u
+        ),
+      }));
+    }
   };
 
   const handleAdminAssignAdvisor = async (
     studentId: string,
     professorId: string | null
   ) => {
+    // 지도학생 배정 대상 검증: 오직 재학생(student)만 가능 (졸업생, 교수진, 관리자 방지)
+    if (professorId) {
+      const targetUser =
+        realUsersForAdmin.find((u) => u.id === studentId) ||
+        state.users.find((u) => u.id === studentId);
+      if (targetUser && targetUser.role !== "student") {
+        throw new Error(
+          "재학생만 지도교수를 배정받을 수 있습니다. 졸업생, 교수진, 관리자는 지도학생으로 배정될 수 없습니다."
+        );
+      }
+    }
+
     if (isRealAuthActive && isFirestoreConnected) {
       await assignStudentAdvisorInFirestore({
         studentUid: studentId,
@@ -2976,7 +3012,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setState((prev) => ({
       ...prev,
       users: prev.users.map((u) =>
-        u.id === userId ? { ...u, role: newRole } : u
+        u.id === userId
+          ? {
+              ...u,
+              role: newRole,
+              ...(newRole !== "student"
+                ? { advisorProfessorId: undefined, advisorAssignedAt: undefined }
+                : {}),
+            }
+          : u
       ),
     }));
   };

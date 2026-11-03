@@ -85,9 +85,16 @@ export default function AdminPage() {
 
   const handleAssignAdvisor = async (studentId: string, professorId: string | null) => {
     try {
+      const target = (realUsersForAdmin.length > 0 ? realUsersForAdmin : users).find(
+        (u) => u.id === studentId
+      );
+      if (professorId && target && target.role !== "student") {
+        alert("재학생만 지도교수를 배정받을 수 있습니다. 졸업생, 교수진, 관리자는 지도학생으로 배정될 수 없습니다.");
+        return;
+      }
       setUpdatingAdvisorStudentId(studentId);
       await handleAdminAssignAdvisor(studentId, professorId);
-      setAdvisorFeedback("지도교수 배정 정보가 성공적으로 반영되었습니다.");
+      setAdvisorFeedback("지도교수-지도학생 배정 정보가 성공적으로 반영되었습니다.");
       setTimeout(() => setAdvisorFeedback(null), 3000);
     } catch (e: any) {
       alert(`지도교수 변경 중 오류가 발생했습니다: ${e?.message || e}`);
@@ -126,6 +133,20 @@ export default function AdminPage() {
         );
       } else {
         updateUserRoleByAdmin(targetUserId, newRole);
+      }
+
+      // 재학생이 아닌 역할(졸업생, 교수, 관리자)로 변경될 경우 기존 지도학생 배정 정보 자동 해제
+      if (newRole !== "student") {
+        const target = (realUsersForAdmin.length > 0 ? realUsersForAdmin : users).find(
+          (u) => u.id === targetUserId
+        );
+        if (target && target.advisorProfessorId) {
+          try {
+            await handleAdminAssignAdvisor(targetUserId, null);
+          } catch (e) {
+            console.warn("역할 변경 시 지도교수 해제 경고:", e);
+          }
+        }
       }
     } catch (err: any) {
       alert(`역할 변경 중 오류가 발생했습니다: ${err?.message || err}`);
@@ -830,6 +851,135 @@ export default function AdminPage() {
                               </span>
                             )}
                           </div>
+                        </div>
+                      )}
+
+                      {/* 교수진 전용: 교수 계정 아래 지도학생(재학생만) 배정 및 관리 */}
+                      {u.role === "professor" && (
+                        <div className="w-full mt-1 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-2.5 bg-emerald-50/50 dark:bg-emerald-950/20 px-3.5 py-3 rounded-xl">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                            <div className="flex items-center gap-2 text-xs flex-wrap">
+                              <GraduationCap className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span className="font-extrabold text-slate-800 dark:text-slate-200">
+                                배정된 지도학생 (재학생):
+                              </span>
+                              {(() => {
+                                const assignedStudents = targetList.filter(
+                                  (s) =>
+                                    s.role === "student" &&
+                                    (s.advisorProfessorId === u.id ||
+                                      (s as any).advisorProfessorId === (u as any).uid)
+                                );
+                                return (
+                                  <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-200 font-extrabold text-xs">
+                                    총 {assignedStudents.length}명
+                                  </span>
+                                );
+                              })()}
+                            </div>
+
+                            {/* 새 지도학생(재학생만) 배정 드롭다운 */}
+                            <div className="flex items-center gap-2 shrink-0">
+                              <label className="text-[11px] font-bold text-slate-600 dark:text-slate-300 shrink-0">
+                                + 지도학생 배정 (재학생만):
+                              </label>
+                              <select
+                                defaultValue=""
+                                disabled={updatingAdvisorStudentId !== null}
+                                onChange={(e) => {
+                                  const selectedStudentId = e.target.value;
+                                  if (selectedStudentId) {
+                                    handleAssignAdvisor(selectedStudentId, u.id);
+                                    e.target.value = "";
+                                  }
+                                }}
+                                className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
+                              >
+                                <option value="">-- 배정할 재학생 선택 --</option>
+                                {targetList
+                                  .filter(
+                                    (s) =>
+                                      s.role === "student" &&
+                                      s.id !== u.id &&
+                                      s.approvalStatus === "approved"
+                                  )
+                                  .map((student) => {
+                                    const isAlreadyAssignedToMe =
+                                      student.advisorProfessorId === u.id ||
+                                      (student as any).advisorProfessorId === (u as any).uid;
+                                    const otherAdvisor =
+                                      !isAlreadyAssignedToMe && student.advisorProfessorId
+                                        ? approvedProfessors.find(
+                                            (p) =>
+                                              p.id === student.advisorProfessorId ||
+                                              (p as any).uid === student.advisorProfessorId
+                                          )
+                                        : null;
+
+                                    return (
+                                      <option
+                                        key={student.id}
+                                        value={student.id}
+                                        disabled={isAlreadyAssignedToMe}
+                                      >
+                                        {student.name} ({student.studentIdOrYear || "재학생"})
+                                        {isAlreadyAssignedToMe
+                                          ? " [이미 배정됨]"
+                                          : otherAdvisor
+                                          ? ` [현재 지도: ${otherAdvisor.name} 교수]`
+                                          : " [미배정]"}
+                                      </option>
+                                    );
+                                  })}
+                              </select>
+                            </div>
+                          </div>
+
+                          {/* 배정된 지도학생 태그 목록 */}
+                          {(() => {
+                            const assignedStudents = targetList.filter(
+                              (s) =>
+                                s.role === "student" &&
+                                (s.advisorProfessorId === u.id ||
+                                  (s as any).advisorProfessorId === (u as any).uid)
+                            );
+
+                            if (assignedStudents.length === 0) {
+                              return (
+                                <p className="text-xs text-slate-400 font-medium pl-6">
+                                  현재 이 교수님 계정 아래로 배정된 지도학생이 없습니다. 위 드롭다운에서 재학생을 선택해 배정할 수 있습니다.
+                                </p>
+                              );
+                            }
+
+                            return (
+                              <div className="flex items-center gap-2 flex-wrap pl-6 pt-1">
+                                {assignedStudents.map((st) => (
+                                  <span
+                                    key={st.id}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white dark:bg-slate-900 border border-emerald-200 dark:border-emerald-800/80 text-slate-800 dark:text-slate-200 text-xs shadow-2xs font-bold"
+                                  >
+                                    <span className="text-emerald-600 dark:text-emerald-400">●</span>
+                                    <span>{st.name}</span>
+                                    {st.studentIdOrYear && (
+                                      <span className="text-[11px] text-slate-400 font-normal">
+                                        ({st.studentIdOrYear})
+                                      </span>
+                                    )}
+                                    <button
+                                      type="button"
+                                      disabled={updatingAdvisorStudentId === st.id}
+                                      onClick={() => handleAssignAdvisor(st.id, null)}
+                                      title="지도학생 배정 해제"
+                                      className="ml-1 p-0.5 rounded hover:bg-rose-50 dark:hover:bg-rose-950/50 text-slate-400 hover:text-rose-600 transition"
+                                    >
+                                      ✕
+                                    </button>
+                                  </span>
+                                ))}
+                              </div>
+                            );
+                          })()}
                         </div>
                       )}
                     </div>
