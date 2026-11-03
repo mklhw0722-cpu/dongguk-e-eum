@@ -1441,6 +1441,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     categoryTag = "1:1 대화"
   ): Promise<string> => {
     if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
+      // 1) 이미 구독 중인 Firestore 1:1 대화방 목록에 해당 상대가 있다면 불필요한 네트워크 호출 없이 즉시 재사용
+      const existingRoom = firestoreRooms.find(
+        (r) =>
+          !r.isGroup &&
+          r.participants.includes(currentUser.id) &&
+          r.participants.includes(targetUserId)
+      );
+      if (existingRoom) {
+        return existingRoom.id;
+      }
+
       let targetUser: any =
         approvedMembers.find((u) => u.id === targetUserId) ||
         realUsersForAdmin.find((u) => u.id === targetUserId);
