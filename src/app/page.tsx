@@ -497,8 +497,99 @@ export default function HomePage() {
           officialNotices={notices}
         />
 
-        {/* 우측: 읽지 않은 채팅 & 나의 졸업요건 확인 바로가기 */}
+        {/* 우측: 지도교수 & 읽지 않은 채팅 & 나의 졸업요건 확인 바로가기 */}
         <div className="lg:col-span-5 space-y-6">
+          {/* 학생 전용: 나의 지도교수 영역 */}
+          {(currentUser.role === "student" || currentRole === "student") && (
+            <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <GraduationCap className="w-5 h-5 text-orange-600" />
+                  <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
+                    나의 지도교수
+                  </h2>
+                </div>
+                <span className="text-xs text-slate-400 font-semibold">
+                  교육학과 학생 지도 시스템
+                </span>
+              </div>
+
+              {myAdvisorInfo.status === "assigned" && myAdvisorInfo.professor ? (
+                <div className="p-4 rounded-xl border border-orange-200 dark:border-orange-900/60 bg-gradient-to-r from-orange-50/50 via-white to-orange-50/30 dark:from-slate-800/60 dark:to-slate-800/30 flex flex-col gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl bg-orange-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
+                      {myAdvisorInfo.professor.avatarInitials || myAdvisorInfo.professor.name.slice(0, 2)}
+                    </div>
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-base font-black text-slate-900 dark:text-white">
+                          {myAdvisorInfo.professor.name}
+                        </span>
+                        <span className="text-xs font-bold text-orange-700 dark:text-orange-300">
+                          {myAdvisorInfo.professor.studentIdOrYear || "교육학과 전임교원"}
+                        </span>
+                        {((myAdvisorInfo.professor as any).id === "u-prof-1" || (myAdvisorInfo.professor as any).email?.includes("@sample.dgu.edu")) && (
+                          <span className="px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold">
+                            테스트 계정
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                        소속: 동국대학교 사범대학 교육학과
+                      </p>
+                      {myAdvisorInfo.professor.specialty && (
+                        <p className="text-xs text-slate-500 truncate">
+                          전문 분야: {myAdvisorInfo.professor.specialty}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-orange-100 dark:border-orange-900/30">
+                    <span
+                      className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+                        myAdvisorInfo.professor.consultationAvailable !== false
+                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                      }`}
+                    >
+                      {myAdvisorInfo.professor.consultationAvailable !== false
+                        ? "● 상담 가능"
+                        : "현재 상담 불가"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedProfessorForConsultation(myAdvisorInfo.professor);
+                        setConsultationModalOpen(true);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-xs transition"
+                    >
+                      상담 신청
+                    </button>
+                  </div>
+                </div>
+              ) : myAdvisorInfo.status === "invalid_status" ? (
+                <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
+                  <div>
+                    <p className="font-bold">지정된 지도교수 계정의 이용 상태를 확인할 수 없습니다.</p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                      교수 계정 권한이 변경되었거나 이용 정지 상태일 수 있습니다. 학과사무실(관리자)에 문의해 주세요.
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-5 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center space-y-1 bg-slate-50/50 dark:bg-slate-800/20">
+                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300">지도교수 미등록</p>
+                  <p className="text-xs text-slate-400">
+                    아직 배정된 지도교수님이 없습니다. 학과사무실 또는 관리자에게 지도교수 지정을 요청해 주세요.
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* 읽지 않은 채팅 */}
           <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs">
             <div className="flex items-center justify-between">
@@ -843,99 +934,6 @@ export default function HomePage() {
               </p>
               <p className="text-xs text-slate-400">
                 학생들이 교수 상담을 신청하면 이곳에 실시간으로 표시됩니다.
-              </p>
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* 학생 전용: 나의 지도교수 영역 */}
-      {(currentUser.role === "student" || currentRole === "student") && (
-        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <GraduationCap className="w-5 h-5 text-orange-600" />
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                나의 지도교수
-              </h2>
-            </div>
-            <span className="text-xs text-slate-400 font-semibold">
-              교육학과 학생 지도 시스템
-            </span>
-          </div>
-
-          {myAdvisorInfo.status === "assigned" && myAdvisorInfo.professor ? (
-            <div className="p-4 rounded-xl border border-orange-200 dark:border-orange-900/60 bg-gradient-to-r from-orange-50/50 via-white to-orange-50/30 dark:from-slate-800/60 dark:to-slate-800/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <div className="w-12 h-12 rounded-xl bg-orange-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
-                  {myAdvisorInfo.professor.avatarInitials || myAdvisorInfo.professor.name.slice(0, 2)}
-                </div>
-                <div className="space-y-0.5">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-base font-black text-slate-900 dark:text-white">
-                      {myAdvisorInfo.professor.name}
-                    </span>
-                    <span className="text-xs font-bold text-orange-700 dark:text-orange-300">
-                      {myAdvisorInfo.professor.studentIdOrYear || "교육학과 전임교원"}
-                    </span>
-                    {((myAdvisorInfo.professor as any).id === "u-prof-1" || (myAdvisorInfo.professor as any).email?.includes("@sample.dgu.edu")) && (
-                      <span className="px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold">
-                        테스트 계정
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                    소속: 동국대학교 사범대학 교육학과
-                  </p>
-                  {myAdvisorInfo.professor.specialty && (
-                    <p className="text-xs text-slate-500">
-                      전문 분야: {myAdvisorInfo.professor.specialty}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2.5 shrink-0 self-end sm:self-center">
-                <span
-                  className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                    myAdvisorInfo.professor.consultationAvailable !== false
-                      ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                      : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                  }`}
-                >
-                  {myAdvisorInfo.professor.consultationAvailable !== false
-                    ? "● 상담 가능"
-                    : "현재 상담 불가"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedProfessorForConsultation(myAdvisorInfo.professor);
-                    setConsultationModalOpen(true);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-xs transition"
-                >
-                  상담 신청
-                </button>
-              </div>
-            </div>
-          ) : myAdvisorInfo.status === "invalid_status" ? (
-            <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
-                <div>
-                  <p className="font-bold">지정된 지도교수 계정의 이용 상태를 확인할 수 없습니다.</p>
-                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                    교수 계정 권한이 변경되었거나 이용 정지 상태일 수 있습니다. 학과사무실(관리자)에 문의해 주세요.
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="p-6 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center space-y-1 bg-slate-50/50 dark:bg-slate-800/20">
-              <p className="text-sm font-bold text-slate-700 dark:text-slate-300">지도교수 미등록</p>
-              <p className="text-xs text-slate-400">
-                아직 배정된 지도교수님이 없습니다. 학과사무실 또는 관리자에게 지도교수 지정을 요청해 주세요.
               </p>
             </div>
           )}
