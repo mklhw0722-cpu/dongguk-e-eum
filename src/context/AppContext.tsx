@@ -184,10 +184,15 @@ interface AppContextValue extends PlatformDataState {
   handleUpdateConsultationStatus: (
     consultationId: string,
     status: ConsultationStatus,
-    rescheduleNote?: string
+    rescheduleNote?: string,
+    conversationId?: string,
+    consultationMethod?: "대면" | "채팅"
   ) => Promise<void>;
   handleCancelConsultation: (consultationId: string) => Promise<void>;
-  handleConnectConsultationChat: (consultation: ConsultationRequest) => Promise<string>;
+  handleConnectConsultationChat: (
+    consultation: ConsultationRequest,
+    customMethod?: "대면" | "채팅"
+  ) => Promise<string>;
 
   // 기능 A. 대화창 액션
   sendMessage: (conversationId: string, content: string) => Promise<void> | void;
@@ -1699,13 +1704,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleUpdateConsultationStatus = async (
     consultationId: string,
     status: ConsultationStatus,
-    rescheduleNote?: string
+    rescheduleNote?: string,
+    conversationId?: string,
+    consultationMethod?: "대면" | "채팅"
   ): Promise<void> => {
     if (isRealAuthActive && isFirestoreConnected) {
       await updateConsultationStatusInFirestore({
         consultationId,
         status,
         rescheduleNote,
+        conversationId,
+        consultationMethod,
       });
     }
 
@@ -1716,6 +1725,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             ...c,
             status,
             ...(rescheduleNote !== undefined ? { rescheduleNote } : {}),
+            ...(conversationId !== undefined ? { conversationId } : {}),
+            ...(consultationMethod !== undefined ? { consultationMethod } : {}),
             updatedAt: nowIso,
           }
         : c;
@@ -1752,7 +1763,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleConnectConsultationChat = async (
-    consultation: ConsultationRequest
+    consultation: ConsultationRequest,
+    customMethod?: "대면" | "채팅"
   ): Promise<string> => {
     const currentId = authUserProfile?.id || currentUser?.id;
     const targetUserId =
@@ -1760,15 +1772,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ? consultation.studentId
         : consultation.professorId;
 
-    const chatId = await startOrOpenDirectChat(targetUserId, "교수 상담");
+    const method = customMethod || consultation.consultationMethod;
+    const tag = method ? `교수 상담 (${method})` : "교수 상담";
+    const chatId = await startOrOpenDirectChat(targetUserId, tag);
 
-    if (consultation.id && consultation.conversationId !== chatId) {
+    if (consultation.id) {
       if (isRealAuthActive && isFirestoreConnected) {
         try {
           await updateConsultationStatusInFirestore({
             consultationId: consultation.id,
             status: consultation.status,
             conversationId: chatId,
+            ...(method ? { consultationMethod: method } : {}),
           });
         } catch (e) {
           console.warn("상담 문서 채팅방 ID 업데이트 경고:", e);
@@ -1776,7 +1791,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       const updater = (c: ConsultationRequest) =>
-        c.id === consultation.id ? { ...c, conversationId: chatId } : c;
+        c.id === consultation.id
+          ? {
+              ...c,
+              conversationId: chatId,
+              ...(method ? { consultationMethod: method } : {}),
+            }
+          : c;
 
       setState((prev: PlatformDataState) => ({
         ...prev,

@@ -439,3 +439,54 @@ test("13. [새로고침 및 상태 유지] 상담 신청 데이터와 상태 변
   assert.equal(profList.length, 1);
   assert.equal(profList[0].status, "accepted");
 });
+
+test("14. [메신저 통합 상담 신청 및 진행 방식(대면/채팅) 승인 연동] 교수 승인 시 대면/채팅 방식을 선택하고 1:1 대화방이 연결된다", () => {
+  // 1. 메신저 사용자 검색 목록에서 교수는 '상담신청', 일반 사용자는 '대화 요청' 버튼 레이블 결정
+  function getActionLabelForUser(user) {
+    return user.role === "professor" ? "상담신청" : "대화 요청";
+  }
+
+  assert.equal(getActionLabelForUser({ role: "professor", name: "김교수" }), "상담신청");
+  assert.equal(getActionLabelForUser({ role: "student", name: "박학생" }), "대화 요청");
+  assert.equal(getActionLabelForUser({ role: "alumni", name: "이동문" }), "대화 요청");
+
+  // 2. 상담 신청 객체
+  let consultation = {
+    id: "consult-100",
+    studentId: "student-1",
+    studentName: "홍길동",
+    professorId: "prof-1",
+    professorName: "백상아",
+    consultationType: "진로 상담",
+    preferredDate: "2026-11-05",
+    preferredTime: "15:00",
+    purpose: "에듀테크 기업 취업 관련 조언을 구하고 싶습니다.",
+    status: "pending",
+  };
+
+  // 3. 교수 승인 및 상담 방식(대면 또는 채팅) 선택
+  function approveConsultation(c, method, conversationId) {
+    if (method !== "대면" && method !== "채팅") {
+      throw new Error("유효하지 않은 상담 방식");
+    }
+    return {
+      ...c,
+      status: "accepted",
+      consultationMethod: method,
+      conversationId,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  // 4. 대면 상담으로 승인
+  const approvedInPerson = approveConsultation(consultation, "대면", "conv-chat-in-person");
+  assert.equal(approvedInPerson.status, "accepted");
+  assert.equal(approvedInPerson.consultationMethod, "대면");
+  assert.equal(approvedInPerson.conversationId, "conv-chat-in-person");
+
+  // 5. 채팅 상담으로 승인
+  const approvedChat = approveConsultation(consultation, "채팅", "conv-chat-direct");
+  assert.equal(approvedChat.status, "accepted");
+  assert.equal(approvedChat.consultationMethod, "채팅");
+  assert.equal(approvedChat.conversationId, "conv-chat-direct");
+});

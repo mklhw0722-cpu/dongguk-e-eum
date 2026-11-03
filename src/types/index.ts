@@ -95,6 +95,7 @@ export interface ConsultationRequest {
   professorId: string;
   professorName: string;
   consultationType: ConsultationType;
+  consultationMethod?: "대면" | "채팅"; // 교수 승인 시 선택하는 상담 진행 방식 (대면 / 채팅)
   preferredDate: string; // YYYY-MM-DD
   preferredTime: string; // HH:MM 또는 시간대
   purpose: string;

@@ -1833,6 +1833,7 @@ export async function updateConsultationStatusInFirestore(params: {
   status: ConsultationStatus;
   rescheduleNote?: string;
   conversationId?: string;
+  consultationMethod?: "대면" | "채팅";
 }): Promise<void> {
   const { db } = getFirebaseInstances();
   if (!db) {
@@ -1850,6 +1851,9 @@ export async function updateConsultationStatusInFirestore(params: {
   }
   if (params.conversationId !== undefined) {
     updateData.conversationId = params.conversationId;
+  }
+  if (params.consultationMethod !== undefined) {
+    updateData.consultationMethod = params.consultationMethod;
   }
 
   await updateDoc(docRef, updateData);

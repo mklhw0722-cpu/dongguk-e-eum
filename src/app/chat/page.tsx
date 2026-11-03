@@ -16,6 +16,11 @@ import {
   LogOut,
   AlertTriangle,
   RefreshCw,
+  GraduationCap,
+  Clock,
+  Calendar,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import {
   subscribeToChatMessages,
@@ -29,11 +34,48 @@ import {
   effectiveReadSeq,
   ReadStateRoom,
 } from "@/lib/chatReadReceipts";
-import { UserRole, User } from "@/types";
+import {
+  UserRole,
+  User,
+  ConsultationStatus,
+  ConsultationType,
+  ConsultationRequest,
+} from "@/types";
+
+const CONSULTATION_STATUS_BADGES: Record<
+  ConsultationStatus,
+  { label: string; style: string }
+> = {
+  pending: {
+    label: "신청 대기",
+    style: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800",
+  },
+  accepted: {
+    label: "상담 수락됨",
+    style: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800",
+  },
+  reschedule_requested: {
+    label: "일정 조정 요청",
+    style: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800",
+  },
+  rejected: {
+    label: "상담 거절됨",
+    style: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800",
+  },
+  completed: {
+    label: "상담 완료",
+    style: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700",
+  },
+  cancelled: {
+    label: "신청 취소됨",
+    style: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700",
+  },
+};
 
 export default function ChatPage() {
   const {
     currentUser,
+    currentRole,
     users,
     conversations,
     messages,
@@ -49,6 +91,11 @@ export default function ChatPage() {
     leaveChat,
     isRealAuthActive,
     authUserProfile,
+    consultations,
+    handleCreateConsultation,
+    handleUpdateConsultationStatus,
+    handleCancelConsultation,
+    handleConnectConsultationChat,
   } = useApp();
 
   const [activeConvId, setActiveConvId] = useState<string>(
@@ -77,6 +124,27 @@ export default function ChatPage() {
   const [groupTitle, setGroupTitle] = useState("");
   const [groupCategory, setGroupCategory] = useState("수업/스터디 모임");
 
+  // 상담 신청 모달 상태 (학생 -> 교수)
+  const [consultationModalOpen, setConsultationModalOpen] = useState(false);
+  const [selectedProfessorForConsultation, setSelectedProfessorForConsultation] =
+    useState<any>(null);
+  const [consultationType, setConsultationType] =
+    useState<ConsultationType>("학업 상담");
+  const [preferredDate, setPreferredDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [preferredTime, setPreferredTime] = useState("14:00");
+  const [consultationPurpose, setConsultationPurpose] = useState("");
+  const [isSubmittingConsultation, setIsSubmittingConsultation] = useState(false);
+
+  // 교수용: 승인 시 상담 방식 선택 상태 (상담 ID -> "대면" | "채팅")
+  const [approvalMethods, setApprovalMethods] = useState<{
+    [consultId: string]: "대면" | "채팅";
+  }>({});
+  const [isUpdatingConsultation, setIsUpdatingConsultation] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -98,16 +166,28 @@ export default function ChatPage() {
   // 방금 사용자가 선택하거나 새로 생성한 대화방 ID 보존 (실시간 목록 동기화 지연 시 첫 번째 방으로 튕김 방지)
   const newlySelectedConvIdRef = useRef<string | null>(null);
 
-  // URL query parameter (?convId=...) 지원
+  // URL query parameter (?convId=... 또는 ?id=..., ?consultProfessorId=...) 지원
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const qConvId = new URLSearchParams(window.location.search).get("convId");
+      const searchParams = new URLSearchParams(window.location.search);
+      const qConvId = searchParams.get("convId") || searchParams.get("id");
       if (qConvId) {
         newlySelectedConvIdRef.current = qConvId;
         setActiveConvId(qConvId);
       }
+
+      const profId = searchParams.get("consultProfessorId");
+      if (profId) {
+        const prof =
+          (approvedMembers || []).find((u) => u.id === profId) ||
+          users.find((u) => u.id === profId);
+        if (prof) {
+          setSelectedProfessorForConsultation(prof);
+          setConsultationModalOpen(true);
+        }
+      }
     }
-  }, []);
+  }, [approvedMembers, users]);
 
   // 대화방 목록 변경 시 기본 활성 방 유지
   useEffect(() => {
@@ -308,6 +388,116 @@ export default function ChatPage() {
     }
   };
 
+  // 학생용: 교수 상담 신청 제출
+  const handleSubmitConsultation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProfessorForConsultation) return;
+    if (!preferredDate.trim()) {
+      alert("희망 날짜를 선택해 주세요.");
+      return;
+    }
+    if (!preferredTime.trim()) {
+      alert("희망 시간대를 입력해 주세요 (예: 14:00 또는 수요일 오후).");
+      return;
+    }
+    if (!consultationPurpose.trim()) {
+      alert("상담 목적이나 질문 내용을 작성해 주세요.");
+      return;
+    }
+
+    try {
+      setIsSubmittingConsultation(true);
+      await handleCreateConsultation({
+        professorId: selectedProfessorForConsultation.id,
+        professorName: selectedProfessorForConsultation.name,
+        consultationType,
+        preferredDate: preferredDate.trim(),
+        preferredTime: preferredTime.trim(),
+        purpose: consultationPurpose.trim(),
+      });
+      setConsultationModalOpen(false);
+      setConsultationPurpose("");
+      alert(
+        `${selectedProfessorForConsultation.name} 교수님께 상담 신청서가 성공적으로 접수되었습니다!\n교수님이 승인하시면 바로 대화방이 시작됩니다.`
+      );
+    } catch (err: any) {
+      alert(`상담 신청 접수 중 오류가 발생했습니다: ${err?.message || err}`);
+    } finally {
+      setIsSubmittingConsultation(false);
+    }
+  };
+
+  // 학생용: 상담 신청 취소
+  const handleCancelStudentConsultation = async (consultationId: string) => {
+    if (!confirm("해당 교수 상담 신청을 취소하시겠습니까?")) return;
+    try {
+      await handleCancelConsultation(consultationId);
+      alert("상담 신청이 취소되었습니다.");
+    } catch (e: any) {
+      alert(`신청 취소 실패: ${e?.message || e}`);
+    }
+  };
+
+  // 교수용: 상담 승인 및 1:1 대화 시작 (상담 방식: 대면/채팅 선택값 적용)
+  const handleProfessorApprove = async (c: ConsultationRequest) => {
+    const method = approvalMethods[c.id] || "대면";
+    try {
+      setIsUpdatingConsultation(true);
+      // 1. 대화방 생성/조회 (태그에 상담 방식 반영)
+      const convId = await handleConnectConsultationChat(c, method);
+      // 2. 상태 승인(accepted)으로 업데이트
+      await handleUpdateConsultationStatus(
+        c.id,
+        "accepted",
+        undefined,
+        convId,
+        method
+      );
+      // 3. 1:1 대화방에 첫 승인 안내 메시지 자동 발송
+      try {
+        await sendMessage(
+          convId,
+          `[교수 상담 승인 안내]\n안녕하세요 ${c.studentName} 학생, 신청하신 '${c.consultationType}' 상담이 승인되었습니다.\n• 진행 방식: ${method} 상담\n• 제안 일시: ${c.preferredDate} · ${c.preferredTime}\n• 상담 질문/내용: ${c.purpose}\n\n상담 진행 및 세부 일정에 대해 편하게 대화해 보아요.`
+        );
+      } catch (sendErr) {
+        console.warn("첫 안내 메시지 발송 경고:", sendErr);
+      }
+      // 4. 바로 해당 대화방으로 이동 및 활성화
+      newlySelectedConvIdRef.current = convId;
+      setActiveConvId(convId);
+      markConversationRead(convId);
+      alert(
+        `${c.studentName} 학생의 상담 신청을 승인했습니다 (${method} 상담).\n1:1 대화방이 바로 시작되었습니다!`
+      );
+    } catch (err: any) {
+      alert(`상담 승인 처리 오류: ${err?.message || err}`);
+    } finally {
+      setIsUpdatingConsultation(false);
+    }
+  };
+
+  // 교수용: 상담 미승인 (거절)
+  const handleProfessorReject = async (c: ConsultationRequest) => {
+    const reason = prompt(
+      "상담 미승인 사유를 입력해 주세요 (선택 사항):",
+      "일정상 상담이 어렵습니다."
+    );
+    if (reason === null) return;
+    try {
+      setIsUpdatingConsultation(true);
+      await handleUpdateConsultationStatus(
+        c.id,
+        "rejected",
+        reason || "일정상 상담이 어렵습니다."
+      );
+      alert(`${c.studentName} 학생의 상담이 미승인(거절) 처리되었습니다.`);
+    } catch (err: any) {
+      alert(`미승인 처리 오류: ${err?.message || err}`);
+    } finally {
+      setIsUpdatingConsultation(false);
+    }
+  };
+
   // 단체방 생성용 선택 토글
   const toggleSelectGroupUser = (uid: string) => {
     setSelectedUserIds((prev) =>
@@ -487,6 +677,245 @@ export default function ChatPage() {
           </div>
         </div>
       )}
+
+      {/* 교수 전용: 접수된 학생 상담 신청 관리함 */}
+      {(currentUser.role === "professor" || currentRole === "professor") &&
+        (consultations || []).filter(
+          (c) => c.professorId === currentUser.id && c.status === "pending"
+        ).length > 0 && (
+          <section className="bg-white dark:bg-slate-900 rounded-3xl border border-orange-200 dark:border-orange-900/60 p-5 space-y-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <GraduationCap className="w-5 h-5 text-orange-600" />
+                <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
+                  접수된 학생 상담 신청
+                </h2>
+                <span className="px-2.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-xs font-bold">
+                  {(consultations || []).filter(
+                    (c) => c.professorId === currentUser.id && c.status === "pending"
+                  ).length}건 대기 중
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                상담 진행 방식(대면 / 채팅)을 선택하신 후 승인하시면 학생과의 1:1 대화방이 즉시 시작됩니다.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {(consultations || [])
+                .filter(
+                  (c) =>
+                    c.professorId === currentUser.id && c.status === "pending"
+                )
+                .map((c) => {
+                  const selectedMethod = approvalMethods[c.id] || "대면";
+                  return (
+                    <div
+                      key={c.id}
+                      className="p-4 rounded-2xl bg-orange-50/40 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900/40 space-y-3.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
+                              {c.studentName} 학생
+                            </span>
+                            {c.studentIdOrYear && (
+                              <span className="text-xs text-slate-500 font-semibold">
+                                ({c.studentIdOrYear})
+                              </span>
+                            )}
+                            <span className="px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 font-bold text-xs">
+                              {c.consultationType}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-1">
+                            <Clock className="w-3.5 h-3.5 text-orange-600" />
+                            <span>희망 일시: {c.preferredDate} · {c.preferredTime}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 leading-relaxed border border-orange-100 dark:border-orange-900/30">
+                        <span className="font-bold text-slate-900 dark:text-slate-100">상담 목적: </span>
+                        {c.purpose}
+                      </div>
+
+                      {/* 상담 유형(진행 방식) 선택: 대면 vs 채팅 */}
+                      <div className="space-y-1.5">
+                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                          상담 진행 방식 선택 *
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setApprovalMethods((prev) => ({
+                                ...prev,
+                                [c.id]: "대면",
+                              }))
+                            }
+                            className={`py-2 px-3 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                              selectedMethod === "대면"
+                                ? "bg-orange-600 text-white border-orange-600 shadow-2xs"
+                                : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300"
+                            }`}
+                          >
+                            🏫 대면 상담
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setApprovalMethods((prev) => ({
+                                ...prev,
+                                [c.id]: "채팅",
+                              }))
+                            }
+                            className={`py-2 px-3 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
+                              selectedMethod === "채팅"
+                                ? "bg-orange-600 text-white border-orange-600 shadow-2xs"
+                                : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300"
+                            }`}
+                          >
+                            💬 채팅 상담
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 승인 / 미승인 버튼 */}
+                      <div className="pt-2 flex items-center justify-end gap-2 border-t border-orange-200/60 dark:border-orange-900/40">
+                        <button
+                          type="button"
+                          disabled={isUpdatingConsultation}
+                          onClick={() => handleProfessorReject(c)}
+                          className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-white dark:hover:bg-slate-800 transition disabled:opacity-50"
+                        >
+                          미승인 (거절)
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isUpdatingConsultation}
+                          onClick={() => handleProfessorApprove(c)}
+                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition disabled:opacity-50 flex items-center gap-1.5"
+                        >
+                          <Check className="w-3.5 h-3.5" /> 승인 및 대화 시작
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </section>
+        )}
+
+      {/* 학생 전용: 나의 상담 신청 현황 */}
+      {(currentUser.role === "student" || currentRole === "student") &&
+        (consultations || []).filter(
+          (c) =>
+            (c.studentId === currentUser.id ||
+              c.studentEmail === currentUser.email) &&
+            (c.status === "pending" ||
+              c.status === "accepted" ||
+              c.status === "reschedule_requested")
+        ).length > 0 && (
+          <section className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-orange-600" />
+                <h2 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                  나의 교수 상담 신청 현황
+                </h2>
+              </div>
+              <span className="text-xs text-slate-400 font-semibold">
+                진행 중{" "}
+                {(consultations || []).filter(
+                  (c) =>
+                    (c.studentId === currentUser.id ||
+                      c.studentEmail === currentUser.email) &&
+                    (c.status === "pending" ||
+                      c.status === "accepted" ||
+                      c.status === "reschedule_requested")
+                ).length}건
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {(consultations || [])
+                .filter(
+                  (c) =>
+                    (c.studentId === currentUser.id ||
+                      c.studentEmail === currentUser.email) &&
+                    (c.status === "pending" ||
+                      c.status === "accepted" ||
+                      c.status === "reschedule_requested")
+                )
+                .map((c) => {
+                  const st = CONSULTATION_STATUS_BADGES[c.status];
+                  return (
+                    <div
+                      key={c.id}
+                      className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 space-y-2.5"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-extrabold text-sm text-slate-900 dark:text-white">
+                            {c.professorName} 교수님
+                          </span>
+                          <span className="px-2 py-0.5 rounded-md bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 font-bold text-xs">
+                            {c.consultationType}
+                          </span>
+                          {st && (
+                            <span
+                              className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${st.style}`}
+                            >
+                              {st.label}
+                            </span>
+                          )}
+                        </div>
+                        {c.consultationMethod && (
+                          <span className="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold text-xs">
+                            {c.consultationMethod} 상담
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-xs text-slate-500">
+                        희망 제안 일정: {c.preferredDate} · {c.preferredTime}
+                      </p>
+
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                        {c.status === "pending" && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleCancelStudentConsultation(c.id)
+                            }
+                            className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs transition"
+                          >
+                            신청 취소
+                          </button>
+                        )}
+                        {c.status === "accepted" && c.conversationId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              newlySelectedConvIdRef.current = c.conversationId!;
+                              setActiveConvId(c.conversationId!);
+                              markConversationRead(c.conversationId!);
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                            1:1 대화방으로 바로 이동
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </section>
+        )}
 
       {/* 메인 메신저 그리드 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs min-h-[580px]">
@@ -904,13 +1333,28 @@ export default function ChatPage() {
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => handleStartDirect(u.id)}
-                      className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shrink-0 transition"
-                    >
-                      대화 요청
-                    </button>
+                    {u.role === "professor" ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedProfessorForConsultation(u);
+                          setConsultationModalOpen(true);
+                          setModalMode(null);
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shrink-0 transition shadow-xs flex items-center gap-1"
+                      >
+                        <GraduationCap className="w-3.5 h-3.5" />
+                        상담신청
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleStartDirect(u.id)}
+                        className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shrink-0 transition"
+                      >
+                        대화 요청
+                      </button>
+                    )}
                   </div>
                 ))
               )}
@@ -1176,6 +1620,161 @@ export default function ChatPage() {
                   className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-bold transition"
                 >
                   선택한 {inviteSelectedIds.length}명 초대하기
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 모달 4: 교수 상담 신청 (학생 -> 교수) */}
+      {consultationModalOpen && selectedProfessorForConsultation && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <GraduationCap className="w-5 h-5 text-orange-600" />
+                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                  교수 상담 신청
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setConsultationModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* 교수 정보 요약 */}
+            <div className="p-3.5 rounded-2xl bg-orange-50/70 dark:bg-orange-950/30 border border-orange-100 dark:border-orange-900/40 flex items-center gap-3">
+              <div className="w-12 h-12 rounded-xl bg-orange-600 text-white font-extrabold text-sm flex items-center justify-center shrink-0">
+                {selectedProfessorForConsultation.avatarInitials ||
+                  selectedProfessorForConsultation.name.slice(0, 2)}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-extrabold text-sm text-slate-900 dark:text-white">
+                    {selectedProfessorForConsultation.name} 교수님
+                  </span>
+                  <span className="text-xs text-orange-700 dark:text-orange-300 font-bold">
+                    {selectedProfessorForConsultation.specialty ||
+                      "교육학과 전임교원"}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400">
+                  동국대학교 사범대학 교육학과
+                  {selectedProfessorForConsultation.specialty
+                    ? ` · ${selectedProfessorForConsultation.specialty}`
+                    : ""}
+                </p>
+              </div>
+            </div>
+
+            {/* 상담 신청 폼 */}
+            <form onSubmit={handleSubmitConsultation} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  상담 유형 선택 *
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {(
+                    [
+                      "학업 상담",
+                      "진로 상담",
+                      "복수전공 상담",
+                      "대학원 진학 상담",
+                      "기타",
+                    ] as ConsultationType[]
+                  ).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setConsultationType(type)}
+                      className={`p-2 rounded-xl font-bold border transition text-center ${
+                        consultationType === type
+                          ? "border-orange-600 bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 shadow-2xs"
+                          : "border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    희망 날짜 (학생 제안) *
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={preferredDate}
+                    onChange={(e) => setPreferredDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-orange-500 font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    희망 시간대 (학생 제안) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="예: 14:00 또는 수요일 오후"
+                    value={preferredTime}
+                    onChange={(e) => setPreferredTime(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-orange-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  상담 목적 또는 질문 내용 *
+                </label>
+                <textarea
+                  rows={3}
+                  required
+                  placeholder="교수님께 여쭙고 싶은 내용이나 상담 목적을 구체적으로 적어주세요."
+                  value={consultationPurpose}
+                  onChange={(e) => setConsultationPurpose(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-orange-500 font-medium resize-none"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-orange-50/70 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/40 text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                <span className="font-bold text-orange-800 dark:text-orange-300">💡 안내: </span>
+                교수님이 신청서를 확인하시고 상담 진행 방식(대면 또는 채팅)을 선택하여 승인하시면, 1:1 대화방이 즉시 개설됩니다.
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setConsultationModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingConsultation}
+                  className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-xs transition disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {isSubmittingConsultation ? (
+                    <>
+                      <span className="animate-spin">⏳</span>
+                      접수 처리 중...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      상담 신청서 제출
+                    </>
+                  )}
                 </button>
               </div>
             </form>
