@@ -20,6 +20,14 @@ test("1. [Firestore 보안 규칙] 학생 본인의 지도교수(advisorProfesso
   );
 });
 
+test("1-1. [Firestore 보안 규칙] 관리자 수정 시에도 비재학생(졸업생, 교수, 관리자)에게 지도교수 ID가 배정되는 것은 데이터베이스에서 차단된다", () => {
+  assert.match(
+    firestoreRules,
+    /isApprovedAdmin\(\)[\s\S]*?request\.resource\.data\.role == 'student'/,
+    "관리자가 회원을 수정할 때에도 advisorProfessorId가 설정되어 있다면 role은 반드시 student여야 합니다."
+  );
+});
+
 test("2. [Firestore 보안 규칙] 상담 신청(consultations) 생성 시 본인의 studentId 및 pending 상태로만 등록 가능하다", () => {
   // consultations 컬렉션 match 블록 검증
   assert.match(firestoreRules, /match \/consultations\/\{consultationId\}/, "consultations 보안 규칙이 정의되어 있어야 합니다.");

@@ -56,11 +56,20 @@ service cloud.firestore {
                     );
 
       // [프로필 수정 규칙]
-      // 1) 승인된 최고 관리자는 회원의 승인 상태(approvalStatus), 역할(role), 코멘트 변경 가능
+      // 1) 승인된 최고 관리자는 회원의 승인 상태(approvalStatus), 역할(role), 코멘트, 지도교수 배정 가능
+      //    (단, 관리자 수정 시에도 비재학생인 졸업생·교수·관리자에게 지도교수 ID가 배정되는 것은 데이터베이스 레벨에서 원천 차단)
       // 2) 최초 관리자 부트스트랩: 시스템 미등록 시 또는 admin_bootstrap 등록자 본인인 경우 승격 허용
-      // 3) 일반 회원은 본인의 프로필만 수정 가능하며, 핵심 보호 필드(승인상태, 역할, 이메일, UID, 가입일)는 절대 임의 변경 불가!
+      // 3) 일반 회원은 본인의 프로필만 수정 가능하며, 핵심 보호 필드(승인상태, 역할, 이메일, UID, 가입일, 지도교수 배정)는 절대 임의 변경 불가!
       allow update: if isAuthenticated() && (
-        isApprovedAdmin()
+        (
+          isApprovedAdmin()
+          && (
+            !('advisorProfessorId' in request.resource.data)
+            || request.resource.data.advisorProfessorId == ''
+            || request.resource.data.advisorProfessorId == null
+            || request.resource.data.role == 'student'
+          )
+        )
         || (
           request.auth.uid == userId
           && (
