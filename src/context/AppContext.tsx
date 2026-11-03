@@ -67,6 +67,7 @@ import {
   subscribeToAuthStatus,
   subscribeToAllUsersForAdmin,
   updateUserApprovalStatusByAdmin,
+  deleteUserByAdminInFirestore,
   claimInitialAdminRole,
   FirestoreChatRoom,
   FirestoreChatMessage,
@@ -170,6 +171,7 @@ interface AppContextValue extends PlatformDataState {
     studentId: string,
     professorId: string | null
   ) => Promise<void>;
+  handleAdminDeleteUser: (targetUid: string) => Promise<void>;
 
   // 교수 상담 신청 시스템 액션
   consultations: ConsultationRequest[];
@@ -1172,6 +1174,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ),
       }));
     }
+  };
+
+  const handleAdminDeleteUser = async (targetUid: string) => {
+    // 1. Firebase 연동 상태라면 Firestore에서 대상 회원의 문서(users, publicProfiles, graduationRecords) 완전 삭제
+    if (isRealAuthActive && isFirestoreConnected) {
+      await deleteUserByAdminInFirestore(targetUid);
+    }
+
+    // 2. 관리자용 실시간 목록에서 제거 및 삭제 대상이 교수였을 경우 배정되어 있던 학생들의 지도교수 정보 초기화
+    setRealUsersForAdmin((prev) =>
+      prev
+        .filter((u) => u.id !== targetUid)
+        .map((u) =>
+          u.advisorProfessorId === targetUid
+            ? { ...u, advisorProfessorId: "", advisorAssignedAt: "" }
+            : u
+        )
+    );
+
+    // 3. 로컬 mock/상태 users 및 approvalRequests 즉각 갱신
+    setState((prev: PlatformDataState) => ({
+      ...prev,
+      users: prev.users
+        .filter((u: User) => u.id !== targetUid)
+        .map((u: User) =>
+          u.advisorProfessorId === targetUid
+            ? { ...u, advisorProfessorId: undefined, advisorAssignedAt: undefined }
+            : u
+        ),
+      approvalRequests: prev.approvalRequests.filter(
+        (r) => r.id !== targetUid
+      ),
+    }));
+
+    // 4. 승인된 공개 회원 목록에서 제거
+    setApprovedMembersRaw((prev: PublicChatUser[]) => prev.filter((m) => m.id !== targetUid));
   };
 
   const handleAdminAssignAdvisor = async (
@@ -3078,6 +3116,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         approvedProfessors,
         myAdvisorInfo,
         handleAdminAssignAdvisor,
+        handleAdminDeleteUser,
         consultations,
         handleCreateConsultation,
         handleUpdateConsultationStatus,

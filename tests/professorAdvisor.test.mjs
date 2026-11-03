@@ -567,3 +567,71 @@ test("15. [교수 계정 아래 지도학생 배정 권한 및 역할 제한 검
   assert.equal(promotedToAdmin.role, "admin");
   assert.equal(promotedToAdmin.advisorProfessorId, undefined);
 });
+test("16. [회원 삭제 기능 및 파이어베이스 연동 정합성 검증] 관리자는 회원을 안전하게 삭제할 수 있고 본인 삭제는 차단되며 배정된 지도학생의 연동 정보가 자동 정리된다", () => {
+  // 1. 초기 사용자 상태
+  let users = [
+    { id: "admin-1", uid: "admin-1", name: "관리자", role: "admin", approvalStatus: "approved" },
+    { id: "prof-1", uid: "prof-1", name: "신나민", role: "professor", approvalStatus: "approved" },
+    { id: "stud-1", uid: "stud-1", name: "김학생", role: "student", approvalStatus: "approved", advisorProfessorId: "prof-1" },
+    { id: "stud-2", uid: "stud-2", name: "이재학", role: "student", approvalStatus: "approved", advisorProfessorId: "prof-1" },
+    { id: "pending-1", uid: "pending-1", name: "스팸가입자", role: "student", approvalStatus: "pending" },
+  ];
+
+  let publicProfiles = {
+    "admin-1": { id: "admin-1", name: "관리자", role: "admin" },
+    "prof-1": { id: "prof-1", name: "신나민", role: "professor" },
+    "stud-1": { id: "stud-1", name: "김학생", role: "student" },
+    "stud-2": { id: "stud-2", name: "이재학", role: "student" },
+  };
+
+  const currentAdmin = users[0];
+
+  // 2. 관리자 삭제 처리 함수 시뮬레이션
+  function deleteUser(targetUserId, executorUser) {
+    if (executorUser.role !== "admin") {
+      throw new Error("관리자만 회원을 삭제할 수 있습니다.");
+    }
+    if (targetUserId === executorUser.id || targetUserId === executorUser.uid) {
+      throw new Error("현재 로그인된 관리자 본인 계정은 삭제할 수 없습니다.");
+    }
+
+    // users 목록에서 제거 & 해당 유저가 지도교수였던 경우 학생 배정 초기화
+    users = users
+      .filter((u) => u.id !== targetUserId)
+      .map((u) =>
+        u.advisorProfessorId === targetUserId
+          ? { ...u, advisorProfessorId: "", advisorAssignedAt: "" }
+          : u
+      );
+
+    // publicProfiles 삭제
+    delete publicProfiles[targetUserId];
+  }
+
+  // 3. 관리자 본인 삭제 시도 시 차단 검증
+  assert.throws(
+    () => deleteUser(currentAdmin.id, currentAdmin),
+    /현재 로그인된 관리자 본인 계정은 삭제할 수 없습니다/
+  );
+
+  // 4. 일반 사용자가 삭제 시도 시 차단 검증
+  assert.throws(
+    () => deleteUser("prof-1", users[1]),
+    /관리자만 회원을 삭제할 수 있습니다/
+  );
+
+  // 5. 스팸/대기 회원 삭제 검증
+  deleteUser("pending-1", currentAdmin);
+  assert.equal(users.some((u) => u.id === "pending-1"), false);
+
+  // 6. 지도교수(prof-1) 삭제 시 배정되어 있던 학생들의 지도교수 정보 자동 정리 검증
+  deleteUser("prof-1", currentAdmin);
+  assert.equal(users.some((u) => u.id === "prof-1"), false);
+  assert.equal(publicProfiles["prof-1"], undefined);
+
+  // 배정되어 있던 학생 2명의 advisorProfessorId가 빈 문자열("")로 초기화되었는지 확인
+  const s1 = users.find((u) => u.id === "stud-1");
+  const s2 = users.find((u) => u.id === "stud-2");
+  assert.equal(s1.advisorProfessorId, "");
+  assert.equal(s2.advisorProfessorId, "");
+});

@@ -522,6 +522,60 @@ export async function updateUserApprovalStatusByAdmin(params: {
 }
 
 /**
+ * 관리자용: 특정 회원의 Firestore 문서 완전 삭제 (회원 탈퇴/강제 삭제)
+ * - users/{targetUid} 삭제
+ * - publicProfiles/{targetUid} 삭제
+ * - graduationRecords/{targetUid} 삭제 (해당 시)
+ * - 삭제 대상이 교수였을 경우 배정되어 있던 학생들의 지도교수 배정 정보 초기화
+ */
+export async function deleteUserByAdminInFirestore(targetUid: string): Promise<void> {
+  const { db } = getFirebaseInstances();
+  if (!db) throw new Error("Firestore가 연결되어 있지 않습니다.");
+
+  const userRef = doc(db, USERS_COLLECTION, targetUid);
+
+  // 1. users 컬렉션 문서 삭제
+  await deleteDoc(userRef);
+
+  // 2. 채팅용 공개 프로필 삭제
+  try {
+    const publicRef = doc(db, "publicProfiles", targetUid);
+    await deleteDoc(publicRef);
+  } catch (e) {
+    console.warn("공개 프로필 삭제 경고:", e);
+  }
+
+  // 3. 개인별 졸업요건 기록 삭제 (해당 학생 문서가 존재하는 경우)
+  try {
+    const gradRef = doc(db, "graduationRecords", targetUid);
+    await deleteDoc(gradRef);
+  } catch (e) {
+    console.warn("졸업요건 문서 삭제 경고:", e);
+  }
+
+  // 4. 삭제 대상이 교수였을 경우, 배정되어 있던 학생들의 지도교수 필드 초기화
+  try {
+    const studentsQuery = query(
+      collection(db, USERS_COLLECTION),
+      where("advisorProfessorId", "==", targetUid)
+    );
+    const snap = await getDocs(studentsQuery);
+    if (!snap.empty) {
+      const updates = snap.docs.map((d) =>
+        updateDoc(d.ref, {
+          advisorProfessorId: "",
+          advisorAssignedAt: "",
+          updatedAt: new Date().toISOString(),
+        })
+      );
+      await Promise.all(updates);
+    }
+  } catch (e) {
+    console.warn("지도학생 배정 해제 연동 경고:", e);
+  }
+}
+
+/**
  * 사용자(관리자 포함)의 표시 이름 및 프로필 이니셜 변경
  */
 export async function updateUserDisplayName(

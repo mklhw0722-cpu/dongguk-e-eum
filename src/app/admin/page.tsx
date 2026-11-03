@@ -74,11 +74,40 @@ export default function AdminPage() {
     updateGraduationCatalogByAdmin,
     approvedProfessors,
     handleAdminAssignAdvisor,
+    handleAdminDeleteUser,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<
     "approvals" | "users" | "rooms_posts" | "reports" | "graduation_rules"
   >("approvals");
+
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+
+  const handleDeleteUser = async (targetUser: { id: string; name: string; role: UserRole }) => {
+    // 1. 현재 로그인 중인 관리자 본인 계정 삭제 차단
+    if (authUserProfile?.id === targetUser.id || authUserProfile?.uid === targetUser.id) {
+      alert("현재 로그인 중인 관리자 본인 계정은 삭제할 수 없습니다.");
+      return;
+    }
+
+    // 2. 삭제 확인 다이얼로그 (실수 방지)
+    const roleName = ROLE_LABELS[targetUser.role] || targetUser.role;
+    const isConfirmed = window.confirm(
+      `정말 '${targetUser.name}' (${roleName}) 회원을 완전히 삭제하시겠습니까?\n\n※ 주의: 파이어베이스 데이터베이스에서 회원 정보 및 관련 프로필이 영구적으로 삭제되며, 이 작업은 되돌릴 수 없습니다.`
+    );
+    if (!isConfirmed) return;
+
+    try {
+      setDeletingUserId(targetUser.id);
+      await handleAdminDeleteUser(targetUser.id);
+      setAdvisorFeedback(`'${targetUser.name}' 회원이 파이어베이스 및 시스템에서 성공적으로 삭제되었습니다.`);
+      setTimeout(() => setAdvisorFeedback(null), 3500);
+    } catch (e: any) {
+      alert(`회원 삭제 처리 중 오류가 발생했습니다: ${e?.message || e}`);
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
 
   const [updatingAdvisorStudentId, setUpdatingAdvisorStudentId] = useState<string | null>(null);
   const [advisorFeedback, setAdvisorFeedback] = useState<string | null>(null);
@@ -519,6 +548,16 @@ export default function AdminPage() {
                         >
                           이용 정지
                         </button>
+                        <button
+                          type="button"
+                          disabled={deletingUserId === userDoc.id}
+                          onClick={() => handleDeleteUser(userDoc)}
+                          title="가입 신청 회원 완전 삭제"
+                          className="px-2.5 py-2 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-xs font-bold inline-flex items-center gap-1 transition disabled:opacity-50"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>{deletingUserId === userDoc.id ? "삭제 중" : "삭제"}</span>
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -790,6 +829,18 @@ export default function AdminPage() {
                               </button>
                             )
                           )}
+                        
+                          {/* 회원 완전 삭제 버튼 */}
+                          <button
+                            type="button"
+                            disabled={deletingUserId === u.id || isUpdating}
+                            onClick={() => handleDeleteUser(u)}
+                            title="회원 영구 삭제"
+                            className="ml-1 px-2.5 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-xs font-bold transition flex items-center gap-1 disabled:opacity-50"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>{deletingUserId === u.id ? "삭제 중..." : "회원 삭제"}</span>
+                          </button>
                         </div>
                       </div>
 
