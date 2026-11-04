@@ -4,7 +4,6 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
-import { canAccessGraduation } from "@/lib/accessGate";
 import { calculateGraduationAudit } from "@/lib/graduationCurriculum";
 import { ROLE_LABELS } from "@/components/common/Cards";
 import { formatUnreadBadge } from "@/lib/chatReadReceipts";
@@ -250,7 +249,10 @@ export default function HomePage() {
           </section>
 
           {/* 나의 졸업요건 확인 바로가기 (재학생/관리자 전용) */}
-          {canAccessGraduation(currentUser) && (
+          {/* 나의 졸업요건 확인 바로가기 (재학생 전용: 관리자·교수진·졸업생 모드에서는 미노출) */}
+          {(currentUser.role === "student" || currentRole === "student") &&
+            currentUser.role !== "admin" &&
+            currentRole !== "admin" && (
           <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
