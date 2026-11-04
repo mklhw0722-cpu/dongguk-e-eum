@@ -280,9 +280,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       {ROLE_LABELS[currentUser.role]}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                    {currentUser.studentIdOrYear}
-                  </p>
+                  {currentUser.role !== "admin" && currentUser.studentIdOrYear ? (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                      {currentUser.studentIdOrYear}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 

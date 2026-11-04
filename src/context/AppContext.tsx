@@ -945,7 +945,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         name: authUserProfile.name || (authUserProfile.role === "admin" ? "이혜원" : rawFirebaseUser?.email ? rawFirebaseUser.email.split("@")[0] : "사용자"),
         email: authUserProfile.email || rawFirebaseUser?.email || "",
         role: authUserProfile.role || "student",
-        studentIdOrYear: authUserProfile.studentIdOrYear || "",
+        studentIdOrYear: (authUserProfile.role || "student") === "admin" ? "" : (authUserProfile.studentIdOrYear || ""),
         doubleMajor: authUserProfile.doubleMajor,
         careerTrack: authUserProfile.careerTrack,
         academicProfile: authUserProfile.academicProfile,

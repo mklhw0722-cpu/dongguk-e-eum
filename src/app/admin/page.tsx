@@ -480,7 +480,7 @@ export default function AdminPage() {
                             {userDoc.name}
                           </span>
                           <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-xs font-semibold">
-                            신청 역할: {ROLE_LABELS[userDoc.role]} ({userDoc.studentIdOrYear})
+                            신청 역할: {ROLE_LABELS[userDoc.role]}{userDoc.role !== "admin" && userDoc.studentIdOrYear ? ` (${userDoc.studentIdOrYear})` : ""}
                           </span>
                         </div>
                         <span className="text-xs text-slate-400">

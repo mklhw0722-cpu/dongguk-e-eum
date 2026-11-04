@@ -168,7 +168,7 @@ export const MOCK_USERS: User[] = [
     nickname: "학과사무실(데모)",
     email: "edu.admin@sample.dgu.edu",
     role: "admin",
-    studentIdOrYear: "학과 운영팀",
+    studentIdOrYear: "",
     bio: "동국e음 플랫폼 회원 승인, 공지 등록, 공유방 및 신고 관리를 담당하는 관리자 계정입니다.",
     avatarInitials: "",
     approvalStatus: "approved",

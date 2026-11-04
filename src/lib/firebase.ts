@@ -452,7 +452,7 @@ export async function claimInitialAdminRole(secretPin?: string): Promise<UserPro
       uid: currentUser.uid,
       email: currentUser.email || "admin@dongguk.edu",
       name: currentUser.displayName || currentUser.email?.split("@")[0] || "이혜원",
-      studentIdOrYear: "최고 관리자",
+      studentIdOrYear: "",
       role: "student" as UserRole,
       approvalStatus: "pending" as ApprovalStatus,
       verificationNote: "시스템 최초 관리자 개설 계정",
@@ -527,6 +527,9 @@ export async function updateUserApprovalStatusByAdmin(params: {
     if (params.role !== "student") {
       updateData.advisorProfessorId = "";
       updateData.advisorAssignedAt = "";
+    }
+    if (params.role === "admin") {
+      updateData.studentIdOrYear = "";
     }
   }
 

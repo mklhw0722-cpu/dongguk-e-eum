@@ -253,7 +253,7 @@ export default function AuthPage() {
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              소속 정보: {authUserProfile.studentIdOrYear} · 가입일: {authUserProfile.joinedAt}
+              {authUserProfile.role === "admin" ? `가입일: ${authUserProfile.joinedAt}` : `소속 정보: ${authUserProfile.studentIdOrYear} · 가입일: ${authUserProfile.joinedAt}`}
             </p>
           </div>
 
@@ -585,7 +585,7 @@ export default function AuthPage() {
             <p className="text-slate-600 dark:text-slate-300">
               - 이름: {authUserProfile?.name || "확인중"}<br />
               - 이메일: {authUserProfile?.email || rawFirebaseUser?.email || "확인중"}<br />
-              - 역할: {ROLE_LABELS[authUserProfile?.role || "student"]} ({authUserProfile?.studentIdOrYear})
+              - 역할: {ROLE_LABELS[authUserProfile?.role || "student"]}{authUserProfile?.role !== "admin" && authUserProfile?.studentIdOrYear ? ` (${authUserProfile.studentIdOrYear})` : ""}
             </p>
             {authUserProfile?.adminComment && (
               <p className="text-orange-700 dark:text-orange-300 font-semibold pt-1 border-t border-slate-200 dark:border-slate-700">

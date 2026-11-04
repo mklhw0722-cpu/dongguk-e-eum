@@ -83,7 +83,7 @@ export function AccessGateScreen({
           </p>
           <p className="text-amber-800 dark:text-amber-300">
             - 등록 이메일: <strong>{email}</strong><br />
-            - 신청 신분: <strong>{roleLabel}</strong> ({studentIdOrYear || "학번 미기재"})<br />
+            - 신청 신분: <strong>{roleLabel}</strong>{roleLabel === "관리자" ? "" : ` (${studentIdOrYear || "학번 미기재"})`}<br />
             - 현재 승인 상태: <strong>승인 대기중 (pending)</strong>
           </p>
           <p className="text-[11px] text-amber-700 dark:text-amber-400 pt-1 border-t border-amber-200 dark:border-amber-900/60">
