@@ -73,3 +73,39 @@ test("3. [사용자 격리 및 기기 동기화 데이터 구조] 다른 사용�
 
   assert.notEqual(pathA, pathB, "사용자별 경로가 달라 상호 간섭이 발생하지 않아야 함");
 });
+
+test("4. [모바일/신규 접속 시 예시 데이터 원천 차단] initialSamples 주입이 제거되고 예시 일정이 엄격히 필터링된다", () => {
+  const calendarCode = fs.readFileSync(new URL("../src/components/calendar/EditableCalendar.tsx", import.meta.url), "utf8");
+  
+  // initialSamples 자동 등록 코드가 제거되었는지 검증
+  assert.equal(calendarCode.includes("const initialSamples"), false, "초기 예시 데이터 선언(initialSamples)이 제거되어 있어야 함");
+  assert.equal(calendarCode.includes('id: "sample-1"'), false, "sample-1 예시 일정이 소스코드에 존재하지 않아야 함");
+
+  // 예시 데이터 필터 로직 검증
+  const isSampleCalendarEvent = (ev) => {
+    if (!ev) return true;
+    if (typeof ev.id === "string" && ev.id.startsWith("sample-")) return true;
+    if (typeof ev.title === "string") {
+      const trimmed = ev.title.trim();
+      if (trimmed.includes("[예시]")) return true;
+      if (trimmed === "교육공학 프로젝트 발표 준비") return true;
+      if (trimmed === "교육방법론 과제 제출 마감") return true;
+      if (trimmed === "학과 멘토링 모임") return true;
+    }
+    return false;
+  };
+
+  const sampleList = [
+    { id: "sample-1", title: "교육공학 프로젝트 발표 준비", date: "2026-11-04" },
+    { id: "sample-2", title: "교육방법론 과제 제출 마감", date: "2026-11-07" },
+    { id: "sample-3", title: "학과 멘토링 모임", date: "2026-11-11" },
+    { id: "custom-1", title: "[예시] 임의의 예시 타이틀", date: "2026-11-12" },
+    { id: "real-1", title: "실제 학생의 과제 제출", date: "2026-11-15" },
+    { id: "real-2", title: "기말고사 시험 준비", date: "2026-11-20" },
+  ];
+
+  const cleaned = sampleList.filter((item) => !isSampleCalendarEvent(item));
+  assert.equal(cleaned.length, 2, "예시 데이터 4건이 모두 걸러지고 실제 등록된 일정 2건만 남아야 함");
+  assert.equal(cleaned[0].id, "real-1");
+  assert.equal(cleaned[1].id, "real-2");
+});

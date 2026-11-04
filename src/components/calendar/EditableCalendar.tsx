@@ -15,6 +15,13 @@ import {
   Check,
   Sparkles,
 } from "lucide-react";
+import { useApp } from "@/context/AppContext";
+import {
+  subscribeToUserCalendarEvents,
+  saveUserCalendarEventToFirestore,
+  deleteUserCalendarEventFromFirestore,
+  getFirebaseInstances,
+} from "@/lib/firebase";
 
 export type EventCategory =
   | "assignment" // 과제·팀플
@@ -25,6 +32,7 @@ export type EventCategory =
 
 export interface CalendarEvent {
   id: string;
+  userId?: string;
   title: string;
   date: string; // YYYY-MM-DD
   endDate?: string; // YYYY-MM-DD (선택)
@@ -34,7 +42,25 @@ export interface CalendarEvent {
   location?: string;
   memo?: string;
   isOfficial?: boolean; // 공지사항 연동 여부
+  createdAt?: string;
+  updatedAt?: string;
 }
+
+/**
+ * 모바일 및 모든 접속 기기에서 예시/더미 일정을 원천 차단하기 위한 필터 함수
+ */
+export const isSampleCalendarEvent = (ev: CalendarEvent): boolean => {
+  if (!ev) return true;
+  if (typeof ev.id === "string" && ev.id.startsWith("sample-")) return true;
+  if (typeof ev.title === "string") {
+    const trimmed = ev.title.trim();
+    if (trimmed.includes("[예시]")) return true;
+    if (trimmed === "교육공학 프로젝트 발표 준비") return true;
+    if (trimmed === "교육방법론 과제 제출 마감") return true;
+    if (trimmed === "학과 멘토링 모임") return true;
+  }
+  return false;
+};
 
 interface NoticeItem {
   id: string;
@@ -105,6 +131,8 @@ export default function EditableCalendar({
   officialNotices = [],
   className = "",
 }: EditableCalendarProps) {
+  const { currentUser } = useApp();
+
   // 현재 보고 있는 달력 기준 날짜
   const today = useMemo(() => new Date(), []);
   const [currentYear, setCurrentYear] = useState<number>(today.getFullYear());
@@ -134,64 +162,91 @@ export default function EditableCalendar({
   const [formLocation, setFormLocation] = useState<string>("");
   const [formMemo, setFormMemo] = useState<string>("");
 
-  // 1. LocalStorage에서 일정 로드 (없으면 초기 안내 샘플 제공)
+  // 1. LocalStorage에서 일정 로드 및 기존 잔존 예시(더미) 데이터 완전 정제
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        setUserEvents(JSON.parse(saved));
-      } else {
-        // 초기 기본 샘플 일정 등록
-        const initialSamples: CalendarEvent[] = [
-          {
-            id: "sample-1",
-            title: "교육공학 프로젝트 발표 준비",
-            date: todayStr,
-            time: "14:00",
-            isAllDay: false,
-            category: "assignment",
-            location: "학술문화관 세미나실",
-            memo: "발표 슬라이드 및 시연 화면 점검하기",
-          },
-          {
-            id: "sample-2",
-            title: "교육방법론 과제 제출 마감",
-            date: formatDateKey(
-              today.getFullYear(),
-              today.getMonth() + 1,
-              Math.min(today.getDate() + 3, 28)
-            ),
-            isAllDay: true,
-            category: "assignment",
-            memo: "이러닝 포털 과제함에 PDF 업로드",
-          },
-          {
-            id: "sample-3",
-            title: "학과 멘토링 모임",
-            date: formatDateKey(
-              today.getFullYear(),
-              today.getMonth() + 1,
-              Math.min(today.getDate() + 7, 28)
-            ),
-            time: "18:30",
-            isAllDay: false,
-            category: "personal",
-            location: "혜화관 4층",
-          },
-        ];
-        setUserEvents(initialSamples);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(initialSamples));
+      const keysToClean = [
+        STORAGE_KEY,
+        currentUser?.id ? `dongguk_custom_calendar_events_v2_${currentUser.id}` : null,
+      ].filter(Boolean) as string[];
+
+      let initialLoaded: CalendarEvent[] = [];
+
+      for (const key of keysToClean) {
+        const saved = localStorage.getItem(key);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+              // 예시 데이터 필터링 제거
+              const clean = parsed.filter((item: CalendarEvent) => !isSampleCalendarEvent(item));
+              if (clean.length !== parsed.length) {
+                localStorage.setItem(key, JSON.stringify(clean));
+              }
+              if (clean.length > 0 && initialLoaded.length === 0) {
+                initialLoaded = clean;
+              }
+            }
+          } catch {
+            // ignore
+          }
+        }
       }
+
+      // 모바일이든 신규 접속이든 예시 일정 절대 자동 주입 금지 (순수 사용자 일정만 표시)
+      setUserEvents(initialLoaded);
     } catch {
       // 로컬스토리지 접근 제한 환경 등 안전 폴백
     }
-  }, [today, todayStr]);
+  }, [currentUser?.id]);
+
+  // 2. 로그인 사용자 대상 Firestore 실시간 연동 (모바일·PC 실시간 동기화)
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const { db } = getFirebaseInstances();
+    if (!db) return;
+
+    const unsubscribe = subscribeToUserCalendarEvents(
+      currentUser.id,
+      (cloudEvents) => {
+        // 클라우드 일정 중 예시/더미 데이터 제외
+        const clean = cloudEvents.filter((ev) => !isSampleCalendarEvent(ev));
+        setUserEvents(clean);
+
+        // 로컬스토리지 캐시 동기화
+        try {
+          const userKey = `dongguk_custom_calendar_events_v2_${currentUser.id}`;
+          localStorage.setItem(userKey, JSON.stringify(clean));
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+        } catch {
+          // ignore
+        }
+
+        // 만약 클라우드에 예시 일정이 등록되어 있다면 백그라운드 자동 정리
+        const samples = cloudEvents.filter(isSampleCalendarEvent);
+        samples.forEach((sample) => {
+          deleteUserCalendarEventFromFirestore(currentUser.id, sample.id).catch(() => {});
+        });
+      },
+      (err) => {
+        console.warn("캘린더 일정 실시간 동기화 오류:", err);
+      }
+    );
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUser?.id]);
 
   // 일정 변경 시 LocalStorage에 자동 저장
   const saveEvents = (newEvents: CalendarEvent[]) => {
-    setUserEvents(newEvents);
+    const clean = newEvents.filter((ev) => !isSampleCalendarEvent(ev));
+    setUserEvents(clean);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newEvents));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
+      if (currentUser?.id) {
+        localStorage.setItem(`dongguk_custom_calendar_events_v2_${currentUser.id}`, JSON.stringify(clean));
+      }
     } catch (err) {
       console.error("캘린더 일정 저장 실패:", err);
     }
@@ -335,26 +390,33 @@ export default function EditableCalendar({
 
     if (editingEventId) {
       // 수정
+      const updatedEvent: CalendarEvent = {
+        id: editingEventId,
+        userId: currentUser?.id,
+        title: formTitle.trim(),
+        date: formDate,
+        endDate: formEndDate || undefined,
+        time: formIsAllDay ? undefined : formTime,
+        isAllDay: formIsAllDay,
+        category: formCategory,
+        location: formLocation.trim() || undefined,
+        memo: formMemo.trim() || undefined,
+      };
       const updated = userEvents.map((ev) =>
-        ev.id === editingEventId
-          ? {
-              ...ev,
-              title: formTitle.trim(),
-              date: formDate,
-              endDate: formEndDate || undefined,
-              time: formIsAllDay ? undefined : formTime,
-              isAllDay: formIsAllDay,
-              category: formCategory,
-              location: formLocation.trim() || undefined,
-              memo: formMemo.trim() || undefined,
-            }
-          : ev
+        ev.id === editingEventId ? updatedEvent : ev
       );
       saveEvents(updated);
+
+      if (currentUser?.id) {
+        saveUserCalendarEventToFirestore(currentUser.id, updatedEvent).catch((err) =>
+          console.warn("Firestore 일정 업데이트 실패:", err)
+        );
+      }
     } else {
       // 신규 추가
       const newEvent: CalendarEvent = {
         id: `event-${Date.now()}`,
+        userId: currentUser?.id,
         title: formTitle.trim(),
         date: formDate,
         endDate: formEndDate || undefined,
@@ -365,6 +427,12 @@ export default function EditableCalendar({
         memo: formMemo.trim() || undefined,
       };
       saveEvents([...userEvents, newEvent]);
+
+      if (currentUser?.id) {
+        saveUserCalendarEventToFirestore(currentUser.id, newEvent).catch((err) =>
+          console.warn("Firestore 신규 일정 등록 실패:", err)
+        );
+      }
     }
 
     setSelectedDate(formDate);
@@ -379,6 +447,12 @@ export default function EditableCalendar({
     saveEvents(filtered);
     if (editingEventId === id) {
       setIsModalOpen(false);
+    }
+
+    if (currentUser?.id) {
+      deleteUserCalendarEventFromFirestore(currentUser.id, id).catch((err) =>
+        console.warn("Firestore 일정 삭제 실패:", err)
+      );
     }
   };
 
