@@ -184,7 +184,7 @@ export default function HomePage() {
               동국대학교 교육학과 전용 소통 플랫폼 · 동국e음
             </div>
             <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-              반갑습니다, {currentUser.name}님! ({ROLE_LABELS[currentRole]} 모드)
+              반갑습니다, {currentUser.name}님!{currentRole === "admin" ? ` (${ROLE_LABELS.admin} 모드)` : ""}
             </h1>
             <p className="text-xs sm:text-sm text-orange-50 max-w-2xl leading-relaxed">
               교육(e)으로 사람과 사람을 잇는 <strong>동국e음</strong>입니다. 학과 공지부터
