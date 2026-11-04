@@ -489,19 +489,7 @@ export default function EditableCalendar({
           </p>
         </div>
 
-        {/* 상단 버튼들 */}
-        <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
-          
 
-          <button
-            type="button"
-            onClick={() => handleOpenAddModal(selectedDate)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shadow-xs transition active:scale-95"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>일정 추가</span>
-          </button>
-        </div>
       </div>
 
       {/* 월 이동 컨트롤러 */}
