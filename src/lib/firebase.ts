@@ -239,7 +239,15 @@ export async function registerWithEmailAndPassword(params: {
           },
         }
       : {}),
-    bio: `${params.studentIdOrYear.trim()} ${params.name.trim()}님의 프로필입니다.`,
+    bio: (() => {
+      const hakbunMatch = (params.studentIdOrYear || "").match(/(\d{2})\s*학번/);
+      const cleanHakbun = hakbunMatch ? `${hakbunMatch[1]}학번` : params.studentIdOrYear.trim();
+      return params.role === "professor"
+        ? `교육학과 전임교원 ${params.name.trim()}님의 프로필입니다.`
+        : params.role === "admin"
+        ? `동국e음 최고관리자 ${params.name.trim()}님의 프로필입니다.`
+        : `${cleanHakbun} ${params.name.trim()}님의 프로필입니다.`;
+    })(),
     avatarInitials: params.name.trim().slice(0, 2),
     approvalStatus: "pending",
     joinedAt: new Date().toISOString().slice(0, 10),

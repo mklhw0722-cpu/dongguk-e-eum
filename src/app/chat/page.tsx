@@ -72,6 +72,73 @@ const CONSULTATION_STATUS_BADGES: Record<
   },
 };
 
+/**
+ * 대화 상대 검색 및 프로필 요약 문구 생성
+ * - 졸업생: "00학번 000님의 프로필입니다."
+ * - 재학생: "00학번 000님의 프로필입니다."
+ * - 교수: "교육학과 전임교원 000님의 프로필입니다."
+ * - 관리자: "동국e음 최고관리자 000님의 프로필입니다."
+ */
+function formatUserChatProfileSubtitle(u: {
+  role?: string;
+  name?: string;
+  studentIdOrYear?: string;
+  bio?: string;
+  specialty?: string;
+}): string {
+  const name = (u.name || "회원").trim();
+  const raw = `${u.studentIdOrYear || ""} ${u.bio || ""}`.trim();
+
+  // 학번 추출: "23학번", "19학번 졸업", "2023학년도 신입학 (23학번)" 등에서 2자리 학번 추출
+  let hakbun = "";
+  const matchHakbun = raw.match(/(\d{2})\s*학번/);
+  if (matchHakbun) {
+    hakbun = `${matchHakbun[1]}학번`;
+  } else {
+    const matchYear = raw.match(/20(\d{2})/);
+    if (matchYear) {
+      hakbun = `${matchYear[1]}학번`;
+    } else {
+      const matchOldYear = raw.match(/19(\d{2})/);
+      if (matchOldYear) {
+        hakbun = `${matchOldYear[1]}학번`;
+      } else {
+        const matchNum = raw.match(/^\d{2}/);
+        if (matchNum) {
+          hakbun = `${matchNum[0]}학번`;
+        }
+      }
+    }
+  }
+
+  // 1. 졸업생 및 재학생: "00학번 000님의 프로필입니다."
+  if (u.role === "student" || u.role === "alumni") {
+    if (hakbun) {
+      return `${hakbun} ${name}님의 프로필입니다.`;
+    }
+    return `${name}님의 프로필입니다.`;
+  }
+
+  // 2. 교수진: "교육학과 전임교원 000님의 프로필입니다."
+  if (u.role === "professor") {
+    if (u.bio && u.bio.includes("프로필입니다")) {
+      return u.bio;
+    }
+    return `교육학과 전임교원 ${name}님의 프로필입니다.`;
+  }
+
+  // 3. 관리자
+  if (u.role === "admin") {
+    return `동국e음 최고관리자 ${name}님의 프로필입니다.`;
+  }
+
+  // 기본 fallback
+  if (hakbun) {
+    return `${hakbun} ${name}님의 프로필입니다.`;
+  }
+  return u.bio || `${name}님의 프로필입니다.`;
+}
+
 export default function ChatPage() {
   const {
     currentUser,
@@ -364,8 +431,10 @@ export default function ChatPage() {
     if (roleFilter !== "all" && u.role !== roleFilter) return false;
     const q = userSearchQuery.trim().toLowerCase();
     if (!q) return true;
+    const subtitle = formatUserChatProfileSubtitle(u).toLowerCase();
     return (
       u.name.toLowerCase().includes(q) ||
+      subtitle.includes(q) ||
       (u.doubleMajor && u.doubleMajor.toLowerCase().includes(q)) ||
       (u.careerTrack && u.careerTrack.toLowerCase().includes(q))
     );
@@ -1326,10 +1395,7 @@ export default function ChatPage() {
                         </span>
                       </div>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        {u.doubleMajor ? `복전: ${u.doubleMajor}` : ""}
-                        {u.doubleMajor && u.careerTrack ? " · " : ""}
-                        {u.careerTrack ? `진로: ${u.careerTrack}` : ""}
-                        {!u.doubleMajor && !u.careerTrack && u.bio ? u.bio : ""}
+                        {formatUserChatProfileSubtitle(u)}
                       </p>
                     </div>
 
