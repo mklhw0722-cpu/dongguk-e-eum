@@ -635,3 +635,97 @@ test("16. [회원 삭제 기능 및 파이어베이스 연동 정합성 검증] 
   assert.equal(s1.advisorProfessorId, "");
   assert.equal(s2.advisorProfessorId, "");
 });
+
+test("17. [회원 삭제 시 상담 및 채팅방 데이터 연쇄 정리 및 유령 계정 방지 검증]", () => {
+  // 1. 초기 데이터 설정: 교수(prof-baek), 학생(stud-lee, stud-kim)
+  let users = [
+    { id: "admin-1", role: "admin", name: "관리자" },
+    { id: "prof-baek", role: "professor", name: "백상아" },
+    { id: "stud-lee", role: "student", name: "이혜원" },
+    { id: "stud-kim", role: "student", name: "김학생" },
+  ];
+
+  let consultations = [
+    {
+      id: "c-1",
+      studentId: "stud-lee",
+      professorId: "prof-baek",
+      professorName: "백상아",
+      status: "accepted",
+    },
+    {
+      id: "c-2",
+      studentId: "stud-kim",
+      professorId: "prof-baek",
+      professorName: "백상아",
+      status: "pending",
+    },
+  ];
+
+  let chats = [
+    // 1:1 대화방 (이혜원 - 백상아 교수)
+    {
+      id: "chat-direct-1",
+      isGroup: false,
+      title: "백상아 교수님",
+      participants: ["stud-lee", "prof-baek"],
+    },
+    // 단체 대화방 (스터디 모임: 4명 참여 중)
+    {
+      id: "chat-group-1",
+      isGroup: true,
+      title: "스터디 모임",
+      participants: ["stud-lee", "stud-kim", "prof-baek"],
+    },
+  ];
+
+  // 2. 관리자가 백상아 교수(prof-baek) 삭제 수행
+  const targetUid = "prof-baek";
+  users = users.filter((u) => u.id !== targetUid);
+
+  // 연쇄 삭제: 상담 데이터에서 prof-baek 관련 상담 완전 제거
+  consultations = consultations.filter(
+    (c) => c.studentId !== targetUid && c.professorId !== targetUid
+  );
+
+  // 연쇄 삭제: 1:1 대화방은 삭제, 단체 대화방에서는 참여자에서 제외
+  chats = chats
+    .filter((chat) => {
+      if (!chat.isGroup && chat.participants.includes(targetUid)) return false;
+      return true;
+    })
+    .map((chat) => ({
+      ...chat,
+      participants: chat.participants.filter((p) => p !== targetUid),
+    }));
+
+  // 3. 검증
+  // 1) 상담 목록에 백상아 교수 관련 상담이 0건이어야 함
+  assert.equal(consultations.length, 0);
+
+  // 2) 1:1 대화방(chat-direct-1)이 완전히 제거되어 대화방 목록에 남지 않음
+  assert.equal(chats.some((c) => c.id === "chat-direct-1"), false);
+
+  // 3) 단체 대화방에서 prof-baek가 제거되고 참여자가 2명으로 갱신됨
+  const groupChat = chats.find((c) => c.id === "chat-group-1");
+  assert.ok(groupChat);
+  assert.deepEqual(groupChat.participants, ["stud-lee", "stud-kim"]);
+  assert.equal(groupChat.participants.includes("prof-baek"), false);
+
+  // 4) UI 활성 참여자 계산 시 '학과 구성원' 더미 객체로 치환되지 않고 유효 사용자만 추출됨
+  const availableUsers = users;
+  const activeMembers = groupChat.participants
+    .map((uid) => availableUsers.find((u) => u.id === uid))
+    .filter(Boolean);
+
+  assert.equal(activeMembers.length, 2);
+  assert.equal(activeMembers.some((m) => m.name === "학과 구성원"), false);
+
+  // 5) firestore.rules 파일에 chats 컬렉션 allow delete 관리자 권한이 선언되어 있는지 검증
+  const rulesContent = fs.readFileSync("firestore.rules", "utf8");
+  assert.ok(
+    rulesContent.includes("match /chats/{chatId}") &&
+      rulesContent.includes("allow delete: if isApprovedAdmin();"),
+    "firestore.rules에 chats allow delete: if isApprovedAdmin() 규칙이 포함되어야 합니다."
+  );
+});

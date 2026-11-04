@@ -17,6 +17,7 @@ import {
   limit,
   arrayUnion,
   arrayRemove,
+  deleteField,
   serverTimestamp,
   runTransaction,
 } from "firebase/firestore";
@@ -583,7 +584,157 @@ export async function deleteUserByAdminInFirestore(targetUid: string): Promise<v
   } catch (e) {
     console.warn("지도학생 배정 해제 연동 경고:", e);
   }
+
+  // 5. 개인별 캘린더 일정 서브컬렉션 문서 일괄 삭제
+  try {
+    const calendarEventsRef = collection(db, USERS_COLLECTION, targetUid, "calendarEvents");
+    const calSnap = await getDocs(calendarEventsRef);
+    if (!calSnap.empty) {
+      const calDeletes = calSnap.docs.map((d) => deleteDoc(d.ref));
+      await Promise.all(calDeletes);
+    }
+  } catch (e) {
+    console.warn("캘린더 일정 삭제 경고:", e);
+  }
+
+  // 6. 루트 calendarEvents 컬렉션 내 해당 사용자 일정 삭제
+  try {
+    const rootCalQuery = query(
+      collection(db, "calendarEvents"),
+      where("userId", "==", targetUid)
+    );
+    const rootCalSnap = await getDocs(rootCalQuery);
+    if (!rootCalSnap.empty) {
+      const rootCalDeletes = rootCalSnap.docs.map((d) => deleteDoc(d.ref));
+      await Promise.all(rootCalDeletes);
+    }
+  } catch (e) {
+    console.warn("루트 캘린더 일정 삭제 경고:", e);
+  }
+
+  // 7. 상담 신청 내역 삭제 (학생 또는 교수로 연관된 모든 상담 문서 삭제)
+  try {
+    const colRef = collection(db, CONSULTATIONS_COLLECTION);
+    const [snapStudent, snapProf] = await Promise.all([
+      getDocs(query(colRef, where("studentId", "==", targetUid))),
+      getDocs(query(colRef, where("professorId", "==", targetUid))),
+    ]);
+    const consultDocs = [...snapStudent.docs, ...snapProf.docs];
+    if (consultDocs.length > 0) {
+      const seenIds = new Set<string>();
+      const consultDeletes = consultDocs
+        .filter((d) => {
+          if (seenIds.has(d.id)) return false;
+          seenIds.add(d.id);
+          return true;
+        })
+        .map((d) => deleteDoc(d.ref));
+      await Promise.all(consultDeletes);
+    }
+  } catch (e) {
+    console.warn("상담 내역 삭제 연동 경고:", e);
+  }
+
+  // 8. 대화방(채팅방) 정리:
+  // - 1:1 대화방이면 대화방 문서 자체 삭제
+  // - 단체 대화방이면 participants 및 participantDetails에서 대상 사용자 제거
+  try {
+    const chatsQuery = query(
+      collection(db, CHATS_COLLECTION),
+      where("participants", "array-contains", targetUid)
+    );
+    const chatsSnap = await getDocs(chatsQuery);
+    for (const chatDoc of chatsSnap.docs) {
+      const chatData = chatDoc.data() as FirestoreChatRoom;
+      const isDirect = !chatData.isGroup || (chatData.participants && chatData.participants.length <= 2);
+      if (isDirect) {
+        await deleteDoc(chatDoc.ref);
+      } else {
+        const remaining = (chatData.participants || []).filter((id) => id !== targetUid);
+        if (remaining.length === 0) {
+          await deleteDoc(chatDoc.ref);
+        } else {
+          const updatePayload: Record<string, any> = {
+            participants: arrayRemove(targetUid),
+          };
+          if (chatData.participantDetails && chatData.participantDetails[targetUid]) {
+            updatePayload[`participantDetails.${targetUid}`] = deleteField();
+          }
+          await updateDoc(chatDoc.ref, updatePayload);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn("대화방 데이터 정리 연동 경고:", e);
+  }
 }
+
+/**
+ * 관리자용: 과거에 삭제된 계정의 잔여 데이터(상담 신청서, 단체방 유령 참여자, 1:1 대화방 등)를
+ * Firestore에서 일괄 감지하여 안전하게 영구 정리합니다.
+ */
+export async function cleanupOrphanedUserDataInFirestore(): Promise<{
+  deletedConsultations: number;
+  cleanedChats: number;
+}> {
+  const { db } = getFirebaseInstances();
+  if (!db) throw new Error("Firestore가 연결되어 있지 않습니다.");
+
+  let deletedConsultations = 0;
+  let cleanedChats = 0;
+
+  try {
+    const usersSnap = await getDocs(collection(db, USERS_COLLECTION));
+    const validUids = new Set(usersSnap.docs.map((d) => d.id));
+
+    // 1. 상담 내역 검사: 신청 학생이나 담당 교수가 users 컬렉션에 없는 경우 영구 삭제
+    const consultSnap = await getDocs(collection(db, CONSULTATIONS_COLLECTION));
+    const orphanConsults = consultSnap.docs.filter((d) => {
+      const data = d.data();
+      return !validUids.has(data.studentId) || !validUids.has(data.professorId);
+    });
+
+    if (orphanConsults.length > 0) {
+      await Promise.all(orphanConsults.map((d) => deleteDoc(d.ref)));
+      deletedConsultations = orphanConsults.length;
+    }
+
+    // 2. 대화방 검사: 존재하지 않는 참여자 정리
+    const chatsSnap = await getDocs(collection(db, CHATS_COLLECTION));
+    for (const chatDoc of chatsSnap.docs) {
+      const chatData = chatDoc.data() as FirestoreChatRoom;
+      const participants = chatData.participants || [];
+      const invalidMembers = participants.filter((uid) => !validUids.has(uid));
+
+      if (invalidMembers.length > 0) {
+        const remaining = participants.filter((uid) => validUids.has(uid));
+        if (!chatData.isGroup || remaining.length <= 1) {
+          if (!chatData.isGroup || remaining.length === 0) {
+            await deleteDoc(chatDoc.ref);
+            cleanedChats++;
+            continue;
+          }
+        }
+
+        const updatePayload: Record<string, any> = {
+          participants: remaining,
+        };
+        for (const badUid of invalidMembers) {
+          if (chatData.participantDetails && chatData.participantDetails[badUid]) {
+            updatePayload[`participantDetails.${badUid}`] = deleteField();
+          }
+        }
+        await updateDoc(chatDoc.ref, updatePayload);
+        cleanedChats++;
+      }
+    }
+  } catch (err) {
+    console.warn("잔여 데이터 일괄 정리 경고:", err);
+  }
+
+  return { deletedConsultations, cleanedChats };
+}
+
 
 /**
  * 사용자(관리자 포함)의 표시 이름 및 프로필 이니셜 변경

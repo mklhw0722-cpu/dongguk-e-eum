@@ -195,6 +195,9 @@ service cloud.firestore {
         )
       );
 
+      // 대화방 삭제: 관리자가 회원 탈퇴/계정 삭제 시 잔여 1:1 대화방을 정리하거나 참여자가 없는 대화방 삭제
+      allow delete: if isApprovedAdmin();
+
       // 메시지 하위 컬렉션
       match /messages/{messageId} {
         allow read: if isApprovedUser() && (

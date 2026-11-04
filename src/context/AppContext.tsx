@@ -68,6 +68,7 @@ import {
   subscribeToAllUsersForAdmin,
   updateUserApprovalStatusByAdmin,
   deleteUserByAdminInFirestore,
+  cleanupOrphanedUserDataInFirestore,
   claimInitialAdminRole,
   FirestoreChatRoom,
   FirestoreChatMessage,
@@ -535,6 +536,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         syncApprovedUsersToPublicProfiles(list).catch((e) =>
           console.warn("공개 프로필 백그라운드 동기화 경고:", e)
         );
+        // 삭제된 계정의 잔여 데이터(상담 신청서, 단체방 유령 참여자, 1:1 대화방 등) 백그라운드 영구 정리
+        cleanupOrphanedUserDataInFirestore().catch((e) =>
+          console.warn("잔여 데이터 일괄 정리 경고:", e)
+        );
       },
       (err) => {
         console.warn(err);
@@ -960,63 +965,102 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // 대화방 목록 계산 (Firestore 연결 시 실제 대화방 동기화, 데모 모드 시 로컬 상태)
   const conversations: Conversation[] = useMemo(() => {
     if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
-      return firestoreRooms.map((room) => {
-        let displayTitle = room.title;
+      const validMemberIds = new Set(approvedMembers.map((m) => m.id));
+      validMemberIds.add(authUserProfile.id);
 
-        // 1:1 대화방의 경우 상대방 이름으로 제목 동적 설정 (학번 노출 방지)
-        if (!room.isGroup) {
-          const partnerUid = room.participants.find((uid) => uid !== authUserProfile.id);
-          if (partnerUid && room.participantDetails?.[partnerUid]) {
-            const partner = room.participantDetails[partnerUid];
-            displayTitle = partner.name || "대화 상대";
+      return firestoreRooms
+        .filter((room) => {
+          // 1:1 대화방의 경우, 상대방이 이미 삭제되었거나 탈퇴한 회원이면 대화방 목록에서 제외
+          if (!room.isGroup) {
+            const partnerUid = room.participants.find((uid) => uid !== authUserProfile.id);
+            if (!partnerUid || !validMemberIds.has(partnerUid)) {
+              return false;
+            }
           }
+          return true;
+        })
+        .map((room) => {
+          let displayTitle = room.title;
+
+          // 1:1 대화방의 경우 상대방 이름으로 제목 동적 설정 (학번 노출 방지)
+          if (!room.isGroup) {
+            const partnerUid = room.participants.find((uid) => uid !== authUserProfile.id);
+            if (partnerUid && room.participantDetails?.[partnerUid]) {
+              const partner = room.participantDetails[partnerUid];
+              displayTitle = partner.name || "대화 상대";
+            }
+          }
+
+          // 단체방 등에서 탈퇴/삭제된 사용자를 참여자 목록에서 제외
+          const activeParticipants = (room.participants || []).filter((uid) => validMemberIds.has(uid));
+
+          const readStateRoom = {
+            participants: activeParticipants,
+            msgSeq: room.msgSeq,
+            readSeq: room.readSeq,
+            joinSeq: room.joinSeq,
+          };
+
+          return {
+            id: room.id,
+            title: displayTitle,
+            isGroup: room.isGroup,
+            categoryTag: room.categoryTag || (room.isGroup ? "단체 대화방" : "1:1 대화"),
+            memberIds: activeParticipants,
+            members: activeParticipants.map((uid) => ({
+              conversationId: room.id,
+              userId: uid,
+              joinedAt: room.createdAt,
+              unreadCount: unreadCountForUser(readStateRoom, uid),
+            })),
+            lastMessageText: room.lastMessageText || "",
+            lastMessageAt: room.lastMessageAt || "",
+            createdBy: room.createdBy,
+            msgSeq: room.msgSeq,
+            readSeq: room.readSeq,
+            joinSeq: room.joinSeq,
+          };
+        });
+    }
+
+    const validUsers = new Set(state.users.map((u) => u.id));
+    if (currentUser) validUsers.add(currentUser.id);
+
+    return state.conversations
+      .filter((conv) => {
+        if (!conv.isGroup) {
+          const partnerId = conv.memberIds.find((id) => id !== currentUser?.id);
+          if (partnerId && !validUsers.has(partnerId)) return false;
         }
-
+        return true;
+      })
+      .map((conv) => {
+        const filteredMemberIds = (conv.memberIds || []).filter((id) => validUsers.has(id));
+        if (typeof conv.msgSeq !== "number") {
+          return {
+            ...conv,
+            memberIds: filteredMemberIds,
+            members: (conv.members || []).filter((m) => validUsers.has(m.userId)),
+          };
+        }
         const readStateRoom = {
-          participants: room.participants || [],
-          msgSeq: room.msgSeq,
-          readSeq: room.readSeq,
-          joinSeq: room.joinSeq,
+          participants: filteredMemberIds,
+          msgSeq: conv.msgSeq,
+          readSeq: conv.readSeq,
+          joinSeq: conv.joinSeq,
         };
-
         return {
-          id: room.id,
-          title: displayTitle,
-          isGroup: room.isGroup,
-          categoryTag: room.categoryTag || (room.isGroup ? "단체 대화방" : "1:1 대화"),
-          memberIds: room.participants,
-          members: room.participants.map((uid) => ({
-            conversationId: room.id,
-            userId: uid,
-            joinedAt: room.createdAt,
-            unreadCount: unreadCountForUser(readStateRoom, uid),
-          })),
-          lastMessageText: room.lastMessageText || "",
-          lastMessageAt: room.lastMessageAt || "",
-          createdBy: room.createdBy,
-          msgSeq: room.msgSeq,
-          readSeq: room.readSeq,
-          joinSeq: room.joinSeq,
+          ...conv,
+          memberIds: filteredMemberIds,
+          members: (conv.members || [])
+            .filter((m) => validUsers.has(m.userId))
+            .map((m) => ({
+              ...m,
+              unreadCount: unreadCountForUser(readStateRoom, m.userId),
+            })),
         };
       });
-    }
-    return state.conversations.map((conv) => {
-      if (typeof conv.msgSeq !== "number") return conv;
-      const readStateRoom = {
-        participants: conv.memberIds || [],
-        msgSeq: conv.msgSeq,
-        readSeq: conv.readSeq,
-        joinSeq: conv.joinSeq,
-      };
-      return {
-        ...conv,
-        members: conv.members.map((m) => ({
-          ...m,
-          unreadCount: unreadCountForUser(readStateRoom, m.userId),
-        })),
-      };
-    });
-  }, [isRealAuthActive, authUserProfile, firestoreRooms, state.conversations]);
+  }, [isRealAuthActive, authUserProfile, approvedMembers, firestoreRooms, state.conversations, state.users, currentUser]);
 
   const switchRole = (role: UserRole) => {
     setCurrentRole(role);
@@ -1177,9 +1221,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleAdminDeleteUser = async (targetUid: string) => {
-    // 1. Firebase 연동 상태라면 Firestore에서 대상 회원의 문서(users, publicProfiles, graduationRecords) 완전 삭제
+    // 1. Firebase 연동 상태라면 Firestore에서 대상 회원의 문서(users, publicProfiles, graduationRecords, calendarEvents, consultations, chats) 완전 삭제
     if (isRealAuthActive && isFirestoreConnected) {
       await deleteUserByAdminInFirestore(targetUid);
+      cleanupOrphanedUserDataInFirestore().catch(console.warn);
     }
 
     // 2. 관리자용 실시간 목록에서 제거 및 삭제 대상이 교수였을 경우 배정되어 있던 학생들의 지도교수 정보 초기화
@@ -1206,10 +1251,41 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       approvalRequests: prev.approvalRequests.filter(
         (r) => r.id !== targetUid
       ),
+      consultations: (prev.consultations || []).filter(
+        (c) => c.studentId !== targetUid && c.professorId !== targetUid
+      ),
+      conversations: (prev.conversations || [])
+        .filter((conv) => {
+          if (!conv.isGroup && conv.memberIds.includes(targetUid)) return false;
+          return true;
+        })
+        .map((conv) => ({
+          ...conv,
+          memberIds: conv.memberIds.filter((id) => id !== targetUid),
+          members: conv.members.filter((m) => m.userId !== targetUid),
+        })),
     }));
 
     // 4. 승인된 공개 회원 목록에서 제거
     setApprovedMembersRaw((prev: PublicChatUser[]) => prev.filter((m) => m.id !== targetUid));
+
+    // 5. 로컬 상담 신청 목록에서 삭제된 사용자와 관련된 상담 즉각 제거
+    setCloudConsultations((prev) =>
+      prev.filter((c) => c.studentId !== targetUid && c.professorId !== targetUid)
+    );
+
+    // 6. Firestore 대화방 상태(실시간 룸 목록) 즉각 정리
+    setFirestoreRooms((prev) =>
+      prev
+        .filter((room) => {
+          if (!room.isGroup && room.participants.includes(targetUid)) return false;
+          return true;
+        })
+        .map((room) => ({
+          ...room,
+          participants: room.participants.filter((id) => id !== targetUid),
+        }))
+    );
   };
 
   const handleAdminAssignAdvisor = async (
@@ -1709,10 +1785,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // --- 교수 상담 신청 시스템 액션 ---
   const consultations: ConsultationRequest[] = useMemo(() => {
-    if (isRealAuthActive) {
-      return cloudConsultations;
+    let all = isRealAuthActive ? cloudConsultations : (state.consultations || []);
+
+    // 승인된 교수 목록에 실존하는 교수와의 상담만 필터링 (삭제된 교수의 과거 신청서 자동 배제)
+    const validProfIds = new Set(approvedProfessors.map((p) => p.id));
+    if (approvedProfessors.length > 0) {
+      all = all.filter((c) => validProfIds.has(c.professorId));
     }
-    const all = state.consultations || [];
+
     if (currentRole === "student" && currentUser) {
       return all.filter((c) => c.studentId === currentUser.id);
     }
@@ -1720,7 +1800,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return all.filter((c) => c.professorId === currentUser.id);
     }
     return all;
-  }, [isRealAuthActive, cloudConsultations, state.consultations, currentRole, currentUser]);
+  }, [isRealAuthActive, cloudConsultations, state.consultations, approvedProfessors, currentRole, currentUser]);
 
   const handleCreateConsultation = async (payload: {
     professorId: string;

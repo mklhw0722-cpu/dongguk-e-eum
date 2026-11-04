@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { ROLE_LABELS, DemoInfoBanner } from "@/components/common/Cards";
 import {
@@ -416,14 +416,25 @@ export default function ChatPage() {
     }
   };
 
-  const filteredConversations = conversations.filter((c) => {
-    const q = convSearch.trim().toLowerCase();
-    if (!q) return true;
-    return (
-      c.title.toLowerCase().includes(q) ||
-      c.lastMessageText.toLowerCase().includes(q)
-    );
-  });
+  const filteredConversations = conversations
+    .filter((c) => {
+      // 1:1 대화방의 경우 상대방이 이미 탈퇴/삭제된 회원이면 대화 목록에서 제외
+      if (!c.isGroup) {
+        const otherId = c.memberIds.find((id) => id !== currentUser.id);
+        if (!otherId || !availableUsers.some((u) => u.id === otherId)) {
+          return false;
+        }
+      }
+      return true;
+    })
+    .filter((c) => {
+      const q = convSearch.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        c.title.toLowerCase().includes(q) ||
+        c.lastMessageText.toLowerCase().includes(q)
+      );
+    });
 
   // 대화 상대 검색용 사용자 목록 (본인 제외, 개인정보 보호: 학번/이메일 검색 제외, 이름 및 역할/전공/진로만 검색)
   const searchableUsers = availableUsers.filter((u) => {
@@ -634,27 +645,30 @@ export default function ChatPage() {
     }
   };
 
-  // 현재 활성 대화방의 참여자 상세 목록
+  // 현재 활성 대화방의 참여자 상세 목록 (탈퇴/삭제된 회원은 유령 계정 방지를 위해 제외)
   const activeMembers =
     activeConversation?.memberIds
       .map((uid) => {
         if (uid === currentUser.id) return currentUser;
-        return (
-          availableUsers.find((u) => u.id === uid) || {
-            id: uid,
-            name: "학과 구성원",
-            role: "student" as UserRole,
-            avatarInitials: "학",
-            email: "",
-            approvalStatus: "approved" as const,
-            joinedAt: "",
-            bio: "",
-            doubleMajor: "",
-            careerTrack: undefined,
-          }
-        );
+        return availableUsers.find((u) => u.id === uid);
       })
-      .filter(Boolean) || [];
+      .filter((m): m is (PublicChatUser | User) => Boolean(m)) || [];
+
+  // 학생 전용: 실존하는 교수님과의 유효 진행 중 상담만 필터링 (삭제된 교수 계정의 상담 자동 배제)
+  const myActiveConsultations = useMemo(() => {
+    return (consultations || []).filter((c) => {
+      const isMy =
+        c.studentId === currentUser.id || c.studentEmail === currentUser.email;
+      const isActive =
+        c.status === "pending" ||
+        c.status === "accepted" ||
+        c.status === "reschedule_requested";
+      const profExists = availableUsers.some(
+        (u) => u.id === c.professorId || u.name === c.professorName
+      );
+      return isMy && isActive && profExists;
+    });
+  }, [consultations, currentUser, availableUsers]);
 
   return (
     <div className="space-y-4">
@@ -879,14 +893,7 @@ export default function ChatPage() {
 
       {/* 학생 전용: 나의 상담 신청 현황 */}
       {(currentUser.role === "student" || currentRole === "student") &&
-        (consultations || []).filter(
-          (c) =>
-            (c.studentId === currentUser.id ||
-              c.studentEmail === currentUser.email) &&
-            (c.status === "pending" ||
-              c.status === "accepted" ||
-              c.status === "reschedule_requested")
-        ).length > 0 && (
+        myActiveConsultations.length > 0 && (
           <section className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 space-y-3 shadow-xs">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
@@ -896,29 +903,12 @@ export default function ChatPage() {
                 </h2>
               </div>
               <span className="text-xs text-slate-400 font-semibold">
-                진행 중{" "}
-                {(consultations || []).filter(
-                  (c) =>
-                    (c.studentId === currentUser.id ||
-                      c.studentEmail === currentUser.email) &&
-                    (c.status === "pending" ||
-                      c.status === "accepted" ||
-                      c.status === "reschedule_requested")
-                ).length}건
+                진행 중 {myActiveConsultations.length}건
               </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {(consultations || [])
-                .filter(
-                  (c) =>
-                    (c.studentId === currentUser.id ||
-                      c.studentEmail === currentUser.email) &&
-                    (c.status === "pending" ||
-                      c.status === "accepted" ||
-                      c.status === "reschedule_requested")
-                )
-                .map((c) => {
+              {myActiveConsultations.map((c) => {
                   const st = CONSULTATION_STATUS_BADGES[c.status];
                   return (
                     <div
