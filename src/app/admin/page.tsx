@@ -860,9 +860,9 @@ export default function AdminPage() {
                         </div>
                       </div>
 
-                      {/* 재학생 전용: 지도교수 배정 및 변경 관리 */}
+                      {/* 재학생 전용: 배정된 지도교수 정보 표시 (배정/변경은 교수 회원 카드에서만 수행) */}
                       {u.role === "student" && (
-                        <div className="w-full mt-1 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-orange-50/50 dark:bg-orange-950/20 px-3 py-2 rounded-xl">
+                        <div className="w-full mt-1 pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2.5 bg-orange-50/50 dark:bg-orange-950/20 px-3 py-2 rounded-xl">
                           <div className="flex items-center gap-2 text-xs flex-wrap">
                             <GraduationCap className="w-4 h-4 text-orange-600 shrink-0" />
                             <span className="font-bold text-slate-700 dark:text-slate-300">
@@ -893,30 +893,6 @@ export default function AdminPage() {
                                 </span>
                               );
                             })()}
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            <label className="text-[11px] font-bold text-slate-500 shrink-0">
-                              지도교수 지정:
-                            </label>
-                            <select
-                              value={u.advisorProfessorId || ""}
-                              disabled={updatingAdvisorStudentId === u.id}
-                              onChange={(e) => handleAssignAdvisor(u.id, e.target.value || null)}
-                              className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 focus:outline-hidden focus:ring-2 focus:ring-orange-500 disabled:opacity-50"
-                            >
-                              <option value="">-- 미등록 (해제) --</option>
-                              {approvedProfessors.map((prof) => (
-                                <option key={prof.id} value={prof.id}>
-                                  {prof.name} {prof.specialty ? `(${prof.specialty})` : "(교육학과)"}
-                                </option>
-                              ))}
-                            </select>
-                            {updatingAdvisorStudentId === u.id && (
-                              <span className="text-[11px] text-orange-600 animate-pulse font-bold">
-                                저장 중...
-                              </span>
-                            )}
                           </div>
                         </div>
                       )}
