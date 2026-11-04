@@ -11,6 +11,7 @@ import {
 } from "@/types";
 import { OFFICIAL_GRADUATION_CATALOG } from "@/lib/graduationCurriculum";
 import { ROLE_LABELS, DemoInfoBanner } from "@/components/common/Cards";
+import { ADMIN_PROFILE_LOGO_DATA_URL } from "@/lib/adminSymbol";
 import {
   ShieldCheck,
   UserCheck,
@@ -308,8 +309,12 @@ export default function AdminPage() {
       {/* 접속 중인 관리자 프로필 및 이름 변경 섹션 */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-orange-600 text-white flex items-center justify-center font-black text-sm shrink-0">
-            {authUserProfile.avatarInitials || (authUserProfile.name ? authUserProfile.name.slice(0, 2) : "관리")}
+          <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-800 border border-orange-200 dark:border-slate-700 flex items-center justify-center shrink-0 overflow-hidden shadow-xs">
+            <img
+              src={ADMIN_PROFILE_LOGO_DATA_URL}
+              alt="동국대학교 관리자 로고"
+              className="w-full h-full object-contain p-0.5"
+            />
           </div>
           <div>
             <div className="flex items-center gap-2">

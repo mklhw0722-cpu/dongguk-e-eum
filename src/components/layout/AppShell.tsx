@@ -10,6 +10,7 @@ import { UserRole } from "@/types";
 import { ROLE_LABELS } from "@/components/common/Cards";
 import { FirebaseSetupModal } from "@/components/common/FirebaseSetupModal";
 import { DONGGUK_SYMBOL_DATA_URL } from "@/lib/donggukSymbol";
+import { ADMIN_PROFILE_LOGO_DATA_URL } from "@/lib/adminSymbol";
 import { formatUnreadBadge } from "@/lib/chatReadReceipts";
 import { getAvatarInitials } from "@/lib/firebase";
 import {
@@ -257,11 +258,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ) : (
             <div className="p-3.5 rounded-2xl bg-orange-50/70 dark:bg-slate-800/80 border border-orange-200/70 dark:border-slate-700">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-600 text-white font-bold text-sm flex items-center justify-center shrink-0">
-                  {currentUser.role === "admin" ? null : (
-                    getAvatarInitials(currentUser.name, currentUser.role) || currentUser.avatarInitials
-                  )}
-                </div>
+                {currentUser.role === "admin" ? (
+                  <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 border border-orange-200 dark:border-slate-700 flex items-center justify-center shrink-0 overflow-hidden shadow-xs">
+                    <img
+                      src={ADMIN_PROFILE_LOGO_DATA_URL}
+                      alt="동국대학교 관리자 로고"
+                      className="w-full h-full object-contain p-0.5"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-10 h-10 rounded-xl bg-orange-600 text-white font-bold text-sm flex items-center justify-center shrink-0">
+                    {getAvatarInitials(currentUser.name, currentUser.role) || currentUser.avatarInitials}
+                  </div>
+                )}
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <p className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">
