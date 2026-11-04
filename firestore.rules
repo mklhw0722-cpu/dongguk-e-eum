@@ -91,6 +91,14 @@ service cloud.firestore {
 
       // 회원 탈퇴 또는 관리자 삭제
       allow delete: if isAuthenticated() && (request.auth.uid == userId || isApprovedAdmin());
+
+      // ==============================================================
+      // 1-2. 사용자별 개인 캘린더 일정 (users/{userId}/calendarEvents)
+      // ==============================================================
+      match /calendarEvents/{eventId} {
+        // 본인 일정 또는 관리자만 조회/수정/삭제 가능
+        allow read, write: if isApprovedUser() && (request.auth.uid == userId || isApprovedAdmin());
+      }
     }
 
     // ==============================================================
@@ -296,6 +304,15 @@ service cloud.firestore {
       // 삭제는 관리자 또는 학생의 대기(pending) 상태 철회 시에만 허용
       allow delete: if isApprovedAdmin()
                     || (isApprovedUser() && request.auth.uid == resource.data.studentId && resource.data.status == 'pending');
+    }
+
+    // ==============================================================
+    // 8. 캘린더 개인 일정 (루트 calendarEvents 컬렉션 보호)
+    // ==============================================================
+    match /calendarEvents/{eventId} {
+      allow read: if isApprovedUser() && (resource.data.userId == request.auth.uid || isApprovedAdmin());
+      allow create: if isApprovedUser() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isApprovedUser() && (resource.data.userId == request.auth.uid || isApprovedAdmin());
     }
 
     // 그 외 지정되지 않은 모든 컬렉션과 문서는 전면 차단

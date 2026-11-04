@@ -46,6 +46,8 @@ import {
   ConsultationRequest,
   ConsultationType,
   ConsultationStatus,
+  CalendarEvent,
+  EventCategory,
 } from "@/types";
 import { MOCK_COMMUNITY_POSTS } from "@/data/mockData";
 
@@ -1958,4 +1960,106 @@ export async function cancelConsultationInFirestore(consultationId: string): Pro
     status: "cancelled",
     updatedAt: new Date().toISOString(),
   });
+}
+
+/**
+ * ==============================================================
+ * 캘린더 개인 일정 Firestore 실시간 동기화 시스템
+ * ==============================================================
+ */
+
+/**
+ * 사용자별 개인 캘린더 일정 실시간 구독 (Firestore onSnapshot)
+ * 스마트폰, PC 등 어떤 기기에서든 동일한 계정으로 로그인하면 실시간 양방향 동기화
+ */
+export function subscribeToUserCalendarEvents(
+  userId: string,
+  onUpdate: (events: CalendarEvent[]) => void,
+  onError?: (err: any) => void
+): () => void {
+  const { db } = getFirebaseInstances();
+  if (!db || !userId) return () => {};
+
+  const colRef = collection(db, "users", userId, "calendarEvents");
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const events: CalendarEvent[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        events.push({
+          id: docSnap.id,
+          userId,
+          title: data.title || "",
+          date: data.date || "",
+          endDate: data.endDate || undefined,
+          time: data.time || undefined,
+          isAllDay: data.isAllDay !== false,
+          category: (data.category as EventCategory) || "assignment",
+          location: data.location || undefined,
+          memo: data.memo || undefined,
+          isOfficial: data.isOfficial || false,
+          createdAt: data.createdAt || undefined,
+          updatedAt: data.updatedAt || undefined,
+        });
+      });
+      // 날짜순, 시간순 정렬 (종일 일정 우선)
+      events.sort((a, b) => {
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        if (a.isAllDay && !b.isAllDay) return -1;
+        if (!a.isAllDay && b.isAllDay) return 1;
+        return (a.time || "").localeCompare(b.time || "");
+      });
+      onUpdate(events);
+    },
+    (err) => {
+      console.warn("캘린더 일정 실시간 구독 경고:", err);
+      if (onError) onError(err);
+    }
+  );
+}
+
+/**
+ * 캘린더 일정을 파이어베이스에 추가 또는 수정 (setDoc)
+ */
+export async function saveUserCalendarEventToFirestore(
+  userId: string,
+  event: CalendarEvent
+): Promise<void> {
+  const { db } = getFirebaseInstances();
+  if (!db || !userId) return;
+
+  const eventDocRef = doc(db, "users", userId, "calendarEvents", event.id);
+  const nowIso = new Date().toISOString();
+  const payload: Record<string, any> = {
+    id: event.id,
+    userId,
+    title: event.title.trim(),
+    date: event.date,
+    category: event.category,
+    isAllDay: event.isAllDay !== false,
+    updatedAt: nowIso,
+  };
+  if (event.endDate) payload.endDate = event.endDate;
+  if (event.time) payload.time = event.time;
+  if (event.location) payload.location = event.location.trim();
+  if (event.memo) payload.memo = event.memo.trim();
+  if (event.isOfficial !== undefined) payload.isOfficial = event.isOfficial;
+  if (!event.createdAt) payload.createdAt = nowIso;
+
+  await setDoc(eventDocRef, payload, { merge: true });
+}
+
+/**
+ * 캘린더 일정을 파이어베이스에서 삭제 (deleteDoc)
+ */
+export async function deleteUserCalendarEventFromFirestore(
+  userId: string,
+  eventId: string
+): Promise<void> {
+  const { db } = getFirebaseInstances();
+  if (!db || !userId || !eventId) return;
+
+  const eventDocRef = doc(db, "users", userId, "calendarEvents", eventId);
+  await deleteDoc(eventDocRef);
 }

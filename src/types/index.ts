@@ -5,6 +5,30 @@ export type UserRole = "student" | "alumni" | "professor" | "admin";
 
 export type ApprovalStatus = "pending" | "approved" | "rejected" | "supplement_requested" | "suspended";
 
+// 캘린더 개인 일정 모델 정의
+export type EventCategory =
+  | "assignment" // 과제·팀플
+  | "exam"       // 시험
+  | "class"      // 수업·특강
+  | "personal"   // 개인·약속
+  | "official";  // 학사·공지
+
+export interface CalendarEvent {
+  id: string;
+  userId?: string;
+  title: string;
+  date: string; // YYYY-MM-DD
+  endDate?: string; // YYYY-MM-DD (선택)
+  time?: string; // HH:mm 또는 ""
+  isAllDay?: boolean;
+  category: EventCategory;
+  location?: string;
+  memo?: string;
+  isOfficial?: boolean; // 공지사항 연동 여부
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type CareerTrack =
   | "교직"
   | "교육행정"
