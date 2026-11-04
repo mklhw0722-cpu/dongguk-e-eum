@@ -60,6 +60,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     accessGate,
     firestoreError,
     handleLogout,
+    realUsersForAdmin,
   } = useApp();
   const router = useRouter();
 
@@ -71,8 +72,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return sum + (member?.unreadCount || 0);
   }, 0);
 
-  const pendingApprovalsCount = approvalRequests.filter(
-    (r) => r.status === "pending"
+  const pendingApprovalsCount = (
+    realUsersForAdmin && realUsersForAdmin.length > 0
+      ? realUsersForAdmin.filter((u) => u.approvalStatus !== "approved")
+      : approvalRequests.filter((r) => r.status !== "approved")
   ).length;
 
   // 관리자 권한 검증: 승인 완료(approved)이고 역할이 admin인 경우만 관리자 인정

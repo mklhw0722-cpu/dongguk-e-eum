@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, {useState, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import {
   ApprovalStatus,
@@ -82,6 +82,16 @@ export default function AdminPage() {
   >("approvals");
 
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
+
+  // 가입 승인 대기 목록 (승인 완료된 회원은 가입 승인창에서 제외)
+  const pendingRealUsers = useMemo(
+    () => realUsersForAdmin.filter((u) => u.approvalStatus !== "approved"),
+    [realUsersForAdmin]
+  );
+  const pendingApprovalRequests = useMemo(
+    () => approvalRequests.filter((r) => r.status !== "approved"),
+    [approvalRequests]
+  );
 
   const handleDeleteUser = async (targetUser: { id: string; name: string; role: UserRole }) => {
     // 1. 현재 로그인 중인 관리자 본인 계정 삭제 차단
@@ -347,16 +357,7 @@ export default function AdminPage() {
             </form>
           ) : (
             <>
-              {authUserProfile.name !== "이혜원" && (
-                <button
-                  type="button"
-                  disabled={isAdminNameSaving}
-                  onClick={() => handleSaveAdminName("이혜원")}
-                  className="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition shadow-xs"
-                >
-                  이름을 &apos;이혜원&apos;으로 변경
-                </button>
-              )}
+              
               <button
                 type="button"
                 onClick={() => {
@@ -384,7 +385,7 @@ export default function AdminPage() {
           }`}
         >
           <UserCheck className="w-4 h-4" /> 가입 승인 관리 (
-          {realUsersForAdmin.length > 0 ? realUsersForAdmin.length : approvalRequests.length})
+          {isFirestoreConnected && realUsersForAdmin.length > 0 ? pendingRealUsers.length : pendingApprovalRequests.length})
         </button>
         <button
           type="button"
@@ -441,128 +442,140 @@ export default function AdminPage() {
             <div className="space-y-3">
               <h2 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2">
                 <Database className="w-4 h-4 text-emerald-600" />
-                Firebase 실제 가입 신청자 실시간 목록 ({realUsersForAdmin.length}명)
+                Firebase 가입 승인 대기자 실시간 목록 ({pendingRealUsers.length}명)
               </h2>
 
-              {realUsersForAdmin.map((userDoc) => {
-                const st = STATUS_LABELS[userDoc.approvalStatus] || STATUS_LABELS.pending;
-                return (
-                  <div
-                    key={userDoc.id}
-                    className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${st.style}`}
-                        >
-                          {st.label}
-                        </span>
-                        <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
-                          {userDoc.name}
-                        </span>
-                        <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-xs font-semibold">
-                          신청 역할: {ROLE_LABELS[userDoc.role]} ({userDoc.studentIdOrYear})
+              {pendingRealUsers.length === 0 ? (
+                <div className="p-8 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-2">
+                  <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto" />
+                  <p className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100">
+                    현재 승인 대기 중인 가입 신청이 없습니다.
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    모든 가입 신청자의 승인이 완료되었습니다. 승인 완료된 회원은 상단의 <strong>[전체 회원 관리]</strong> 탭에서 확인 및 권한을 관리하실 수 있습니다.
+                  </p>
+                </div>
+              ) : (
+                pendingRealUsers.map((userDoc) => {
+                  const st = STATUS_LABELS[userDoc.approvalStatus] || STATUS_LABELS.pending;
+                  return (
+                    <div
+                      key={userDoc.id}
+                      className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${st.style}`}
+                          >
+                            {st.label}
+                          </span>
+                          <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
+                            {userDoc.name}
+                          </span>
+                          <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-xs font-semibold">
+                            신청 역할: {ROLE_LABELS[userDoc.role]} ({userDoc.studentIdOrYear})
+                          </span>
+                        </div>
+                        <span className="text-xs text-slate-400">
+                          가입일: {userDoc.joinedAt}
                         </span>
                       </div>
-                      <span className="text-xs text-slate-400">
-                        가입일: {userDoc.joinedAt}
-                      </span>
-                    </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl">
-                      <p>
-                        <strong>이메일:</strong> {userDoc.email}
-                      </p>
-                      <p>
-                        <strong>UID:</strong> <code className="text-[11px]">{userDoc.id}</code>
-                      </p>
-                      {userDoc.verificationNote && (
-                        <p className="sm:col-span-2">
-                          <strong>가입 신청 메모:</strong> {userDoc.verificationNote}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl">
+                        <p>
+                          <strong>이메일:</strong> {userDoc.email}
                         </p>
-                      )}
-                      {userDoc.adminComment && (
-                        <p className="sm:col-span-2 text-orange-700 dark:text-orange-300 font-semibold">
-                          <strong>관리자 메시지:</strong> {userDoc.adminComment}
+                        <p>
+                          <strong>UID:</strong> <code className="text-[11px]">{userDoc.id}</code>
                         </p>
-                      )}
-                    </div>
+                        {userDoc.verificationNote && (
+                          <p className="sm:col-span-2">
+                            <strong>가입 신청 메모:</strong> {userDoc.verificationNote}
+                          </p>
+                        )}
+                        {userDoc.adminComment && (
+                          <p className="sm:col-span-2 text-orange-700 dark:text-orange-300 font-semibold">
+                            <strong>관리자 메시지:</strong> {userDoc.adminComment}
+                          </p>
+                        )}
+                      </div>
 
-                    <div className="flex flex-col sm:flex-row gap-2 pt-1">
-                      <select
-                        value={roleSelects[userDoc.id] || userDoc.role}
-                        onChange={(e) =>
-                          setRoleSelects((prev) => ({
-                            ...prev,
-                            [userDoc.id]: e.target.value as UserRole,
-                          }))
-                        }
-                        className="px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
-                      >
-                        <option value="student">재학생</option>
-                        <option value="alumni">졸업생</option>
-                        <option value="professor">교수</option>
-                        <option value="admin">관리자</option>
-                      </select>
+                      <div className="flex flex-col sm:flex-row gap-2 pt-1">
+                        <select
+                          value={roleSelects[userDoc.id] || userDoc.role}
+                          onChange={(e) =>
+                            setRoleSelects((prev) => ({
+                              ...prev,
+                              [userDoc.id]: e.target.value as UserRole,
+                            }))
+                          }
+                          className="px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs font-semibold"
+                        >
+                          <option value="student">재학생</option>
+                          <option value="alumni">졸업생</option>
+                          <option value="professor">교수</option>
+                          <option value="admin">관리자</option>
+                        </select>
 
-                      <input
-                        type="text"
-                        value={commentInputs[userDoc.id] || ""}
-                        onChange={(e) =>
-                          setCommentInputs((prev) => ({
-                            ...prev,
-                            [userDoc.id]: e.target.value,
-                          }))
-                        }
-                        placeholder="승인/보완/거절 메시지 입력..."
-                        className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
-                      />
+                        <input
+                          type="text"
+                          value={commentInputs[userDoc.id] || ""}
+                          onChange={(e) =>
+                            setCommentInputs((prev) => ({
+                              ...prev,
+                              [userDoc.id]: e.target.value,
+                            }))
+                          }
+                          placeholder="승인/보완/거절 메시지 입력..."
+                          className="flex-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                        />
 
-                      <div className="flex gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => onProcessRealUser(userDoc.id, "approved")}
-                          className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-1 transition"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5" /> 승인
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onProcessRealUser(userDoc.id, "supplement_requested")}
-                          className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold inline-flex items-center gap-1 transition"
-                        >
-                          <AlertCircle className="w-3.5 h-3.5" /> 보완 요청
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onProcessRealUser(userDoc.id, "rejected")}
-                          className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold inline-flex items-center gap-1 transition"
-                        >
-                          <XCircle className="w-3.5 h-3.5" /> 거절
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => onProcessRealUser(userDoc.id, "suspended")}
-                          className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold inline-flex items-center gap-1 transition"
-                        >
-                          이용 정지
-                        </button>
-                        <button
-                          type="button"
-                          disabled={deletingUserId === userDoc.id}
-                          onClick={() => handleDeleteUser(userDoc)}
-                          title="가입 신청 회원 완전 삭제"
-                          className="px-2.5 py-2 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-xs font-bold inline-flex items-center gap-1 transition disabled:opacity-50"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>{deletingUserId === userDoc.id ? "삭제 중" : "삭제"}</span>
-                        </button>
+                        <div className="flex gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => onProcessRealUser(userDoc.id, "approved")}
+                            className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-1 transition"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" /> 승인
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onProcessRealUser(userDoc.id, "supplement_requested")}
+                            className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold inline-flex items-center gap-1 transition"
+                          >
+                            <AlertCircle className="w-3.5 h-3.5" /> 보완 요청
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onProcessRealUser(userDoc.id, "rejected")}
+                            className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold inline-flex items-center gap-1 transition"
+                          >
+                            <XCircle className="w-3.5 h-3.5" /> 거절
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onProcessRealUser(userDoc.id, "suspended")}
+                            className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold inline-flex items-center gap-1 transition"
+                          >
+                            이용 정지
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deletingUserId === userDoc.id}
+                            onClick={() => handleDeleteUser(userDoc)}
+                            title="가입 신청 회원 완전 삭제"
+                            className="px-2.5 py-2 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-xs font-bold inline-flex items-center gap-1 transition disabled:opacity-50"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>{deletingUserId === userDoc.id ? "삭제 중" : "삭제"}</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           )}
 
@@ -572,7 +585,7 @@ export default function AdminPage() {
               {realUsersForAdmin.length > 0 ? "데모 신청 내역 (로컬)" : "가입 신청 목록"}
             </h2>
 
-            {approvalRequests.map((req) => {
+            {pendingApprovalRequests.map((req) => {
               const st = STATUS_LABELS[req.status];
               return (
                 <div
