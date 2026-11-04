@@ -74,6 +74,104 @@ export default function HomePage() {
 
   // 역할별 맞춤형 바로가기 구성
   
+  // 재학생 모드 판별 (관리자, 교수진, 졸업생은 false)
+  const isStudent =
+    (currentUser.role === "student" || currentRole === "student") &&
+    currentUser.role !== "admin" &&
+    currentRole !== "admin" &&
+    currentUser.role !== "professor" &&
+    currentRole !== "professor" &&
+    currentUser.role !== "alumni" &&
+    currentRole !== "alumni";
+
+  // 내가 참여 중인 공유방 위젯
+  const renderJoinedRoomsSection = () => (
+    <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Compass className="w-5 h-5 text-orange-600" />
+          <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
+            내가 참여 중인 공유방 ({myJoinedRooms.length})
+          </h2>
+        </div>
+        <Link
+          href="/rooms"
+          className="text-xs font-semibold text-orange-600 hover:underline flex items-center gap-1"
+        >
+          전체 공유방 탐색 <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      </div>
+
+      {myJoinedRooms.length === 0 ? (
+        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-center text-xs text-slate-500">
+          현재 참여 중인 공유방이 없습니다.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {myJoinedRooms.slice(0, 4).map((room) => (
+            <Link
+              key={room.id}
+              href="/rooms"
+              className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-orange-400 transition bg-slate-50/50 dark:bg-slate-800/40"
+            >
+              <span className="inline-block px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-[10px] font-bold mb-1.5">
+                {room.type === "career" ? "진로 트랙" : "복수전공"} · {room.categoryName}
+              </span>
+              <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 mb-1">
+                {room.name}
+              </h3>
+              <p className="text-[11px] text-slate-500 line-clamp-1">
+                참여 인원 {room.memberIds.length}명
+              </p>
+            </Link>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+
+  // 최근 등록된 복수전공 후기 위젯
+  const renderDoubleMajorReviewsSection = () => (
+    <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <BookOpen className="w-5 h-5 text-orange-600" />
+          <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
+            최근 등록된 복수전공 후기
+          </h2>
+        </div>
+        <Link
+          href="/rooms"
+          className="text-xs font-semibold text-orange-600 hover:underline flex items-center gap-1"
+        >
+          후기 더보기 <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      </div>
+
+      <div className="space-y-2.5">
+        {doubleMajorReviews.map((post) => (
+          <Link
+            key={post.id}
+            href="/rooms"
+            className="block p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-orange-300 bg-slate-50/60 dark:bg-slate-800/40 transition"
+          >
+            <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
+              <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                [{post.roomName}]
+              </span>
+              <span>
+                {post.authorName} ({post.authorBadge})
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-1">
+              {post.title}
+            </p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+
   return (
     <div className="space-y-6">
       {/* 환영 배너 */}
@@ -106,7 +204,7 @@ export default function HomePage() {
         {/* 우측: 지도교수 & 읽지 않은 채팅 & 나의 졸업요건 확인 바로가기 */}
         <div className="lg:col-span-5 space-y-6">
           {/* 학생 전용: 나의 지도교수 영역 */}
-          {(currentUser.role === "student" || currentRole === "student") && (
+          {isStudent && (
             <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -249,10 +347,8 @@ export default function HomePage() {
           </section>
 
           {/* 나의 졸업요건 확인 바로가기 (재학생/관리자 전용) */}
-          {/* 나의 졸업요건 확인 바로가기 (재학생 전용: 관리자·교수진·졸업생 모드에서는 미노출) */}
-          {(currentUser.role === "student" || currentRole === "student") &&
-            currentUser.role !== "admin" &&
-            currentRole !== "admin" && (
+          {/* 재학생 전용: 나의 졸업요건 자가점검 요약 */}
+          {isStudent && (
           <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -301,89 +397,24 @@ export default function HomePage() {
             </div>
           </section>
           )}
+
+          {/* 관리자·졸업생·교수진 모드: 캘린더 우측 빈 공간에 공유방 & 후기 배치 */}
+          {!isStudent && (
+            <>
+              {renderJoinedRoomsSection()}
+              {renderDoubleMajorReviewsSection()}
+            </>
+          )}
         </div>
       </div>
 
-      {/* 내가 참여한 진로 공유방 & 최근 등록된 복수전공 후기 */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* 내가 참여한 진로 공유방 */}
-        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Compass className="w-5 h-5 text-orange-600" />
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                내가 참여 중인 공유방 ({myJoinedRooms.length})
-              </h2>
-            </div>
-            <Link
-              href="/rooms"
-              className="text-xs font-semibold text-orange-600 hover:underline flex items-center gap-1"
-            >
-              전체 공유방 탐색 <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {myJoinedRooms.slice(0, 4).map((room) => (
-              <Link
-                key={room.id}
-                href="/rooms"
-                className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-orange-400 transition bg-slate-50/50 dark:bg-slate-800/40"
-              >
-                <span className="inline-block px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-[10px] font-bold mb-1.5">
-                  {room.type === "career" ? "진로 트랙" : "복수전공"} · {room.categoryName}
-                </span>
-                <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 mb-1">
-                  {room.name}
-                </h3>
-                <p className="text-[11px] text-slate-500 line-clamp-1">
-                  참여 인원 {room.memberIds.length}명
-                </p>
-              </Link>
-            ))}
-          </div>
-        </section>
-
-        {/* 최근 등록된 복수전공 후기 */}
-        <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-orange-600" />
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                최근 등록된 복수전공 후기
-              </h2>
-            </div>
-            <Link
-              href="/rooms"
-              className="text-xs font-semibold text-orange-600 hover:underline flex items-center gap-1"
-            >
-              후기 더보기 <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="space-y-2.5">
-            {doubleMajorReviews.map((post) => (
-              <Link
-                key={post.id}
-                href="/rooms"
-                className="block p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-orange-300 bg-slate-50/60 dark:bg-slate-800/40 transition"
-              >
-                <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
-                  <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-                    [{post.roomName}]
-                  </span>
-                  <span>
-                    {post.authorName} ({post.authorBadge})
-                  </span>
-                </div>
-                <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-1">
-                  {post.title}
-                </p>
-              </Link>
-            ))}
-          </div>
-        </section>
-      </div>
+      {/* 재학생 모드: 하단 2열에 진로 공유방 & 최근 복수전공 후기 배치 */}
+      {isStudent && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {renderJoinedRoomsSection()}
+          {renderDoubleMajorReviewsSection()}
+        </div>
+      )}
 
       {/* 추천 졸업생 멘토 */}
       <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
