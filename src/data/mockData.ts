@@ -1018,54 +1018,7 @@ export const MOCK_STUDENT_PROGRESS: StudentProgress = {
   ],
 };
 
-export const MOCK_APPROVAL_REQUESTS: ApprovalRequest[] = [
-  {
-    id: "app-req-1",
-    applicantName: "신유진",
-    applicantEmail: "yujin.shin@sample.dgu.edu",
-    requestedRole: "student",
-    studentIdOrYear: "25학번 (1학년 재학)",
-    verificationMethod: "학교 웹메일(@dgu.ac.kr) 인증 대기 (데모)",
-    note: "교육학과 25학번 신입생입니다! 선배님들의 복수전공 후기와 학과 공지를 보고 싶어 가입 신청합니다.",
-    status: "pending",
-    submittedAt: "2026-10-22 10:15",
-  },
-  {
-    id: "app-req-2",
-    applicantName: "장민호",
-    applicantEmail: "minho.jang@sample.alumni.kr",
-    requestedRole: "alumni",
-    studentIdOrYear: "14학번 (2019년 졸업)",
-    verificationMethod: "졸업생 명부 대조 요청 (데모 - 민감 증명서 미수집)",
-    note: "14학번 졸업생입니다. 현재 에듀테크 기업에서 근무 중이며 후배 멘토링에 참여하고 싶습니다.",
-    status: "pending",
-    submittedAt: "2026-10-21 18:40",
-  },
-  {
-    id: "app-req-3",
-    applicantName: "홍길동",
-    applicantEmail: "unknown@example.com",
-    requestedRole: "student",
-    studentIdOrYear: "학번 미기재",
-    verificationMethod: "소속 확인 정보 부족",
-    note: "가입 신청합니다.",
-    status: "supplement_requested",
-    adminComment: "학번(입학연도)과 교육학과 소속 확인 메모가 누락되어 보완을 요청드립니다.",
-    submittedAt: "2026-10-19 14:20",
-  },
-  {
-    id: "app-req-4",
-    applicantName: "외부인테스트",
-    applicantEmail: "spam@example.org",
-    requestedRole: "alumni",
-    studentIdOrYear: "미상",
-    verificationMethod: "소속 불일치",
-    note: "홍보 목적 가입",
-    status: "rejected",
-    adminComment: "동국대학교 교육학과 구성원(재학생·졸업생·교수진)만 가입할 수 있는 폐쇄형 플랫폼입니다.",
-    submittedAt: "2026-10-15 09:00",
-  },
-];
+export const MOCK_APPROVAL_REQUESTS: ApprovalRequest[] = [];
 
 export const MOCK_REPORTS: ReportItem[] = [
   {

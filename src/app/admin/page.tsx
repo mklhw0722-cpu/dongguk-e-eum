@@ -69,6 +69,7 @@ export default function AdminPage() {
     handleAdminUpdateApproval,
     handleUpdateUserName,
     isFirestoreConnected,
+    isRealAuthActive,
     authUserProfile,
     graduationCatalog,
     updateGraduationCatalogByAdmin,
@@ -579,10 +580,11 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* 데모 신청자 목록 (로컬 시연용) */}
+          {/* 오프라인 시연용 가입 신청 목록 (Firebase 연결 시에는 예시 데이터를 노출하지 않음) */}
+          {!isFirestoreConnected && !isRealAuthActive && realUsersForAdmin.length === 0 && (
           <div className="space-y-3 pt-2">
             <h2 className="text-sm font-bold text-slate-500">
-              {realUsersForAdmin.length > 0 ? "데모 신청 내역 (로컬)" : "가입 신청 목록"}
+              가입 신청 목록
             </h2>
 
             {pendingApprovalRequests.map((req) => {
@@ -691,6 +693,7 @@ export default function AdminPage() {
               );
             })}
           </div>
+          )}
         </div>
       )}
 
