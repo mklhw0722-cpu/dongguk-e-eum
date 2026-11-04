@@ -44,7 +44,6 @@ export default function NoticesPage() {
 
   const [selectedCategory, setSelectedCategory] = useState<string>("전체");
   const [selectedSourceFilter, setSelectedSourceFilter] = useState<string>("전체");
-  const [hideSampleNotices, setHideSampleNotices] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
   const [isWriteModalOpen, setIsWriteModalOpen] = useState(false);
@@ -102,7 +101,7 @@ export default function NoticesPage() {
   const filteredNotices = useMemo(() => {
     return notices
       .filter((n) => {
-        if (hideSampleNotices && n.isSampleData) return false;
+        if (n.isSampleData) return false;
         const matchCat =
           selectedCategory === "전체" || n.category === selectedCategory;
         const matchSource =
@@ -123,13 +122,9 @@ export default function NoticesPage() {
       })
       .sort((a, b) => {
         if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-        // 공식 연동 공지 및 관리자 실제 공지를 예시 데이터보다 우선 표시
-        if (Boolean(a.isSampleData) !== Boolean(b.isSampleData)) {
-          return a.isSampleData ? 1 : -1;
-        }
         return b.createdAt.localeCompare(a.createdAt);
       });
-  }, [notices, selectedCategory, selectedSourceFilter, hideSampleNotices, searchQuery]);
+  }, [notices, selectedCategory, selectedSourceFilter, searchQuery]);
 
   const handleSyncCloud = async () => {
     try {
@@ -548,15 +543,7 @@ export default function NoticesPage() {
             ))}
           </div>
 
-          <label className="inline-flex items-center gap-1.5 text-slate-600 font-medium cursor-pointer">
-            <input
-              type="checkbox"
-              checked={hideSampleNotices}
-              onChange={(e) => setHideSampleNotices(e.target.checked)}
-              className="rounded text-orange-600"
-            />
-            <span>예시 데이터 숨기기</span>
-          </label>
+          
         </div>
       </div>
 
@@ -569,7 +556,6 @@ export default function NoticesPage() {
           onAction={() => {
             setSelectedCategory("전체");
             setSelectedSourceFilter("전체");
-            setHideSampleNotices(false);
             setSearchQuery("");
           }}
         />

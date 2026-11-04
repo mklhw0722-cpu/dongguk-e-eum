@@ -1996,7 +1996,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const urlToId = new Map<string, string>();
 
     // 1. 기존 로컬/예시 공지 보존 (삭제 금지 원칙 준수)
-    state.notices.forEach((n) => {
+    state.notices.filter((n) => !n.isSampleData).forEach((n) => {
       byId.set(n.id, n);
       if (n.officialUrl && n.officialUrl !== "https://www.dongguk.edu") {
         urlToId.set(n.officialUrl, n.id);
