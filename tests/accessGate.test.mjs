@@ -159,3 +159,52 @@ test("11. 졸업요건 관리는 재학생 및 관리자만 이용 가능하며 
   assert.equal(canAccessGraduation({ role: "alumni" }), false, "졸업생은 접근 차단");
   assert.equal(canAccessGraduation(null), false, "비로그인/프로필 없음 차단");
 });
+
+test("12. [프로필 사진 이니셜 생성] 일반 회원은 성을 뺀 이름을 사용하고 관리자는 텍스트를 제거한다", () => {
+  function getAvatarInitials(name, role) {
+    if (role === "admin" || (name && (name.includes("관리자") || name.toLowerCase() === "admin"))) {
+      return "";
+    }
+    if (!name) return "";
+    let cleaned = name.replace(/\s*(교수|선생님|멘토|학우|님).*$/, "").trim();
+    cleaned = cleaned.replace(/\(.*?\)/g, "").trim();
+    if (!cleaned) return "";
+
+    const compoundSurnames = ["남궁", "황보", "제갈", "선우", "독고", "사공", "서문", "동방"];
+    for (const compound of compoundSurnames) {
+      if (cleaned.startsWith(compound) && cleaned.length > 2) {
+        return cleaned.slice(2, 4);
+      }
+    }
+
+    if (cleaned.length >= 3) {
+      return cleaned.slice(1, 3);
+    }
+
+    if (cleaned.length === 2) {
+      return cleaned.slice(1);
+    }
+
+    return cleaned;
+  }
+
+  // 1. 일반 재학생: 3글자 이름에서 성을 제외한 이름 2글자
+  assert.equal(getAvatarInitials("이혜원", "student"), "혜원");
+  assert.equal(getAvatarInitials("김학생", "student"), "학생");
+  assert.equal(getAvatarInitials("정성은", "student"), "성은");
+  assert.equal(getAvatarInitials("정주영", "student"), "주영");
+
+  // 2. 교수진: 성을 제외한 이름
+  assert.equal(getAvatarInitials("신나민", "professor"), "나민");
+  assert.equal(getAvatarInitials("백상아 교수", "professor"), "상아");
+  assert.equal(getAvatarInitials("백상아 교수(교육공학)", "professor"), "상아");
+
+  // 3. 2글자 복성 및 외자 이름
+  assert.equal(getAvatarInitials("남궁혜원", "student"), "혜원");
+  assert.equal(getAvatarInitials("김철", "student"), "철");
+
+  // 4. 관리자: 프로필 사진 텍스트 완전 제거 (빈 문자열)
+  assert.equal(getAvatarInitials("관리자", "admin"), "");
+  assert.equal(getAvatarInitials("이혜원", "admin"), "");
+  assert.equal(getAvatarInitials("최고 관리자", "admin"), "");
+});
