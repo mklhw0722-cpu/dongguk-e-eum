@@ -26,6 +26,7 @@ import {
   subscribeToChatMessages,
   FirestoreChatMessage,
   PublicChatUser,
+  getAvatarInitials,
 } from "@/lib/firebase";
 import {
   unreadCountForMessage,
@@ -1706,8 +1707,8 @@ export default function ChatPage() {
             {/* 교수 정보 요약 */}
             <div className="p-3.5 rounded-2xl bg-orange-50/70 dark:bg-orange-950/30 border border-orange-100 dark:border-orange-900/40 flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-orange-600 text-white font-extrabold text-sm flex items-center justify-center shrink-0">
-                {selectedProfessorForConsultation.avatarInitials ||
-                  selectedProfessorForConsultation.name.slice(0, 2)}
+                {getAvatarInitials(selectedProfessorForConsultation.name, selectedProfessorForConsultation.role) ||
+                  selectedProfessorForConsultation.avatarInitials}
               </div>
               <div>
                 <div className="flex items-center gap-2">

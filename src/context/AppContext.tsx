@@ -85,6 +85,7 @@ import {
   getFirebaseInstances,
   syncApprovedUsersToPublicProfiles,
   updateUserDisplayName,
+  getAvatarInitials,
   subscribeToNoticesInFirestore,
   upsertNoticeInFirestore,
   syncOfficialNoticesToFirestore,
@@ -865,7 +866,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
               name: u.name || "구성원",
               role: u.role || "student",
               avatarInitials:
-                u.avatarInitials || (u.name ? u.name.slice(0, 2) : "학"),
+                getAvatarInitials(u.name, u.role),
               approvalStatus: "approved",
               careerTrack: u.careerTrack || "",
               doubleMajor: u.doubleMajor || "",
@@ -950,8 +951,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         academicProfile: authUserProfile.academicProfile,
         bio: authUserProfile.bio || "",
         avatarInitials:
-          authUserProfile.avatarInitials ||
-          (authUserProfile.name ? authUserProfile.name.slice(0, 2) : authUserProfile.role === "admin" ? "이혜" : "학"),
+          getAvatarInitials(authUserProfile.name, authUserProfile.role),
         approvalStatus: authUserProfile.approvalStatus || "pending",
         joinedAt: authUserProfile.joinedAt || new Date().toISOString().slice(0, 10),
         advisorProfessorId: authUserProfile.advisorProfessorId,
@@ -1176,7 +1176,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ? {
             ...prev,
             name: newName.trim(),
-            avatarInitials: newName.trim().slice(0, 2),
+            avatarInitials: getAvatarInitials(newName, currentRole || currentUser.role),
           }
         : null
     );
@@ -1623,7 +1623,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
                 uid: userSnap.id,
                 name: d.name || "구성원",
                 role: d.role || "student",
-                avatarInitials: d.avatarInitials || "학",
+                avatarInitials: getAvatarInitials(d.name, d.role) || "학",
                 approvalStatus: d.approvalStatus || "approved",
               };
             }

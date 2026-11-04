@@ -7,6 +7,7 @@ import { useApp } from "@/context/AppContext";
 import { calculateGraduationAudit } from "@/lib/graduationCurriculum";
 import { ROLE_LABELS } from "@/components/common/Cards";
 import { formatUnreadBadge } from "@/lib/chatReadReceipts";
+import { getAvatarInitials } from "@/lib/firebase";
 import EditableCalendar from "@/components/calendar/EditableCalendar";
 import { ConsultationStatus, ConsultationType, ConsultationRequest } from "@/types";
 import {
@@ -222,7 +223,7 @@ export default function HomePage() {
                 <div className="p-4 rounded-xl border border-orange-200 dark:border-orange-900/60 bg-gradient-to-r from-orange-50/50 via-white to-orange-50/30 dark:from-slate-800/60 dark:to-slate-800/30 flex flex-col gap-3">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-xl bg-orange-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
-                      {myAdvisorInfo.professor.avatarInitials || myAdvisorInfo.professor.name.slice(0, 2)}
+                      {getAvatarInitials(myAdvisorInfo.professor.name, myAdvisorInfo.professor.role) || myAdvisorInfo.professor.avatarInitials}
                     </div>
                     <div className="space-y-0.5 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">

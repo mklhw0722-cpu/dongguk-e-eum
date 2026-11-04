@@ -61,6 +61,43 @@ export interface FirebaseWebConfig {
   appId?: string;
 }
 
+/**
+ * 프로필 사진용 이니셜/텍스트 생성 규칙
+ * 1. 관리자(admin) 계정은 프로필 사진에서 텍스트를 제거합니다 (빈 문자열 "").
+ * 2. 일반 계정(재학생, 졸업생, 교수진 등)은 성(Surname)을 제외한 이름(Given Name)을 표시합니다.
+ *    예: '이혜원' -> '혜원', '김학생' -> '학생', '신나민' -> '나민', '백상아' -> '상아'
+ * 3. 2글자 복성(남궁, 황보, 제갈, 선우 등)은 2글자 성을 제외한 이름을 표시합니다.
+ *    예: '남궁혜원' -> '혜원'
+ */
+export function getAvatarInitials(name?: string, role?: string): string {
+  if (role === "admin" || (name && (name.includes("관리자") || name.toLowerCase() === "admin"))) {
+    return "";
+  }
+  if (!name) return "";
+
+  // 직함/수식어 및 괄호 제거 (예: '백상아 교수' -> '백상아', '이혜원(재학생)' -> '이혜원')
+  let cleaned = name.replace(/\s*(교수|선생님|멘토|학우|님).*$/, "").trim();
+  cleaned = cleaned.replace(/\(.*?\)/g, "").trim();
+  if (!cleaned) return "";
+
+  const compoundSurnames = ["남궁", "황보", "제갈", "선우", "독고", "사공", "서문", "동방"];
+  for (const compound of compoundSurnames) {
+    if (cleaned.startsWith(compound) && cleaned.length > 2) {
+      return cleaned.slice(2, 4);
+    }
+  }
+
+  if (cleaned.length >= 3) {
+    return cleaned.slice(1, 3);
+  }
+
+  if (cleaned.length === 2) {
+    return cleaned.slice(1);
+  }
+
+  return cleaned;
+}
+
 const CONFIG_STORAGE_KEY = "dongguk_e_eum_firebase_config_v1";
 const POSTS_COLLECTION = "communityPosts";
 const USERS_COLLECTION = "users";
@@ -251,7 +288,7 @@ export async function registerWithEmailAndPassword(params: {
         ? `동국e음 최고관리자 ${params.name.trim()}님의 프로필입니다.`
         : `${cleanHakbun} ${params.name.trim()}님의 프로필입니다.`;
     })(),
-    avatarInitials: params.name.trim().slice(0, 2),
+    avatarInitials: getAvatarInitials(params.name, params.role),
     approvalStatus: "pending",
     joinedAt: new Date().toISOString().slice(0, 10),
     verificationNote: params.verificationNote || "소속 확인 신청",
@@ -510,7 +547,7 @@ export async function updateUserApprovalStatusByAdmin(params: {
             name: u.name || "구성원",
             role: params.role || u.role || "student",
             avatarInitials:
-              u.avatarInitials || (u.name ? u.name.slice(0, 2) : "학"),
+              getAvatarInitials(u.name, params.role || u.role) || u.avatarInitials || "",
             approvalStatus: "approved",
             careerTrack: u.careerTrack || "",
             doubleMajor: u.doubleMajor || "",
@@ -749,7 +786,7 @@ export async function updateUserDisplayName(
   const trimmed = newName.trim();
   if (!trimmed) throw new Error("이름을 공백으로 설정할 수 없습니다.");
 
-  const avatarInitials = trimmed.slice(0, 2);
+  const avatarInitials = getAvatarInitials(trimmed);
   const userRef = doc(db, USERS_COLLECTION, uid);
 
   await updateDoc(userRef, {
@@ -979,7 +1016,7 @@ export async function syncApprovedUsersToPublicProfiles(
           name: u.name || "구성원",
           role: u.role || "student",
           avatarInitials:
-            u.avatarInitials || (u.name ? u.name.slice(0, 2) : "학"),
+            getAvatarInitials(u.name, u.role) || u.avatarInitials || "",
           approvalStatus: "approved",
           careerTrack: u.careerTrack || "",
           doubleMajor: u.doubleMajor || "",
@@ -1050,7 +1087,7 @@ export function subscribeToApprovedUsers(
               name: d.name || "구성원",
               role: (d.role as UserRole) || "student",
               avatarInitials:
-                d.avatarInitials || (d.name ? d.name.slice(0, 2) : "학"),
+                getAvatarInitials(d.name, d.role) || d.avatarInitials || "",
               approvalStatus: "approved",
               careerTrack: d.careerTrack || "",
               doubleMajor: d.doubleMajor || "",
@@ -1090,7 +1127,7 @@ export function subscribeToApprovedUsers(
             name: d.name || "구성원",
             role: (d.role as UserRole) || "student",
             avatarInitials:
-              d.avatarInitials || (d.name ? d.name.slice(0, 2) : "학"),
+              getAvatarInitials(d.name, d.role) || d.avatarInitials || "",
             approvalStatus: "approved",
             careerTrack: d.careerTrack || "",
             doubleMajor: d.doubleMajor || "",
@@ -1150,7 +1187,7 @@ export async function searchApprovedUsersInFirestore(
           role: (data.role as UserRole) || "student",
           avatarInitials:
             data.avatarInitials ||
-            (data.name ? data.name.slice(0, 2) : "학"),
+            getAvatarInitials(data.name, data.role) || data.avatarInitials || "",
           approvalStatus: "approved",
           careerTrack: data.careerTrack || "",
           doubleMajor: data.doubleMajor || "",
@@ -1176,7 +1213,7 @@ export async function searchApprovedUsersInFirestore(
             role: (data.role as UserRole) || "student",
             avatarInitials:
               data.avatarInitials ||
-              (data.name ? data.name.slice(0, 2) : "학"),
+              getAvatarInitials(data.name, data.role) || data.avatarInitials || "",
             approvalStatus: "approved",
             careerTrack: data.careerTrack || "",
             doubleMajor: data.doubleMajor || "",
@@ -1333,7 +1370,7 @@ export async function getOrCreateDirectChatInFirestore(
         role: currentUser.role || "student",
         avatarInitials:
           currentUser.avatarInitials ||
-          (currentUser.name ? currentUser.name.slice(0, 2) : "학"),
+          getAvatarInitials(currentUser.name, currentUser.role) || currentUser.avatarInitials || "",
       },
       [targetUser.id]: {
         uid: targetUser.id,
@@ -1341,7 +1378,7 @@ export async function getOrCreateDirectChatInFirestore(
         role: targetUser.role || "student",
         avatarInitials:
           targetUser.avatarInitials ||
-          (targetUser.name ? targetUser.name.slice(0, 2) : "학"),
+          getAvatarInitials(targetUser.name, targetUser.role) || targetUser.avatarInitials || "",
       },
     },
     lastMessageText: "대화가 시작되었습니다. 첫 인사를 건네보세요!",
@@ -1407,14 +1444,14 @@ export async function createGroupChatInFirestore(
       role: currentUser.role || "student",
       avatarInitials:
         currentUser.avatarInitials ||
-        (currentUser.name ? currentUser.name.slice(0, 2) : "학"),
+        getAvatarInitials(currentUser.name, currentUser.role) || currentUser.avatarInitials || "",
     },
     ...invitedUsers.map((u) => ({
       uid: u.id,
       name: u.name,
       role: u.role,
       avatarInitials:
-        u.avatarInitials || (u.name ? u.name.slice(0, 2) : "학"),
+        getAvatarInitials(u.name, u.role) || u.avatarInitials || "",
     })),
   ];
 
@@ -1612,7 +1649,7 @@ export async function inviteUsersToChatInFirestore(
         name: u.name,
         role: u.role,
         avatarInitials:
-          u.avatarInitials || (u.name ? u.name.slice(0, 2) : "학"),
+          getAvatarInitials(u.name, u.role) || u.avatarInitials || "",
       };
       // 초대 시점 순번을 joinSeq 및 초기 readSeq에 기록 (초대 이전 메시지 안읽음 제외)
       if (typeof chatData.joinSeq?.[u.id] !== "number") {
