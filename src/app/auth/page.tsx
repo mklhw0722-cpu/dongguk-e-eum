@@ -409,17 +409,17 @@ export default function AuthPage() {
               {[
                 {
                   role: "student" as UserRole,
-                  title: "재학생 (본전공·복수전공)",
+                  title: "재학생",
                   desc: "공지 확인, 졸업요건 자가점검, 공유방 참여",
                 },
                 {
                   role: "alumni" as UserRole,
-                  title: "졸업생 (동문 멘토)",
+                  title: "졸업생",
                   desc: "진로 프로필 등록, 후배 멘토링 및 직무 경험 공유",
                 },
                 {
                   role: "professor" as UserRole,
-                  title: "교수진 · 연구실",
+                  title: "교수진",
                   desc: "학생 면담 요청, 연구·수업 그룹방 개설",
                 },
               ].map((item) => (
