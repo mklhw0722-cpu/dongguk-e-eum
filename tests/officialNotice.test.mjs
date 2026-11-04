@@ -15,8 +15,8 @@ const officialNoticesJson = JSON.parse(
   fs.readFileSync(new URL("../src/data/officialNotices.json", import.meta.url), "utf8")
 );
 
-test("1. 공식 홈페이지 수집 데이터(officialNotices.json)가 6개 공식 게시판을 모두 포함하고 유효한 원문 URL을 가진다", () => {
-  assert.equal(officialNoticesJson.sources.length, 6);
+test("1. 공식 홈페이지 수집 데이터(officialNotices.json)가 3개 공식 게시판(교육학과·사범대·학사공지)을 포함하고 유효한 원문 URL을 가진다", () => {
+  assert.equal(officialNoticesJson.sources.length, 3);
   assert.ok(Array.isArray(officialNoticesJson.notices));
   assert.ok(officialNoticesJson.notices.length >= 30, "최소 30건 이상의 실제 공식 공지가 수집되어야 함");
 

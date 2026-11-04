@@ -25,10 +25,8 @@ import {
 
 const NOTICE_FILTER_TABS = [
   { label: "전체 공지", value: "전체" },
-  { label: "학교 공지", value: "학교 공지" },
   { label: "교육학과 공지", value: "교육학과 공지" },
   { label: "학사 일정·학사공지", value: "학사 일정" },
-  { label: "장학 및 지원", value: "장학 및 지원" },
   { label: "교직 관련 안내", value: "교직 관련 안내" },
 ] as const;
 
@@ -498,7 +496,7 @@ export default function NoticesPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="공지 제목, 출처(교육학과, 사범대학, 학사공지), 키워드(교직, 다전공, 장학, 수강신청) 검색..."
+            placeholder="공지 제목, 출처(교육학과, 사범대학, 학사공지), 키워드(교직, 다전공, 수강신청, 학사일정) 검색..."
             className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
           />
         </div>
@@ -534,8 +532,6 @@ export default function NoticesPage() {
               { label: "교육학과 학부공지", value: "edu_dept_news2" },
               { label: "사범대학 공지", value: "edu_college_notice" },
               { label: "학교 학사공지", value: "dgu_haksa" },
-              { label: "학교 장학공지", value: "dgu_janghak" },
-              { label: "학교 일반공지", value: "dgu_general" },
             ].map((src) => (
               <button
                 key={src.value}
@@ -726,9 +722,7 @@ export default function NoticesPage() {
                   className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50"
                 >
                   <option value="교육학과 공지">교육학과 공지</option>
-                  <option value="학교 공지">학교 공지</option>
                   <option value="학사 일정">학사 일정·학사공지</option>
-                  <option value="장학 및 지원">장학 및 지원</option>
                   <option value="교직 관련 안내">교직 관련 안내</option>
                 </select>
               </div>
