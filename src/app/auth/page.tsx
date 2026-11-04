@@ -294,9 +294,6 @@ export default function AuthPage() {
       {activeTab === "login" && (
         <div className="max-w-md mx-auto bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 space-y-5 shadow-xs">
           <div className="text-center space-y-1.5">
-            <div className="w-12 h-12 rounded-2xl bg-orange-600 text-white font-black text-2xl flex items-center justify-center mx-auto">
-              e
-            </div>
             <h2 className="text-xl font-black text-slate-900 dark:text-white">
               동국e음 회원 로그인
             </h2>
