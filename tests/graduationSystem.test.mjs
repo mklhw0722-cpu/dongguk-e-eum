@@ -280,7 +280,27 @@ test("7 & 8. [교육봉사·학교현장실습 조합·교직 체크리스트 �
   assert.equal(invalidSeq.hasSequenceError, true);
   assert.equal(invalidSeq.combinationCode, "INVALID_2_WITHOUT_1");
 
-  // 조합 ①: Ⅰ + Ⅱ (2학점) -> 유효
+  // 조합 ①: Ⅰ + Ⅱ (2학점) + 필수 선이수 3과목 미충족 상태 -> 조합은 유효하나 실습 사전요건 미충족
+  const combo12MissingPrereq = evaluateSchoolPracticum(
+    {
+      practicum1Completed: true,
+      practicum1Semester: "2024-1",
+      practicum2Completed: true,
+      practicum2Semester: "2025-1",
+      practicum3Completed: false,
+      practicum3Semester: "",
+      humanRightsEducationCompleted: true,
+      thoughtAndExpressionCompleted: false,
+      teachingMaterialsAndMethodsCompleted: true,
+      educationTheoryCompleted: true,
+    },
+    baseChecklist
+  );
+  assert.equal(combo12MissingPrereq.isCombinationValid, true);
+  assert.equal(combo12MissingPrereq.prerequisites.prerequisiteCoursesAllMet, false, "사고와 표현 미이수로 선이수 요건 미충족");
+  assert.equal(combo12MissingPrereq.prerequisites.allPrerequisitesMet, false);
+
+  // 조합 ①: Ⅰ + Ⅱ (2학점) + 선이수 3과목(사고와 표현, 교재연구및지도법, 교육학교육론) 모두 충족
   const combo12 = evaluateSchoolPracticum(
     {
       practicum1Completed: true,
@@ -290,13 +310,41 @@ test("7 & 8. [교육봉사·학교현장실습 조합·교직 체크리스트 �
       practicum3Completed: false,
       practicum3Semester: "",
       humanRightsEducationCompleted: true,
+      thoughtAndExpressionCompleted: true,
+      teachingMaterialsAndMethodsCompleted: true,
+      educationTheoryCompleted: true,
     },
     baseChecklist
   );
   assert.equal(combo12.isCombinationValid, true);
   assert.equal(combo12.earnedPracticumCredits, 2);
   assert.equal(combo12.combinationCode, "COMBO_1_2");
+  assert.equal(combo12.prerequisites.prerequisiteCoursesAllMet, true);
   assert.equal(combo12.prerequisites.allPrerequisitesMet, true);
+
+  // 이수 강좌(enrolledCourses)를 통한 자동 감지 검증
+  const comboWithCourses = evaluateSchoolPracticum(
+    {
+      practicum1Completed: true,
+      practicum1Semester: "2024-1",
+      practicum2Completed: true,
+      practicum2Semester: "2025-1",
+      practicum3Completed: false,
+      practicum3Semester: "",
+      humanRightsEducationCompleted: true,
+    },
+    baseChecklist,
+    [
+      { courseCode: "EDU2012", courseTitle: "사고와표현", credits: 3, category: "전공필수 (교육학과)", completedSemester: "2024-2" },
+      { courseCode: "EDU4030", courseTitle: "교육학교재연구및지도법", credits: 3, category: "전공필수 (교육학과)", completedSemester: "2025-1" },
+      { courseCode: "EDU4029", courseTitle: "교육학교육론", credits: 3, category: "전공필수 (교육학과)", completedSemester: "2025-2" },
+    ]
+  );
+  assert.equal(comboWithCourses.prerequisites.thoughtAndExpressionCompleted, true);
+  assert.equal(comboWithCourses.prerequisites.teachingMaterialsAndMethodsCompleted, true);
+  assert.equal(comboWithCourses.prerequisites.educationTheoryCompleted, true);
+  assert.equal(comboWithCourses.prerequisites.prerequisiteCoursesAllMet, true);
+  assert.equal(comboWithCourses.prerequisites.allPrerequisitesMet, true);
 
   // 조합 ②: Ⅲ 단독 (2학점) -> 유효
   const combo3 = evaluateSchoolPracticum(
@@ -943,5 +991,78 @@ test("20. [직접 입력 영역별 학점 합산 및 총 졸업 이수 학점 �
   assert.equal(audit.totalEarnedCredits, 112, "총 취득 학점 112학점 계산 확인");
   assert.equal(totalCard.earnedValue, 112, "총 졸업 이수 학점 카드에 합산값 112학점 반영 확인");
   assert.equal(audit.generalElectiveEarnedCredits, 12, "일반교양 및 자선 취득 학점 12학점 반영 확인");
+});
+
+test("21. [학교현장실습 선이수 3과목 요건 검증] 사고와 표현, 교육학교재연구및지도법, 교육학교육론 3과목을 모두 이수해야만 학교현장실습 사전요건이 충족된다", () => {
+  const baseChecklist = {
+    personalityTestPassCount: 1,
+    cprCompletedCount: 1,
+    genderSensitivityCount: 1,
+  };
+
+  // 1) 3과목 중 일부만 이수한 경우 (예: 사고와 표현만 이수) -> 미충족
+  const partialResult = evaluateSchoolPracticum(
+    {
+      practicum1Completed: false,
+      practicum1Semester: "",
+      practicum2Completed: false,
+      practicum2Semester: "",
+      practicum3Completed: false,
+      practicum3Semester: "",
+      humanRightsEducationCompleted: true,
+      thoughtAndExpressionCompleted: true,
+      teachingMaterialsAndMethodsCompleted: false,
+      educationTheoryCompleted: false,
+    },
+    baseChecklist
+  );
+  assert.equal(partialResult.prerequisites.thoughtAndExpressionCompleted, true);
+  assert.equal(partialResult.prerequisites.teachingMaterialsAndMethodsCompleted, false);
+  assert.equal(partialResult.prerequisites.educationTheoryCompleted, false);
+  assert.equal(partialResult.prerequisites.prerequisiteCoursesAllMet, false);
+  assert.equal(partialResult.prerequisites.allPrerequisitesMet, false);
+
+  // 2) 3과목 모두 직접 체크한 경우 -> 충족
+  const fullCheckedResult = evaluateSchoolPracticum(
+    {
+      practicum1Completed: false,
+      practicum1Semester: "",
+      practicum2Completed: false,
+      practicum2Semester: "",
+      practicum3Completed: false,
+      practicum3Semester: "",
+      humanRightsEducationCompleted: true,
+      thoughtAndExpressionCompleted: true,
+      teachingMaterialsAndMethodsCompleted: true,
+      educationTheoryCompleted: true,
+    },
+    baseChecklist
+  );
+  assert.equal(fullCheckedResult.prerequisites.prerequisiteCoursesAllMet, true);
+  assert.equal(fullCheckedResult.prerequisites.allPrerequisitesMet, true);
+
+  // 3) 수강 강좌(enrolledCourses)로 3과목이 등록된 경우 -> 자동 감지 및 충족
+  const coursesResult = evaluateSchoolPracticum(
+    {
+      practicum1Completed: false,
+      practicum1Semester: "",
+      practicum2Completed: false,
+      practicum2Semester: "",
+      practicum3Completed: false,
+      practicum3Semester: "",
+      humanRightsEducationCompleted: true,
+    },
+    baseChecklist,
+    [
+      { courseCode: "EDU2012", courseTitle: "사고와표현", credits: 3, category: "전공필수 (교육학과)", completedSemester: "2024-2" },
+      { courseCode: "EDU4030", courseTitle: "교육학교재연구및지도법", credits: 3, category: "전공필수 (교육학과)", completedSemester: "2025-1" },
+      { courseCode: "EDU4029", courseTitle: "교육학교육론", credits: 3, category: "전공필수 (교육학과)", completedSemester: "2025-2" },
+    ]
+  );
+  assert.equal(coursesResult.prerequisites.thoughtAndExpressionCompleted, true);
+  assert.equal(coursesResult.prerequisites.teachingMaterialsAndMethodsCompleted, true);
+  assert.equal(coursesResult.prerequisites.educationTheoryCompleted, true);
+  assert.equal(coursesResult.prerequisites.prerequisiteCoursesAllMet, true);
+  assert.equal(coursesResult.prerequisites.allPrerequisitesMet, true);
 });
 

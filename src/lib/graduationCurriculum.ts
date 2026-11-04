@@ -1111,6 +1111,9 @@ export function migrateStudentProgress(
     practicum3Completed: Boolean(raw?.practicumState?.practicum3Completed),
     practicum3Semester: raw?.practicumState?.practicum3Semester || "",
     humanRightsEducationCompleted: Boolean(raw?.practicumState?.humanRightsEducationCompleted),
+    thoughtAndExpressionCompleted: Boolean(raw?.practicumState?.thoughtAndExpressionCompleted),
+    teachingMaterialsAndMethodsCompleted: Boolean(raw?.practicumState?.teachingMaterialsAndMethodsCompleted),
+    educationTheoryCompleted: Boolean(raw?.practicumState?.educationTheoryCompleted),
   };
 
   const teachingChecklist: TeachingChecklistState = {
@@ -1239,6 +1242,9 @@ export function createEmptyStudentProgress(
         practicum3Completed: false,
         practicum3Semester: "",
         humanRightsEducationCompleted: false,
+        thoughtAndExpressionCompleted: false,
+        teachingMaterialsAndMethodsCompleted: false,
+        educationTheoryCompleted: false,
       },
       teachingChecklist: {
         personalityTestPassCount: 0,
@@ -1561,6 +1567,10 @@ export interface SchoolPracticumEvaluation {
     cprOnce: boolean;
     humanRightsEdu: boolean;
     genderSensitivityOnce: boolean;
+    thoughtAndExpressionCompleted: boolean; // 사고와 표현 (EDU2012)
+    teachingMaterialsAndMethodsCompleted: boolean; // 교육학교재연구및지도법 (EDU4030)
+    educationTheoryCompleted: boolean; // 교육학교육론 (EDU4029)
+    prerequisiteCoursesAllMet: boolean; // 필수 3과목 모두 이수 여부
     allPrerequisitesMet: boolean;
   };
 }
@@ -1572,10 +1582,12 @@ export interface SchoolPracticumEvaluation {
  * - 조합 ②: 학교현장실습Ⅲ(2학점) = 2학점
  * - 조합 ③: 학교현장실습Ⅰ(1학점) + 학교현장실습Ⅱ(1학점) + 학교현장실습Ⅲ(2학점) = 4학점
  * - 주의: 학교현장실습Ⅰ을 이수하지 않고 학교현장실습Ⅱ를 수강할 수 없음.
+ * - 사전 필수 이수 3과목: 사고와 표현(EDU2012), 교육학교재연구및지도법(EDU4030), 교육학교육론(EDU4029)
  */
 export function evaluateSchoolPracticum(
   practicum: SchoolPracticumState,
-  checklist: TeachingChecklistState
+  checklist: TeachingChecklistState,
+  completedCourses: EnrolledCourse[] = []
 ): SchoolPracticumEvaluation {
   const p1 = Boolean(practicum.practicum1Completed);
   const p2 = Boolean(practicum.practicum2Completed);
@@ -1616,6 +1628,33 @@ export function evaluateSchoolPracticum(
   const humanRightsEdu = Boolean(practicum.humanRightsEducationCompleted);
   const genderSensitivityOnce = (checklist.genderSensitivityCount || 0) >= 1;
 
+  // 필수 선이수 과목 3개 확인 (강좌 목록 또는 실습 상태 체크)
+  const isCourseDone = (code: string, ...titleKeywords: string[]) => {
+    return (completedCourses || []).some((c) => {
+      const cCode = c.courseCode ? normalizeCourseText(c.courseCode) : "";
+      if (cCode === code) return true;
+      const cTitle = c.courseTitle ? normalizeCourseText(c.courseTitle) : "";
+      return titleKeywords.some((kw) => cTitle.includes(normalizeCourseText(kw)));
+    });
+  };
+
+  const thoughtAndExpressionCompleted =
+    Boolean(practicum.thoughtAndExpressionCompleted) ||
+    isCourseDone("EDU2012", "사고와표현", "사고와 표현");
+
+  const teachingMaterialsAndMethodsCompleted =
+    Boolean(practicum.teachingMaterialsAndMethodsCompleted) ||
+    isCourseDone("EDU4030", "교육학교재연구및지도법", "교재연구및지도법", "교재연구");
+
+  const educationTheoryCompleted =
+    Boolean(practicum.educationTheoryCompleted) ||
+    isCourseDone("EDU4029", "교육학교육론");
+
+  const prerequisiteCoursesAllMet =
+    thoughtAndExpressionCompleted &&
+    teachingMaterialsAndMethodsCompleted &&
+    educationTheoryCompleted;
+
   return {
     earnedPracticumCredits,
     combinationCode,
@@ -1630,8 +1669,16 @@ export function evaluateSchoolPracticum(
       cprOnce,
       humanRightsEdu,
       genderSensitivityOnce,
+      thoughtAndExpressionCompleted,
+      teachingMaterialsAndMethodsCompleted,
+      educationTheoryCompleted,
+      prerequisiteCoursesAllMet,
       allPrerequisitesMet:
-        personalityTestOnce && cprOnce && humanRightsEdu && genderSensitivityOnce,
+        personalityTestOnce &&
+        cprOnce &&
+        humanRightsEdu &&
+        genderSensitivityOnce &&
+        prerequisiteCoursesAllMet,
     },
   };
 }
@@ -1878,7 +1925,8 @@ export function calculateGraduationAudit(
 
   const practicumEvaluation = evaluateSchoolPracticum(
     mergedPracticumState,
-    progress.teachingChecklist!
+    progress.teachingChecklist!,
+    completedCourses
   );
 
   const loggedHours = (progress.volunteeringRecords || []).reduce(

@@ -385,6 +385,9 @@ export interface SchoolPracticumState {
   practicum3Completed: boolean; // ERC0026 학교현장실습Ⅲ(종합실습, 2학점/4주, 7학기 이상)
   practicum3Semester: string;
   humanRightsEducationCompleted: boolean; // 실습 사전 요건: 온라인 인권존중 교육 이수 여부
+  thoughtAndExpressionCompleted?: boolean; // 실습 사전 요건: 사고와 표현(EDU2012) 이수 여부
+  teachingMaterialsAndMethodsCompleted?: boolean; // 실습 사전 요건: 교육학교재연구및지도법(EDU4030) 이수 여부
+  educationTheoryCompleted?: boolean; // 실습 사전 요건: 교육학교육론(EDU4029) 이수 여부
 }
 
 export interface TeachingChecklistState {
