@@ -193,15 +193,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <LogOut className="w-3 h-3" /> {rawFirebaseUser.email} 로그아웃
               </button>
-            ) : (
-              <Link
-                href="/auth"
-                className="text-orange-300 hover:text-orange-200 underline font-semibold text-[11px] inline-flex items-center gap-1"
-              >
-                <Lock className="w-3 h-3" />
-                [로그인 / 회원가입 하러 가기]
-              </Link>
-            )}
+            ) : null}
           </div>
 
           <div className="flex items-center gap-1.5 flex-wrap">
