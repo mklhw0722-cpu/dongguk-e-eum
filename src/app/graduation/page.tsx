@@ -1851,11 +1851,11 @@ export default function GraduationPage() {
               </span>
             </div>
 
-            {/* 필수 선이수 과목 3개 (사고와 표현, 교육학교재연구및지도법, 교육학교육론) */}
-            <div className="p-2.5 rounded-lg bg-orange-50/80 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-900/60 space-y-1.5">
+            {/* 필수 선이수 과목 (사고와 표현, 교육학교재연구및지도법, 교육학교육론) */}
+            <div className="p-2.5 rounded-lg bg-orange-50/80 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-900/60 space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-orange-900 dark:text-orange-200 text-[11px] flex items-center gap-1">
-                  <span>📌</span> 필수 선이수 과목 3개 (모두 이수해야 실습 참여 가능)
+                  <span>📌</span> 필수 선이수 과목
                 </span>
                 <span
                   className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded ${
@@ -1869,8 +1869,8 @@ export default function GraduationPage() {
                     : "선이수 과목 미완료"}
                 </span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px] pt-0.5">
-                <label className="flex items-center gap-1.5 cursor-pointer">
+              <div className="flex flex-col gap-1.5 text-[11px] pt-0.5">
+                <label className="flex items-center gap-2 cursor-pointer py-0.5">
                   <input
                     type="checkbox"
                     checked={audit.practicumEvaluation.prerequisites.thoughtAndExpressionCompleted}
@@ -1879,20 +1879,19 @@ export default function GraduationPage() {
                         thoughtAndExpressionCompleted: e.target.checked,
                       })
                     }
-                    className="rounded border-slate-300 text-orange-600"
+                    className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
                   />
                   <span
                     className={
                       audit.practicumEvaluation.prerequisites.thoughtAndExpressionCompleted
                         ? "font-bold text-emerald-700 dark:text-emerald-400"
-                        : "text-slate-600 dark:text-slate-400"
+                        : "text-slate-700 dark:text-slate-300"
                     }
                   >
-                    {audit.practicumEvaluation.prerequisites.thoughtAndExpressionCompleted ? "✔" : "•"}{" "}
                     사고와 표현
                   </span>
                 </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer py-0.5">
                   <input
                     type="checkbox"
                     checked={audit.practicumEvaluation.prerequisites.teachingMaterialsAndMethodsCompleted}
@@ -1901,20 +1900,19 @@ export default function GraduationPage() {
                         teachingMaterialsAndMethodsCompleted: e.target.checked,
                       })
                     }
-                    className="rounded border-slate-300 text-orange-600"
+                    className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
                   />
                   <span
                     className={
                       audit.practicumEvaluation.prerequisites.teachingMaterialsAndMethodsCompleted
                         ? "font-bold text-emerald-700 dark:text-emerald-400"
-                        : "text-slate-600 dark:text-slate-400"
+                        : "text-slate-700 dark:text-slate-300"
                     }
                   >
-                    {audit.practicumEvaluation.prerequisites.teachingMaterialsAndMethodsCompleted ? "✔" : "•"}{" "}
                     교육학교재연구및지도법
                   </span>
                 </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
+                <label className="flex items-center gap-2 cursor-pointer py-0.5">
                   <input
                     type="checkbox"
                     checked={audit.practicumEvaluation.prerequisites.educationTheoryCompleted}
@@ -1923,16 +1921,15 @@ export default function GraduationPage() {
                         educationTheoryCompleted: e.target.checked,
                       })
                     }
-                    className="rounded border-slate-300 text-orange-600"
+                    className="rounded border-slate-300 text-orange-600 focus:ring-orange-500"
                   />
                   <span
                     className={
                       audit.practicumEvaluation.prerequisites.educationTheoryCompleted
                         ? "font-bold text-emerald-700 dark:text-emerald-400"
-                        : "text-slate-600 dark:text-slate-400"
+                        : "text-slate-700 dark:text-slate-300"
                     }
                   >
-                    {audit.practicumEvaluation.prerequisites.educationTheoryCompleted ? "✔" : "•"}{" "}
                     교육학교육론
                   </span>
                 </label>
