@@ -30,6 +30,7 @@ import {
 type AuthScreenTab =
   | "login"
   | "signup"
+  | "reset"
   | "pending"
   | "bootstrap_admin"
   | "rejected_or_supplement";
@@ -60,6 +61,9 @@ export default function AuthPage() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [resetEmail, setResetEmail] = useState("");
+  const [resetLoading, setResetLoading] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
   const [resetSentNotice, setResetSentNotice] = useState(false);
 
   // 회원가입 폼 상태
@@ -106,18 +110,28 @@ export default function AuthPage() {
     }
   };
 
-  const onResetPasswordClick = async () => {
-    if (!loginEmail.trim()) {
-      setLoginError("비밀번호를 재설정할 이메일 주소를 먼저 입력해 주세요.");
+  const onResetSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetEmail.trim()) {
+      setResetError("비밀번호를 재설정할 이메일 주소를 입력해 주세요.");
       return;
     }
-    setLoginError(null);
+    setResetError(null);
+    setResetLoading(true);
     try {
-      await handleResetPassword(loginEmail.trim());
+      await handleResetPassword(resetEmail.trim());
       setResetSentNotice(true);
-      setTimeout(() => setResetSentNotice(false), 5000);
     } catch (err: unknown) {
-      setLoginError(err instanceof Error ? err.message : String(err));
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("user-not-found")) {
+        setResetError("등록되지 않은 이메일 주소입니다. 가입 여부를 확인해 주세요.");
+      } else if (msg.includes("invalid-email")) {
+        setResetError("올바른 이메일 주소 형식이 아닙니다.");
+      } else {
+        setResetError(msg);
+      }
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -274,6 +288,7 @@ export default function AuthPage() {
         {[
           { key: "login", label: "1. 로그인 (이메일/비번)" },
           { key: "signup", label: "2. 신규 회원가입" },
+          { key: "reset", label: "3. 비밀번호 재설정" },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -309,12 +324,6 @@ export default function AuthPage() {
             </div>
           )}
 
-          {resetSentNotice && (
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2">
-              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-              <span>비밀번호 재설정 이메일을 발송했습니다. 받은 편지함을 확인해 주세요.</span>
-            </div>
-          )}
 
           <form onSubmit={onLoginSubmit} className="space-y-3.5 text-xs sm:text-sm">
             <div>
@@ -333,16 +342,7 @@ export default function AuthPage() {
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="font-bold">비밀번호</label>
-                <button
-                  type="button"
-                  onClick={onResetPasswordClick}
-                  className="text-xs text-orange-600 hover:underline font-semibold"
-                >
-                  비밀번호 재설정
-                </button>
-              </div>
+              <label className="block font-bold mb-1">비밀번호</label>
               <div className="relative">
                 <KeyRound className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
@@ -374,6 +374,84 @@ export default function AuthPage() {
               계정이 없으신가요? 신규 회원가입 신청 →
             </button>
 
+          </div>
+        </div>
+      )}
+
+      {/* 3. 비밀번호 재설정 화면 */}
+      {activeTab === "reset" && (
+        <div className="max-w-md mx-auto bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 space-y-5 shadow-xs">
+          <div className="text-center space-y-1.5">
+            <h2 className="text-xl font-black text-slate-900 dark:text-white">
+              비밀번호 재설정
+            </h2>
+            <p className="text-xs text-slate-500">
+              가입하신 이메일 주소를 입력하시면 비밀번호 재설정 인증 메일을 보내드립니다.
+            </p>
+          </div>
+
+          {resetError && (
+            <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
+              <XCircle className="w-4 h-4 shrink-0" />
+              <span>{resetError}</span>
+            </div>
+          )}
+
+          {resetSentNotice && (
+            <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs space-y-1.5">
+              <div className="flex items-center gap-2 font-bold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>재설정 인증 이메일 발송 완료</span>
+              </div>
+              <p className="text-[11px] text-emerald-700 dark:text-emerald-400 leading-relaxed">
+                <strong>{resetEmail}</strong> 주소로 비밀번호 재설정 링크가 발송되었습니다.<br />
+                메일함을 확인하신 후 링크를 클릭하여 새로운 비밀번호를 설정해 주세요.
+              </p>
+            </div>
+          )}
+
+          <form onSubmit={onResetSubmit} className="space-y-4 text-xs sm:text-sm">
+            <div>
+              <label className="block font-bold mb-1">가입된 이메일 주소</label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="email"
+                  required
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  placeholder="예: student@dgu.ac.kr"
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                />
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800 text-[11px] text-slate-500 dark:text-slate-400 space-y-1.5">
+              <p className="font-semibold text-slate-700 dark:text-slate-300">💡 비밀번호 재설정 안내</p>
+              <ul className="list-disc pl-4 space-y-1">
+                <li>실제 가입된 회원 계정의 이메일로만 재설정 링크가 전송됩니다.</li>
+                <li>메일을 받으신 후 링크를 클릭해 새로운 비밀번호를 안전하게 설정하실 수 있습니다.</li>
+                <li>메일이 보이지 않는 경우 스팸 메일함도 함께 확인해 주세요.</li>
+              </ul>
+            </div>
+
+            <button
+              type="submit"
+              disabled={resetLoading}
+              className="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-bold transition cursor-pointer"
+            >
+              {resetLoading ? "인증 메일 발송 중..." : "비밀번호 재설정 인증 메일 발송"}
+            </button>
+          </form>
+
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
+            <button
+              type="button"
+              onClick={() => setActiveTab("login")}
+              className="text-xs font-bold text-orange-600 hover:underline block mx-auto cursor-pointer"
+            >
+              ← 로그인 화면으로 돌아가기
+            </button>
           </div>
         </div>
       )}
