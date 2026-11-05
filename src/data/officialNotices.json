@@ -1,6 +1,6 @@
 {
-  "lastAttemptAt": "2026-11-04T11:46:31.619Z",
-  "lastSuccessAt": "2026-11-04T11:46:31.619Z",
+  "lastAttemptAt": "2026-11-05T00:40:56.958Z",
+  "lastSuccessAt": "2026-11-05T00:40:56.958Z",
   "scheduleNote": "하루 3회 자동 수집 (09:00, 14:00, 20:00 KST · GitHub Actions)",
   "sources": [
     {
@@ -9,10 +9,11 @@
       "organization": "동국대학교 교육학과",
       "boardUrl": "https://education.dongguk.edu/article/news2/list",
       "defaultCategory": "교육학과 공지",
-      "status": "ok",
+      "status": "error",
       "fetchedCount": 12,
       "lastSuccessAt": "2026-11-04T11:46:31.619Z",
-      "lastAttemptAt": "2026-11-04T11:46:31.619Z"
+      "lastAttemptAt": "2026-11-05T00:40:56.958Z",
+      "errorMessage": "HTTP 503"
     },
     {
       "sourceId": "edu_college_notice",
@@ -20,10 +21,11 @@
       "organization": "동국대학교 사범대학",
       "boardUrl": "https://edu.dongguk.edu/article/notice/list",
       "defaultCategory": "교직 관련 안내",
-      "status": "ok",
+      "status": "error",
       "fetchedCount": 12,
       "lastSuccessAt": "2026-11-04T11:46:31.619Z",
-      "lastAttemptAt": "2026-11-04T11:46:31.619Z"
+      "lastAttemptAt": "2026-11-05T00:40:56.958Z",
+      "errorMessage": "This operation was aborted"
     },
     {
       "sourceId": "dgu_haksa",
@@ -33,8 +35,8 @@
       "defaultCategory": "학사 일정",
       "status": "ok",
       "fetchedCount": 12,
-      "lastSuccessAt": "2026-11-04T11:46:31.619Z",
-      "lastAttemptAt": "2026-11-04T11:46:31.619Z"
+      "lastSuccessAt": "2026-11-05T00:40:56.958Z",
+      "lastAttemptAt": "2026-11-05T00:40:56.958Z"
     }
   ],
   "notices": [
@@ -51,12 +53,12 @@
       "createdAt": "2026-10-29",
       "isPinned": true,
       "hasAttachment": false,
-      "viewCount": 566,
+      "viewCount": 570,
       "officialUrl": "https://www.dongguk.edu/article/HAKSANOTICE/detail/26766799",
       "isOfficialSynced": true,
       "isNew": true,
       "collectedAt": "2026-10-29T11:30:01.919Z",
-      "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
+      "lastVerifiedAt": "2026-11-05T00:40:56.958Z",
       "syncState": "active",
       "scheduleStatus": "needs_review"
     },
@@ -73,12 +75,12 @@
       "createdAt": "2026-10-29",
       "isPinned": true,
       "hasAttachment": true,
-      "viewCount": 557,
+      "viewCount": 565,
       "officialUrl": "https://www.dongguk.edu/article/HAKSANOTICE/detail/26766795",
       "isOfficialSynced": true,
       "isNew": true,
       "collectedAt": "2026-10-29T05:33:17.649Z",
-      "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
+      "lastVerifiedAt": "2026-11-05T00:40:56.958Z",
       "syncState": "active",
       "scheduleStatus": "confirmed",
       "eventStartDate": "2026-12-06",
@@ -98,12 +100,12 @@
       "createdAt": "2026-10-29",
       "isPinned": true,
       "hasAttachment": false,
-      "viewCount": 404,
+      "viewCount": 411,
       "officialUrl": "https://www.dongguk.edu/article/HAKSANOTICE/detail/26766794",
       "isOfficialSynced": true,
       "isNew": true,
       "collectedAt": "2026-10-29T05:33:17.649Z",
-      "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
+      "lastVerifiedAt": "2026-11-05T00:40:56.958Z",
       "syncState": "active",
       "scheduleStatus": "confirmed",
       "eventStartDate": "2026-12-18",
@@ -123,12 +125,12 @@
       "createdAt": "2026-10-26",
       "isPinned": true,
       "hasAttachment": true,
-      "viewCount": 1325,
+      "viewCount": 1351,
       "officialUrl": "https://www.dongguk.edu/article/HAKSANOTICE/detail/26766752",
       "isOfficialSynced": true,
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
-      "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
+      "lastVerifiedAt": "2026-11-05T00:40:56.958Z",
       "syncState": "active",
       "scheduleStatus": "needs_review"
     },
@@ -145,12 +147,12 @@
       "createdAt": "2026-10-26",
       "isPinned": true,
       "hasAttachment": false,
-      "viewCount": 5735,
+      "viewCount": 5915,
       "officialUrl": "https://www.dongguk.edu/article/HAKSANOTICE/detail/26766742",
       "isOfficialSynced": true,
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
-      "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
+      "lastVerifiedAt": "2026-11-05T00:40:56.958Z",
       "syncState": "active",
       "scheduleStatus": "none"
     },
@@ -260,7 +262,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "needs_review"
     },
     {
@@ -282,7 +284,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "needs_review"
     },
     {
@@ -298,12 +300,12 @@
       "createdAt": "2026-11-04",
       "isPinned": false,
       "hasAttachment": true,
-      "viewCount": 40,
+      "viewCount": 66,
       "officialUrl": "https://www.dongguk.edu/article/HAKSANOTICE/detail/26766878",
       "isOfficialSynced": true,
       "isNew": true,
       "collectedAt": "2026-11-04T11:46:31.619Z",
-      "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
+      "lastVerifiedAt": "2026-11-05T00:40:56.958Z",
       "syncState": "active",
       "scheduleStatus": "none"
     },
@@ -326,7 +328,7 @@
       "isNew": true,
       "collectedAt": "2026-11-04T05:47:27.944Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "needs_review"
     },
     {
@@ -342,12 +344,12 @@
       "createdAt": "2026-11-03",
       "isPinned": false,
       "hasAttachment": true,
-      "viewCount": 134,
+      "viewCount": 152,
       "officialUrl": "https://www.dongguk.edu/article/HAKSANOTICE/detail/26766855",
       "isOfficialSynced": true,
       "isNew": true,
       "collectedAt": "2026-11-03T11:40:59.775Z",
-      "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
+      "lastVerifiedAt": "2026-11-05T00:40:56.958Z",
       "syncState": "active",
       "scheduleStatus": "none"
     },
@@ -364,12 +366,12 @@
       "createdAt": "2026-11-03",
       "isPinned": false,
       "hasAttachment": true,
-      "viewCount": 162,
+      "viewCount": 178,
       "officialUrl": "https://www.dongguk.edu/article/HAKSANOTICE/detail/26766842",
       "isOfficialSynced": true,
       "isNew": true,
       "collectedAt": "2026-11-03T03:50:33.971Z",
-      "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
+      "lastVerifiedAt": "2026-11-05T00:40:56.958Z",
       "syncState": "active",
       "scheduleStatus": "none"
     },
@@ -392,7 +394,7 @@
       "isNew": true,
       "collectedAt": "2026-11-03T05:43:09.721Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "none"
     },
     {
@@ -408,12 +410,12 @@
       "createdAt": "2026-11-02",
       "isPinned": false,
       "hasAttachment": true,
-      "viewCount": 154,
+      "viewCount": 159,
       "officialUrl": "https://www.dongguk.edu/article/HAKSANOTICE/detail/26766837",
       "isOfficialSynced": true,
       "isNew": true,
       "collectedAt": "2026-11-02T11:42:04.151Z",
-      "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
+      "lastVerifiedAt": "2026-11-05T00:40:56.958Z",
       "syncState": "active",
       "scheduleStatus": "none"
     },
@@ -430,12 +432,12 @@
       "createdAt": "2026-11-02",
       "isPinned": false,
       "hasAttachment": false,
-      "viewCount": 706,
+      "viewCount": 810,
       "officialUrl": "https://www.dongguk.edu/article/HAKSANOTICE/detail/26766834",
       "isOfficialSynced": true,
       "isNew": true,
       "collectedAt": "2026-11-02T11:42:04.151Z",
-      "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
+      "lastVerifiedAt": "2026-11-05T00:40:56.958Z",
       "syncState": "active",
       "scheduleStatus": "needs_review"
     },
@@ -452,12 +454,12 @@
       "createdAt": "2026-10-30",
       "isPinned": false,
       "hasAttachment": true,
-      "viewCount": 214,
+      "viewCount": 219,
       "officialUrl": "https://www.dongguk.edu/article/HAKSANOTICE/detail/26766817",
       "isOfficialSynced": true,
       "isNew": true,
       "collectedAt": "2026-10-30T11:27:17.883Z",
-      "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
+      "lastVerifiedAt": "2026-11-05T00:40:56.958Z",
       "syncState": "active",
       "scheduleStatus": "none"
     },
@@ -568,7 +570,7 @@
       "isNew": true,
       "collectedAt": "2026-10-30T11:27:17.883Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "needs_review"
     },
     {
@@ -769,7 +771,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "needs_review"
     },
     {
@@ -791,7 +793,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "needs_review"
     },
     {
@@ -813,7 +815,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "needs_review"
     },
     {
@@ -834,7 +836,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "needs_review"
     },
     {
@@ -856,7 +858,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "needs_review"
     },
     {
@@ -877,7 +879,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "needs_review"
     },
     {
@@ -899,7 +901,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "none"
     },
     {
@@ -921,7 +923,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "none"
     },
     {
@@ -943,7 +945,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "none"
     },
     {
@@ -965,7 +967,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "none"
     },
     {
@@ -987,7 +989,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T00:35:01.144Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "none"
     },
     {
@@ -1009,7 +1011,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-03T04:45:25.307Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "needs_review"
     },
     {
@@ -1031,7 +1033,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-10-30T05:32:59.475Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "needs_review"
     },
     {
@@ -1052,7 +1054,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "needs_review"
     },
     {
@@ -1073,7 +1075,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "needs_review"
     },
     {
@@ -1094,7 +1096,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "none"
     },
     {
@@ -1115,7 +1117,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "none"
     },
     {
@@ -1136,7 +1138,7 @@
       "isNew": false,
       "collectedAt": "2026-10-28T06:37:15.613Z",
       "lastVerifiedAt": "2026-11-04T11:46:31.619Z",
-      "syncState": "active",
+      "syncState": "unverified",
       "scheduleStatus": "none"
     }
   ]
