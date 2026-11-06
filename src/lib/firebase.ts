@@ -41,6 +41,7 @@ import {
   CommunityComment,
   Notice,
   NoticeSyncMetadata,
+  AlumniProfile,
   OfficialGraduationCatalog,
   StudentAcademicProfile,
   StudentProgress,
@@ -2253,4 +2254,120 @@ export async function deleteUserCalendarEventFromFirestore(
 
   const eventDocRef = doc(db, "users", userId, "calendarEvents", eventId);
   await deleteDoc(eventDocRef);
+}
+
+export const ALUMNI_PROFILES_COLLECTION = "alumniProfiles";
+
+/**
+ * Firestore 동문(졸업생) 프로필 실시간 구독
+ */
+export function subscribeToAlumniProfilesInFirestore(
+  onUpdate: (profiles: AlumniProfile[]) => void,
+  onError?: (errMessage: string) => void
+): (() => void) | null {
+  const { db } = getFirestoreInstance();
+  if (!db) return null;
+
+  const colRef = collection(db, ALUMNI_PROFILES_COLLECTION);
+  const unsubscribe = onSnapshot(
+    colRef,
+    (snapshot) => {
+      const list: AlumniProfile[] = [];
+      snapshot.forEach((docSnap) => {
+        const d = docSnap.data();
+        list.push({
+          id: docSnap.id,
+          userId: d.userId || docSnap.id,
+          displayName: d.displayName || "",
+          graduationYear: Number(d.graduationYear) || 2023,
+          admissionYear: Number(d.admissionYear) || 2018,
+          doubleMajor: d.doubleMajor || "",
+          careerTrack: d.careerTrack || "기타",
+          currentRoleTitle: d.currentRoleTitle || "",
+          organization: d.organization || "",
+          bio: d.bio || "",
+          experienceSummary: d.experienceSummary || "",
+          mentoringAvailable: d.mentoringAvailable !== false,
+          interests: Array.isArray(d.interests) ? d.interests : [],
+          privacy: {
+            showOrganization: d.privacy?.showOrganization !== false,
+            showEmail: !!d.privacy?.showEmail,
+            allowDirectChat: d.privacy?.allowDirectChat !== false,
+          },
+        });
+      });
+      onUpdate(list);
+    },
+    (err) => {
+      console.warn("동문 프로필 실시간 구독 오류:", err);
+      if (onError) onError(err.message);
+    }
+  );
+
+  return unsubscribe;
+}
+
+/**
+ * 졸업생 본인의 진로 프로필 및 공개 설정을 Firestore에 저장/동기화합니다.
+ */
+export async function saveAlumniProfileInFirestore(
+  profile: AlumniProfile
+): Promise<void> {
+  const { db } = getFirestoreInstance();
+  if (!db) return;
+
+  const docId = profile.id || profile.userId;
+  const profileRef = doc(db, ALUMNI_PROFILES_COLLECTION, docId);
+  const nowIso = new Date().toISOString();
+
+  const payload: Record<string, any> = {
+    id: docId,
+    userId: profile.userId,
+    displayName: (profile.displayName || "").trim(),
+    graduationYear: Number(profile.graduationYear) || 2023,
+    admissionYear: Number(profile.admissionYear) || 2018,
+    doubleMajor: (profile.doubleMajor || "").trim(),
+    careerTrack: profile.careerTrack,
+    currentRoleTitle: (profile.currentRoleTitle || "").trim(),
+    organization: (profile.organization || "").trim(),
+    bio: (profile.bio || "").trim(),
+    experienceSummary: (profile.experienceSummary || "").trim(),
+    mentoringAvailable: profile.mentoringAvailable !== false,
+    interests: profile.interests || [],
+    privacy: {
+      showOrganization: profile.privacy?.showOrganization !== false,
+      showEmail: !!profile.privacy?.showEmail,
+      allowDirectChat: profile.privacy?.allowDirectChat !== false,
+    },
+    updatedAt: nowIso,
+  };
+
+  await setDoc(profileRef, payload, { merge: true });
+
+  // 사용자의 users 문서 및 publicProfiles 문서에도 최신 프로필 정보 반영
+  try {
+    if (profile.userId) {
+      const userDocRef = doc(db, "users", profile.userId);
+      const userSnap = await getDoc(userDocRef);
+      if (userSnap.exists()) {
+        await updateDoc(userDocRef, {
+          bio: (profile.bio || "").trim(),
+          doubleMajor: (profile.doubleMajor || "").trim(),
+          careerTrack: profile.careerTrack,
+        });
+      }
+
+      const publicDocRef = doc(db, "publicProfiles", profile.userId);
+      const publicSnap = await getDoc(publicDocRef);
+      if (publicSnap.exists()) {
+        await updateDoc(publicDocRef, {
+          bio: (profile.bio || "").trim(),
+          doubleMajor: (profile.doubleMajor || "").trim(),
+          careerTrack: profile.careerTrack,
+        });
+      }
+    }
+  } catch (syncErr) {
+    console.warn("동문 프로필 기본 유저 정보 동기화 경고:", syncErr);
+  }
 }

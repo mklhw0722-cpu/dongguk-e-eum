@@ -23,6 +23,14 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
+    // 헬퍼 함수: 요청자가 '승인된 졸업생(alumni)'인지 검증
+    function isApprovedAlumni() {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approvalStatus == 'approved'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'alumni';
+    }
+
     // ==============================================================
     // 1. 회원 프로필 및 가입 신청 정보 (users 컬렉션)
     // ==============================================================
@@ -316,6 +324,31 @@ service cloud.firestore {
       allow read: if isApprovedUser() && (resource.data.userId == request.auth.uid || isApprovedAdmin());
       allow create: if isApprovedUser() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isApprovedUser() && (resource.data.userId == request.auth.uid || isApprovedAdmin());
+    }
+
+    // ==============================================================
+    // 9. 졸업생 진로 프로필 및 멘토링 네트워크 (alumniProfiles 컬렉션)
+    // ==============================================================
+    match /alumniProfiles/{profileId} {
+      // 승인된 정회원(재학생, 졸업생, 교수) 및 관리자는 동문 탐색을 위해 목록을 열람할 수 있습니다.
+      allow read: if isApprovedUser() || isApprovedAdmin();
+
+      // 오직 승인된 졸업생(role == 'alumni') 본인 또는 관리자만 프로필을 등록/수정/삭제할 수 있습니다.
+      // (재학생 및 교수는 등록 및 수정 불가)
+      allow create: if isApprovedAdmin()
+                    || (
+                      isApprovedAlumni()
+                      && request.resource.data.userId == request.auth.uid
+                    );
+
+      allow update: if isApprovedAdmin()
+                    || (
+                      isApprovedAlumni()
+                      && resource.data.userId == request.auth.uid
+                      && request.resource.data.userId == resource.data.userId
+                    );
+
+      allow delete: if isApprovedAdmin() || (isApprovedAlumni() && resource.data.userId == request.auth.uid);
     }
 
     // 그 외 지정되지 않은 모든 컬렉션과 문서는 전면 차단

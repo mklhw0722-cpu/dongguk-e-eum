@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useApp, CAREER_TRACK_LIST } from "@/context/AppContext";
 import { AlumniProfile, CareerTrack } from "@/types";
@@ -31,7 +31,13 @@ export default function AlumniPage() {
     upsertAlumniProfile,
     startOrOpenDirectChat,
     currentRole,
+    currentUser,
+    authUserProfile,
   } = useApp();
+
+  const userRole = authUserProfile?.role || currentUser.role;
+  const isAlumni = userRole === "alumni";
+  const [isSaving, setIsSaving] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCareer, setSelectedCareer] = useState<string>("전체");
@@ -49,22 +55,58 @@ export default function AlumniPage() {
   const [mentoringMsg, setMentoringMsg] = useState("");
   const [feedbackBanner, setFeedbackBanner] = useState<string | null>(null);
 
-  // 졸업생 본인 프로필 등록/수정 상태 (데모)
-  const [profName, setProfName] = useState("정혜원 (18학번)");
+  // 현재 접속 계정의 동문 프로필 매칭
+  const currentUserId = authUserProfile?.id || authUserProfile?.uid || currentUser.id;
+  const myAlumniProfile = alumniProfiles.find(
+    (p) => p.userId === currentUserId || (currentUser.name && p.displayName.includes(currentUser.name))
+  );
+
+  // 졸업생 본인 프로필 등록/수정 상태
+  const [profName, setProfName] = useState("동문 멘토");
   const [profGradYear, setProfGradYear] = useState(2023);
   const [profDoubleMajor, setProfDoubleMajor] = useState("심리학");
   const [profCareer, setProfCareer] = useState<CareerTrack>("기업 HRD");
-  const [profRoleTitle, setProfRoleTitle] = useState("인재개발원 교육기획 매니저");
-  const [profOrg, setProfOrg] = useState("국내 대기업 그룹 인재개발원 (예시)");
+  const [profRoleTitle, setProfRoleTitle] = useState("교육기획 매니저");
+  const [profOrg, setProfOrg] = useState("국내 기업 (예시)");
   const [profBio, setProfBio] = useState(
-    "교육학 전공과 심리학 복수전공을 연결해 기업 HRD 직무로 일하고 있습니다."
+    "교육학 전공과 복수전공을 연결해 실무 직무로 일하고 있습니다."
   );
   const [profExp, setProfExp] = useState(
-    "신입사원 온보딩 프로그램 개발 및 리더십 과정 운영 경험을 공유합니다."
+    "학부 시절 활동 및 취업/진로 준비 경험을 공유합니다."
   );
   const [profShowOrg, setProfShowOrg] = useState(true);
   const [profShowEmail, setProfShowEmail] = useState(false);
   const [profMentoringAvail, setProfMentoringAvail] = useState(true);
+
+  // 비졸업생이 프로필 설정 탭에 머물러 있는 경우 자동으로 목록 탭으로 전환
+  useEffect(() => {
+    if (!isAlumni && activeTab === "my_profile") {
+      setActiveTab("directory");
+    }
+  }, [isAlumni, activeTab]);
+
+  // 졸업생 계정일 때 데이터베이스에 저장된 본인 최신 프로필 정보 자동 동기화
+  useEffect(() => {
+    if (myAlumniProfile) {
+      setProfName(myAlumniProfile.displayName || "");
+      setProfGradYear(myAlumniProfile.graduationYear || 2023);
+      setProfDoubleMajor(myAlumniProfile.doubleMajor || "");
+      setProfCareer(myAlumniProfile.careerTrack || "기업 HRD");
+      setProfRoleTitle(myAlumniProfile.currentRoleTitle || "");
+      setProfOrg(myAlumniProfile.organization || "");
+      setProfBio(myAlumniProfile.bio || "");
+      setProfExp(myAlumniProfile.experienceSummary || "");
+      setProfShowOrg(myAlumniProfile.privacy?.showOrganization !== false);
+      setProfShowEmail(myAlumniProfile.privacy?.showEmail === true);
+      setProfMentoringAvail(myAlumniProfile.mentoringAvailable !== false);
+    } else if (isAlumni && currentUser) {
+      const yearText = currentUser.studentIdOrYear ? ` (${currentUser.studentIdOrYear})` : "";
+      setProfName(`${currentUser.name}${yearText}`);
+      if (currentUser.doubleMajor) setProfDoubleMajor(currentUser.doubleMajor);
+      if (currentUser.careerTrack) setProfCareer(currentUser.careerTrack);
+      if (currentUser.bio) setProfBio(currentUser.bio);
+    }
+  }, [myAlumniProfile?.id, currentUserId, isAlumni, currentUser.name, currentUser.studentIdOrYear]);
 
   const doubleMajorOptions = [
     "전체",
@@ -109,28 +151,36 @@ export default function AlumniPage() {
     );
   };
 
-  const handleSaveMyAlumniProfile = (e: React.FormEvent) => {
+  const handleSaveMyAlumniProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    upsertAlumniProfile({
-      displayName: profName,
-      graduationYear: Number(profGradYear),
-      admissionYear: Number(profGradYear) - 5,
-      doubleMajor: profDoubleMajor,
-      careerTrack: profCareer,
-      currentRoleTitle: profRoleTitle,
-      organization: profOrg,
-      bio: profBio,
-      experienceSummary: profExp,
-      mentoringAvailable: profMentoringAvail,
-      interests: [profCareer, profDoubleMajor, "진로멘토링"],
-      privacy: {
-        showOrganization: profShowOrg,
-        showEmail: profShowEmail,
-        allowDirectChat: true,
-      },
-    });
-    setFeedbackBanner("졸업생 프로필 및 개인정보 공개 범위가 저장되었습니다.");
-    setActiveTab("directory");
+    setIsSaving(true);
+    try {
+      await upsertAlumniProfile({
+        displayName: profName.trim(),
+        graduationYear: Number(profGradYear),
+        admissionYear: Number(profGradYear) - 4,
+        doubleMajor: profDoubleMajor.trim() || "단일전공 (교육학)",
+        careerTrack: profCareer,
+        currentRoleTitle: profRoleTitle.trim(),
+        organization: profOrg.trim(),
+        bio: profBio.trim(),
+        experienceSummary: profExp.trim(),
+        mentoringAvailable: profMentoringAvail,
+        interests: [profCareer, profDoubleMajor.trim() || "진로멘토링"].filter(Boolean),
+        privacy: {
+          showOrganization: profShowOrg,
+          showEmail: profShowEmail,
+          allowDirectChat: true,
+        },
+      });
+      setFeedbackBanner("졸업생 프로필 및 개인정보 공개 범위가 클라우드 데이터베이스에 실시간으로 저장되었습니다.");
+      setActiveTab("directory");
+    } catch (err: any) {
+      console.error("프로필 저장 에러:", err);
+      setFeedbackBanner("프로필 저장 중 오류가 발생했습니다. 다시 시도해 주세요.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -173,17 +223,19 @@ export default function AlumniPage() {
           >
             멘토링 요청 현황 ({mentoringRequests.length})
           </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab("my_profile")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-              activeTab === "my_profile"
-                ? "bg-orange-600 text-white"
-                : "text-slate-600 dark:text-slate-300"
-            }`}
-          >
-            졸업생 프로필·공개범위 설정
-          </button>
+          {isAlumni && (
+            <button
+              type="button"
+              onClick={() => setActiveTab("my_profile")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                activeTab === "my_profile"
+                  ? "bg-orange-600 text-white"
+                  : "text-slate-600 dark:text-slate-300"
+              }`}
+            >
+              졸업생 프로필·공개범위 설정
+            </button>
+          )}
         </div>
       </div>
 
@@ -359,6 +411,24 @@ export default function AlumniPage() {
       )}
 
       {activeTab === "my_profile" && (
+        !isAlumni ? (
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 text-center space-y-3 shadow-xs">
+            <Lock className="w-10 h-10 text-orange-600 mx-auto" />
+            <h2 className="text-lg font-black text-slate-900 dark:text-white">
+              졸업생 전용 설정 화면입니다
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+              진로 프로필 등록 및 개인정보 공개 범위 설정은 교육학과를 졸업한 졸업생(동문) 계정으로 로그인한 경우에만 접근하실 수 있습니다.
+            </p>
+            <button
+              type="button"
+              onClick={() => setActiveTab("directory")}
+              className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition"
+            >
+              동문 목록으로 돌아가기
+            </button>
+          </div>
+        ) : (
         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-xs">
           <div className="flex items-center gap-2">
             <UserCog className="w-5 h-5 text-orange-600" />
@@ -494,13 +564,15 @@ export default function AlumniPage() {
             <div className="sm:col-span-2 flex justify-end">
               <button
                 type="submit"
-                className="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold"
+                disabled={isSaving}
+                className="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition"
               >
-                프로필 및 공개 설정 저장
+                {isSaving ? "데이터베이스 저장 중..." : "프로필 및 공개 설정 저장"}
               </button>
             </div>
           </form>
         </div>
+        )
       )}
 
       {/* 상세 프로필 모달 */}

@@ -86,6 +86,8 @@ import {
   syncApprovedUsersToPublicProfiles,
   updateUserDisplayName,
   getAvatarInitials,
+  subscribeToAlumniProfilesInFirestore,
+  saveAlumniProfileInFirestore,
   subscribeToNoticesInFirestore,
   upsertNoticeInFirestore,
   syncOfficialNoticesToFirestore,
@@ -243,7 +245,7 @@ interface AppContextValue extends PlatformDataState {
     requestId: string,
     status: "대기중" | "수락됨" | "답변완료"
   ) => void;
-  upsertAlumniProfile: (profile: Omit<AlumniProfile, "id" | "userId">) => void;
+  upsertAlumniProfile: (profile: Omit<AlumniProfile, "id" | "userId">) => Promise<AlumniProfile>;
 
   // 기능 D. 졸업요건 자가점검 및 공식 학업이수 기준 관리 액션
   graduationCatalog: OfficialGraduationCatalog;
@@ -587,6 +589,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // Firestore 실시간 대화방 목록 및 승인 회원 상태
   const [firestoreRooms, setFirestoreRooms] = useState<FirestoreChatRoom[]>([]);
   const [firestoreNotices, setFirestoreNotices] = useState<Notice[]>([]);
+  const [firestoreAlumniProfiles, setFirestoreAlumniProfiles] = useState<AlumniProfile[]>([]);
   const [approvedMembersRaw, setApprovedMembersRaw] = useState<PublicChatUser[]>([]);
   const [approvedMembersLoading, setApprovedMembersLoading] = useState(false);
   const [approvedMembersError, setApprovedMembersError] = useState<string | null>(null);
@@ -599,6 +602,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!rawFirebaseUser || !authUserProfile || authUserProfile.approvalStatus !== "approved") {
       setFirestoreRooms([]);
       setFirestoreNotices([]);
+      setFirestoreAlumniProfiles([]);
       setApprovedMembersRaw([]);
       setApprovedMembersLoading(false);
       setApprovedMembersError(null);
@@ -631,6 +635,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       (errMessage) => {
         setApprovedMembersLoading(false);
         setApprovedMembersError(errMessage);
+      }
+    );
+
+    // 2-2. 동문(졸업생) 프로필 실시간 구독
+    const unsubAlumni = subscribeToAlumniProfilesInFirestore(
+      (cloudProfiles) => {
+        setFirestoreAlumniProfiles(cloudProfiles);
+      },
+      () => {
+        // 비정상/미승인 폴백
       }
     );
 
@@ -833,6 +847,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return () => {
       if (unsubChats) unsubChats();
       if (unsubApprovedUsers) unsubApprovedUsers();
+      if (unsubAlumni) unsubAlumni();
       if (unsubNotices) unsubNotices();
       if (unsubGradCatalog) unsubGradCatalog();
       if (unsubGradRecord) unsubGradRecord();
@@ -2257,13 +2272,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // 동문(졸업생) 통합 목록 (로컬 기본 목업 + Firestore 실시간 동문 프로필 병합)
+  const mergedAlumniProfiles: AlumniProfile[] = useMemo(() => {
+    const byId = new Map<string, AlumniProfile>();
+    state.alumniProfiles.forEach((p) => {
+      byId.set(p.id, p);
+    });
+    if (firestoreAlumniProfiles && firestoreAlumniProfiles.length > 0) {
+      firestoreAlumniProfiles.forEach((cp) => {
+        const existingKey = Array.from(byId.keys()).find(
+          (k) => byId.get(k)?.userId === cp.userId || k === cp.id
+        );
+        if (existingKey) {
+          byId.set(existingKey, cp);
+        } else {
+          byId.set(cp.id, cp);
+        }
+      });
+    }
+    return Array.from(byId.values());
+  }, [state.alumniProfiles, firestoreAlumniProfiles]);
+
   // --- 졸업생 연결 액션 ---
   const createMentoringRequest = (
     toAlumniProfileId: string,
     topic: string,
     message: string
   ) => {
-    const targetAlumni = state.alumniProfiles.find(
+    const targetAlumni = mergedAlumniProfiles.find(
       (a) => a.id === toAlumniProfileId
     );
     if (!targetAlumni) return;
@@ -2298,31 +2334,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }));
   };
 
-  const upsertAlumniProfile = (
+  const upsertAlumniProfile = async (
     profileData: Omit<AlumniProfile, "id" | "userId">
-  ) => {
+  ): Promise<AlumniProfile> => {
+    const targetUserId = authUserProfile?.id || (rawFirebaseUser ? rawFirebaseUser.uid : currentUser.id);
+    const existing = mergedAlumniProfiles.find(
+      (p) => p.userId === targetUserId || (currentUser.name && p.displayName.includes(currentUser.name))
+    );
+    const profileId = existing?.id || `alumni-${targetUserId}`;
+    const newProfile: AlumniProfile = {
+      id: profileId,
+      userId: targetUserId,
+      ...profileData,
+    };
+
+    // 1. 로컬 상태 즉시 갱신
     setState((prev) => {
-      const existing = prev.alumniProfiles.find(
-        (p) => p.userId === currentUser.id
+      const exists = prev.alumniProfiles.some(
+        (p) => p.id === profileId || p.userId === targetUserId
       );
-      if (existing) {
-        return {
-          ...prev,
-          alumniProfiles: prev.alumniProfiles.map((p) =>
-            p.userId === currentUser.id ? { ...existing, ...profileData } : p
-          ),
-        };
-      }
-      const newProfile: AlumniProfile = {
-        id: `alumni-${Date.now()}`,
-        userId: currentUser.id,
-        ...profileData,
-      };
+      const nextProfiles = exists
+        ? prev.alumniProfiles.map((p) =>
+            p.id === profileId || p.userId === targetUserId ? newProfile : p
+          )
+        : [newProfile, ...prev.alumniProfiles];
+      PlatformRepository.saveState({ ...prev, alumniProfiles: nextProfiles });
       return {
         ...prev,
-        alumniProfiles: [newProfile, ...prev.alumniProfiles],
+        alumniProfiles: nextProfiles,
       };
     });
+
+    // 2. Firestore 클라우드 즉시 동기화
+    try {
+      await saveAlumniProfileInFirestore(newProfile);
+    } catch (err) {
+      console.warn("Firestore 동문 프로필 동기화 경고 (로컬 저장 유지):", err);
+    }
+
+    return newProfile;
   };
 
   // --- 졸업요건 자가점검 및 공식 학업이수 기준 관리 액션 ---
@@ -3158,6 +3208,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider
       value={{
         ...state,
+        alumniProfiles: mergedAlumniProfiles,
         notices: mergedNotices,
         noticeSyncMeta,
         conversations,
