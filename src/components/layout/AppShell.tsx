@@ -24,7 +24,6 @@ import {
   UserCheck,
   RotateCcw,
   Sparkles,
-  Database,
   LogOut,
   Clock,
   ShieldAlert,
@@ -126,28 +125,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="bg-slate-900 text-white px-3 sm:px-6 py-2 text-xs border-b border-slate-800 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 flex-wrap">
-            {/* 학과 공식 클라우드 DB 연결 상태 표시 (관리자만 클릭 시 상세 모달 열림) */}
-            <button
-              type="button"
-              onClick={() => {
-                if (isApprovedAdminUser) {
-                  setIsFirebaseModalOpen(true);
-                }
-              }}
-              title={isApprovedAdminUser ? "클릭 시 관리자 Firebase 연동 설정 열기" : "동국대학교 교육학과 공식 클라우드 DB와 실시간 연결되어 있습니다."}
-              className={`px-2.5 py-1 rounded-md font-bold text-[11px] inline-flex items-center gap-1.5 transition ${
-                isApprovedAdminUser ? "cursor-pointer hover:opacity-90" : "cursor-default"
-              } ${
-                isFirestoreConnected
-                  ? "bg-emerald-600 text-white"
-                  : "bg-orange-600 text-white"
-              }`}
-            >
-              <Database className="w-3.5 h-3.5" />
-              {isFirestoreConnected
-                ? `동국e음 클라우드 DB 정상 연결 (${firebaseProjectId})`
-                : "동국e음 클라우드 DB 연결 준비중"}
-            </button>
+
 
             {rawFirebaseUser && authUserProfile ? (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 border border-slate-700 text-slate-200">
@@ -354,11 +332,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Sparkles className="w-3.5 h-3.5 text-orange-500" /> 동국e음 (Dongguk e-eum)
             </p>
             <p>동국대학교 교육학과 전용 플랫폼</p>
-            <p className="text-[10px]">
-              {isFirestoreConnected
-                ? "🟢 Firebase Auth & Firestore 실시간 보안 연동"
-                : "⚪ 로컬 데모 모드 (상단에서 연결 가능)"}
-            </p>
+
           </div>
         </aside>
 

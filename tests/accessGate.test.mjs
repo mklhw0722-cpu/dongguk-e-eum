@@ -234,3 +234,19 @@ test("13. [관리자 프로필 소개 문구] 관리자 계정은 '동국e음 �
     "동국e음 관리자님의 프로필입니다."
   );
 });
+
+
+test("14. [인증 화면 및 상단바 UI 정리] DB연결 초록색 설명창, 보안 규칙 강제 배너, '(Firebase Auth 연동)' 문구가 제거되어 있다", () => {
+  const authContent = fs.readFileSync(new URL("../src/app/auth/page.tsx", import.meta.url), "utf8");
+  const shellContent = fs.readFileSync(new URL("../src/components/layout/AppShell.tsx", import.meta.url), "utf8");
+
+  // AppShell 상단바에서 '동국e음 클라우드 DB 정상 연결' 제거 확인
+  assert.equal(shellContent.includes("동국e음 클라우드 DB 정상 연결"), false);
+
+  // auth 페이지에서 보안 규칙 강제 배너 제거 확인
+  assert.equal(authContent.includes("보안 규칙 강제: 승인된 회원만 내부 데이터 접근 가능"), false);
+
+  // auth 페이지에서 '(Firebase Auth 연동)' 문구 제거 확인
+  assert.equal(authContent.includes("(Firebase Auth 연동)"), false);
+  assert.ok(authContent.includes("동국대학교 교육학과 승인 회원 전용"));
+});

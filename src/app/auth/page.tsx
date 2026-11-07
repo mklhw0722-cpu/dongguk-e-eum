@@ -10,7 +10,7 @@ import {
   UserRole,
 } from "@/types";
 import { formatAdmissionYearLabel } from "@/lib/graduationCurriculum";
-import { ROLE_LABELS, DemoInfoBanner } from "@/components/common/Cards";
+import { ROLE_LABELS } from "@/components/common/Cards";
 import {
   UserCheck,
   ShieldAlert,
@@ -237,11 +237,7 @@ export default function AuthPage() {
 
       </div>
 
-      <DemoInfoBanner
-        title="보안 규칙 강제: 승인된 회원만 내부 데이터 접근 가능"
-        description="회원가입 시 Firestore에 무조건 승인 대기(pending) 상태로 등록되며, 사용자가 자신의 승인 상태나 관리자 권한을 스스로 변경하는 것은 서버(Firestore Security Rules)에서 원천 차단됩니다."
-        variant="amber"
-      />
+
 
       {/* 현재 로그인 세션 상태 표시 */}
       {isRealAuthActive && authUserProfile && (
@@ -313,7 +309,7 @@ export default function AuthPage() {
               동국e음 회원 로그인
             </h2>
             <p className="text-xs text-slate-500">
-              동국대학교 교육학과 승인 회원 전용 (Firebase Auth 연동)
+              동국대학교 교육학과 승인 회원 전용
             </p>
           </div>
 
