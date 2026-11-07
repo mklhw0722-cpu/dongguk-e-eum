@@ -140,6 +140,31 @@ function formatUserChatProfileSubtitle(u: {
   return u.bio || `${name}님의 프로필입니다.`;
 }
 
+/**
+ * 채팅방 참여 구성원 카드용 학번 포맷터
+ * - 관리자/교수: 복전 및 학번 일체 미표시 (빈 문자열)
+ * - 재학생/졸업생: '00학번'만 깔끔하게 표시
+ */
+function formatChatMemberHakbun(u: {
+  role?: string;
+  studentIdOrYear?: string;
+  bio?: string;
+}): string {
+  if (u.role === "admin" || u.role === "professor") {
+    return "";
+  }
+  const raw = `${u.studentIdOrYear || ""} ${u.bio || ""}`.trim();
+  const matchHakbun = raw.match(/(\d{2})\s*학번/);
+  if (matchHakbun) return `${matchHakbun[1]}학번`;
+  const matchYear = raw.match(/20(\d{2})/);
+  if (matchYear) return `${matchYear[1]}학번`;
+  const matchOldYear = raw.match(/19(\d{2})/);
+  if (matchOldYear) return `${matchOldYear[1]}학번`;
+  const matchNum = raw.match(/^\d{2}/);
+  if (matchNum) return `${matchNum[0]}학번`;
+  return "";
+}
+
 export default function ChatPage() {
   const {
     currentUser,
@@ -1143,8 +1168,10 @@ export default function ChatPage() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {activeMembers.map((member) =>
-                      member ? (
+                    {activeMembers.map((member) => {
+                      if (!member) return null;
+                      const hakbun = formatChatMemberHakbun(member);
+                      return (
                         <div
                           key={member.id}
                           className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 flex items-center justify-between text-xs shadow-2xs"
@@ -1156,18 +1183,20 @@ export default function ChatPage() {
                                 ({ROLE_LABELS[member.role] || "구성원"})
                               </span>
                             </p>
-                            <p className="text-slate-500 text-[11px]">
-                              {member.doubleMajor ? `복전: ${member.doubleMajor}` : ""}
-                            </p>
+                            {hakbun ? (
+                              <p className="text-slate-500 text-[11px] font-medium">
+                                {hakbun}
+                              </p>
+                            ) : null}
                           </div>
-                          {member.careerTrack && (
+                          {member.role !== "admin" && member.role !== "professor" && member.careerTrack && (
                             <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-semibold">
                               {member.careerTrack}
                             </span>
                           )}
                         </div>
-                      ) : null
-                    )}
+                      );
+                    })}
                   </div>
                 </div>
               )}

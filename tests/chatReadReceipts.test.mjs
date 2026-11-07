@@ -10,6 +10,7 @@ import {
   formatUnreadBadge,
   computeMarkReadTarget,
   compareBySeq,
+  formatChatMemberHakbun,
 } from "../src/lib/chatReadReceipts.ts";
 
 test("1. [1:1 채팅] 사용자 A가 B에게 메시지를 보내면 A 화면에 '1'이 표시되고, A 본인의 안 읽은 메시지 수는 0이다", () => {
@@ -322,4 +323,64 @@ test("10. [대량 메시지 및 배지 포맷 최적화] 50개의 밀린 메시�
   assert.equal(formatUnreadBadge(99), "99");
   assert.equal(formatUnreadBadge(100), "99+");
   assert.equal(formatUnreadBadge(250), "99+");
+});
+
+test("11. [채팅방 참여 구성원 카드 포맷팅] 관리자 및 교수는 복전·학번 미표시, 재학생 및 졸업생은 00학번만 깔끔하게 표시된다", () => {
+  // 1. 관리자(admin): 학번/복전 일체 미표시 (빈 문자열)
+  assert.equal(
+    formatChatMemberHakbun({
+      role: "admin",
+      studentIdOrYear: "2022111234",
+      bio: "22학번 동국e음 관리자",
+    }),
+    ""
+  );
+
+  // 2. 교수(professor): 학번/복전 일체 미표시 (빈 문자열)
+  assert.equal(
+    formatChatMemberHakbun({
+      role: "professor",
+      studentIdOrYear: "교수",
+      bio: "교육학과 교수",
+    }),
+    ""
+  );
+
+  // 3. 재학생(student): '22학번' 등의 00학번으로 포맷팅
+  assert.equal(
+    formatChatMemberHakbun({
+      role: "student",
+      studentIdOrYear: "2022112345",
+      bio: "재학생 소개",
+    }),
+    "22학번"
+  );
+  assert.equal(
+    formatChatMemberHakbun({
+      role: "student",
+      studentIdOrYear: "22학번",
+    }),
+    "22학번"
+  );
+
+  // 4. 졸업생(alumni): '19학번' 등의 00학번으로 포맷팅
+  assert.equal(
+    formatChatMemberHakbun({
+      role: "alumni",
+      studentIdOrYear: "2019110001",
+      bio: "19학번 졸업생",
+    }),
+    "19학번"
+  );
+  assert.equal(
+    formatChatMemberHakbun({
+      role: "alumni",
+      studentIdOrYear: "19학번",
+    }),
+    "19학번"
+  );
+
+  // 5. null/undefined 또는 학번 미등록 시 빈 문자열
+  assert.equal(formatChatMemberHakbun(null), "");
+  assert.equal(formatChatMemberHakbun({ role: "student" }), "");
 });

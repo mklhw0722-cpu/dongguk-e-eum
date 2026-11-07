@@ -100,3 +100,29 @@ export function compareBySeq(a: ReadStateMessage, b: ReadStateMessage): number {
   if (sa > 0 && sb > 0 && sa !== sb) return sa - sb;
   return 0;
 }
+
+
+/**
+ * 채팅방 참여 구성원 카드용 학번 포맷터
+ * - 관리자(admin) / 교수(professor): 복전 및 학번 일체 미표시 (빈 문자열)
+ * - 재학생(student) / 졸업생(alumni): '00학번'만 깔끔하게 표시
+ */
+export function formatChatMemberHakbun(u: {
+  role?: string;
+  studentIdOrYear?: string;
+  bio?: string;
+}): string {
+  if (!u || u.role === "admin" || u.role === "professor") {
+    return "";
+  }
+  const raw = `${u.studentIdOrYear || ""} ${u.bio || ""}`.trim();
+  const matchHakbun = raw.match(/(\d{2})\s*학번/);
+  if (matchHakbun) return `${matchHakbun[1]}학번`;
+  const matchYear = raw.match(/20(\d{2})/);
+  if (matchYear) return `${matchYear[1]}학번`;
+  const matchOldYear = raw.match(/19(\d{2})/);
+  if (matchOldYear) return `${matchOldYear[1]}학번`;
+  const matchNum = raw.match(/^\d{2}/);
+  if (matchNum) return `${matchNum[0]}학번`;
+  return "";
+}
