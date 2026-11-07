@@ -208,3 +208,29 @@ test("12. [프로필 사진 이니셜 생성] 일반 회원은 성을 뺀 이름
   assert.equal(getAvatarInitials("이혜원", "admin"), "");
   assert.equal(getAvatarInitials("최고 관리자", "admin"), "");
 });
+
+test("13. [관리자 프로필 소개 문구] 관리자 계정은 '동국e음 관리자님의 프로필입니다.'로 정확히 표시된다", () => {
+  function formatUserChatProfileSubtitle(u) {
+    const raw = (u.studentIdOrYear || "").trim();
+    const name = (u.name || "").trim();
+    if (u.role === "student" || u.role === "alumni") {
+      return `${raw} ${name}님의 프로필입니다.`;
+    }
+    if (u.role === "professor") {
+      return `교육학과 전임교원 ${name}님의 프로필입니다.`;
+    }
+    if (u.role === "admin") {
+      return "동국e음 관리자님의 프로필입니다.";
+    }
+    return `${name}님의 프로필입니다.`;
+  }
+
+  assert.equal(
+    formatUserChatProfileSubtitle({ role: "admin", name: "관리자" }),
+    "동국e음 관리자님의 프로필입니다."
+  );
+  assert.equal(
+    formatUserChatProfileSubtitle({ role: "admin", name: "이혜원" }),
+    "동국e음 관리자님의 프로필입니다."
+  );
+});

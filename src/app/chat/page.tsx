@@ -130,7 +130,7 @@ function formatUserChatProfileSubtitle(u: {
 
   // 3. 관리자
   if (u.role === "admin") {
-    return `동국e음 최고관리자 ${name}님의 프로필입니다.`;
+    return "동국e음 관리자님의 프로필입니다.";
   }
 
   // 기본 fallback

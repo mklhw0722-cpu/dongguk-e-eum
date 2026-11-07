@@ -286,7 +286,7 @@ export async function registerWithEmailAndPassword(params: {
       return params.role === "professor"
         ? `교육학과 전임교원 ${params.name.trim()}님의 프로필입니다.`
         : params.role === "admin"
-        ? `동국e음 최고관리자 ${params.name.trim()}님의 프로필입니다.`
+        ? "동국e음 관리자님의 프로필입니다."
         : `${cleanHakbun} ${params.name.trim()}님의 프로필입니다.`;
     })(),
     avatarInitials: getAvatarInitials(params.name, params.role),
