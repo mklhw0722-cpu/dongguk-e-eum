@@ -449,14 +449,17 @@ test("13. [새로고침 및 상태 유지] 상담 신청 데이터와 상태 변
 });
 
 test("14. [메신저 통합 상담 신청 및 진행 방식(대면/채팅) 승인 연동] 교수 승인 시 대면/채팅 방식을 선택하고 1:1 대화방이 연결된다", () => {
-  // 1. 메신저 사용자 검색 목록에서 교수는 '상담신청', 일반 사용자는 '대화 요청' 버튼 레이블 결정
-  function getActionLabelForUser(user) {
-    return user.role === "professor" ? "상담신청" : "대화 요청";
+  // 1. 메신저 사용자 검색 목록에서 학생 기준 교수는 '상담신청', 일반 사용자는 '대화 요청' 버튼 레이블 결정
+  function getActionLabelForUser(targetUser, currentUserRole = "student") {
+    if (targetUser.role === "professor") {
+      return currentUserRole === "professor" ? "대화 요청" : "상담신청";
+    }
+    return "대화 요청";
   }
 
-  assert.equal(getActionLabelForUser({ role: "professor", name: "김교수" }), "상담신청");
-  assert.equal(getActionLabelForUser({ role: "student", name: "박학생" }), "대화 요청");
-  assert.equal(getActionLabelForUser({ role: "alumni", name: "이동문" }), "대화 요청");
+  assert.equal(getActionLabelForUser({ role: "professor", name: "김교수" }, "student"), "상담신청");
+  assert.equal(getActionLabelForUser({ role: "student", name: "박학생" }, "student"), "대화 요청");
+  assert.equal(getActionLabelForUser({ role: "alumni", name: "이동문" }, "student"), "대화 요청");
 
   // 2. 상담 신청 객체
   let consultation = {
@@ -728,4 +731,44 @@ test("17. [회원 삭제 시 상담 및 채팅방 데이터 연쇄 정리 및 �
       rulesContent.includes("allow delete: if isApprovedAdmin();"),
     "firestore.rules에 chats allow delete: if isApprovedAdmin() 규칙이 포함되어야 합니다."
   );
+});
+
+test("18. [교수 계정 간 상호작용] 교수 계정으로 다른 교수를 조회할 때는 '상담신청'이 아닌 '대화요청'으로 처리되며, 학생 계정일 때만 '상담신청'으로 분기된다", () => {
+  function getButtonType(targetUser, currentUser) {
+    const isCurrentUserProfessor = currentUser.role === "professor";
+    if (targetUser.role === "professor" && !isCurrentUserProfessor) {
+      return "상담신청";
+    }
+    return "대화 요청";
+  }
+
+  function getConversationTag(targetUser, currentUser) {
+    const isCurrentUserProfessor = currentUser.role === "professor";
+    const isTargetProfessor = targetUser.role === "professor";
+    if (isCurrentUserProfessor && isTargetProfessor) {
+      return "교수진 1:1 대화";
+    }
+    if (isCurrentUserProfessor) {
+      return "교수-학생 면담";
+    }
+    if (isTargetProfessor) {
+      return "교수-학생 대화";
+    }
+    return "학과 구성원 1:1 대화";
+  }
+
+  const profShin = { id: "prof-1", name: "신나민", role: "professor" };
+  const profYe = { id: "prof-2", name: "예상백", role: "professor" };
+  const studLee = { id: "stud-1", name: "이혜원", role: "student" };
+
+  // 1) 학생 -> 교수: 상담신청 모달 연결
+  assert.equal(getButtonType(profShin, studLee), "상담신청");
+
+  // 2) 교수 -> 교수: 대화 요청 버튼 및 교수진 1:1 대화 태그 연결
+  assert.equal(getButtonType(profYe, profShin), "대화 요청");
+  assert.equal(getConversationTag(profYe, profShin), "교수진 1:1 대화");
+
+  // 3) 교수 -> 학생: 대화 요청 및 면담 태그 연결
+  assert.equal(getButtonType(studLee, profShin), "대화 요청");
+  assert.equal(getConversationTag(studLee, profShin), "교수-학생 면담");
 });
