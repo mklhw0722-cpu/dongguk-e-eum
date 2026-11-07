@@ -166,6 +166,9 @@ export default function ChatPage() {
     handleConnectConsultationChat,
   } = useApp();
 
+  const isCurrentUserProfessor =
+    (authUserProfile?.role || currentUser.role || currentRole) === "professor";
+
   const [activeConvId, setActiveConvId] = useState<string>(
     conversations[0]?.id || ""
   );
@@ -250,8 +253,16 @@ export default function ChatPage() {
           (approvedMembers || []).find((u) => u.id === profId) ||
           users.find((u) => u.id === profId);
         if (prof) {
-          setSelectedProfessorForConsultation(prof);
-          setConsultationModalOpen(true);
+          if (isCurrentUserProfessor) {
+            Promise.resolve(startOrOpenDirectChat(prof.id, "교수진 1:1 대화")).then((convId: string) => {
+              newlySelectedConvIdRef.current = convId;
+              setActiveConvId(convId);
+              markConversationRead(convId);
+            });
+          } else {
+            setSelectedProfessorForConsultation(prof);
+            setConsultationModalOpen(true);
+          }
         }
       }
     }
@@ -454,9 +465,17 @@ export default function ChatPage() {
 
   // 1:1 대화 요청 실행
   const handleStartDirect = async (targetUserId: string) => {
+    const targetUser =
+      (approvedMembers || []).find((u) => u.id === targetUserId) ||
+      users.find((u) => u.id === targetUserId);
+    const isTargetProfessor = targetUser?.role === "professor";
     const tag =
-      currentUser.role === "professor"
+      isCurrentUserProfessor && isTargetProfessor
+        ? "교수진 1:1 대화"
+        : isCurrentUserProfessor
         ? "교수-학생 면담"
+        : isTargetProfessor
+        ? "교수-학생 대화"
         : "학과 구성원 1:1 대화";
     try {
       const convId = await startOrOpenDirectChat(targetUserId, tag);
@@ -1285,7 +1304,9 @@ export default function ChatPage() {
                   학과 구성원 검색 및 1:1 대화 요청
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  교수님의 특정 학생 면담 요청, 재학생과 졸업생 간 멘토링 대화를 바로 시작할 수 있습니다.
+                  {isCurrentUserProfessor
+                    ? "교수진 간 연구·학사 소통 및 학생 면담 대화를 바로 시작할 수 있습니다."
+                    : "교수님의 특정 학생 면담 요청, 재학생과 졸업생 간 멘토링 대화를 바로 시작할 수 있습니다."}
                 </p>
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
@@ -1390,7 +1411,7 @@ export default function ChatPage() {
                       </p>
                     </div>
 
-                    {u.role === "professor" ? (
+                    {u.role === "professor" && !isCurrentUserProfessor ? (
                       <button
                         type="button"
                         onClick={() => {
