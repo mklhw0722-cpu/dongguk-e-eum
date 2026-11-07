@@ -109,3 +109,17 @@ test("4. [모바일/신규 접속 시 예시 데이터 원천 차단] initialSam
   assert.equal(cleaned[0].id, "real-1");
   assert.equal(cleaned[1].id, "real-2");
 });
+
+
+test("5. [캘린더 UI 간소화] '직접 수정 가능', 설명 문구, '새 일정 만들기' 중복 버튼이 제거되어 깔끔한 화면을 제공한다", () => {
+  const calendarContent = fs.readFileSync(new URL("../src/components/calendar/EditableCalendar.tsx", import.meta.url), "utf8");
+
+  // 문구 및 배지 삭제 확인
+  assert.equal(calendarContent.includes("직접 수정 가능"), false, "'직접 수정 가능' 배지가 제거되어야 함");
+  assert.equal(calendarContent.includes("원하는 날짜를 클릭해 새 일정을 등록하고"), false, "설명 문구가 제거되어야 함");
+  assert.equal(calendarContent.includes("새 일정 만들기"), false, "하단 '새 일정 만들기' 버튼이 제거되어야 함");
+
+  // 기본 제목 및 상단 '+ 이 날에 새 일정 등록'은 정상 유지되는지 확인
+  assert.ok(calendarContent.includes("나의 학업 & 일정 캘린더"));
+  assert.ok(calendarContent.includes("이 날에 새 일정 등록"));
+});

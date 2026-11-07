@@ -476,17 +476,11 @@ export default function EditableCalendar({
               <CalendarIcon className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
                 나의 학업 & 일정 캘린더
-                <span className="text-[11px] font-semibold text-orange-600 bg-orange-50 dark:bg-orange-950 px-2 py-0.5 rounded-full border border-orange-200 dark:border-orange-900">
-                  직접 수정 가능
-                </span>
               </h2>
             </div>
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            원하는 날짜를 클릭해 새 일정을 등록하고, 언제든 수정·삭제할 수 있어요.
-          </p>
         </div>
 
 
@@ -653,15 +647,8 @@ export default function EditableCalendar({
         </div>
 
         {selectedDateEvents.length === 0 ? (
-          <div className="py-6 text-center text-xs text-slate-400 space-y-2">
+          <div className="py-6 text-center text-xs text-slate-400">
             <p>등록된 일정이 없습니다.</p>
-            <button
-              type="button"
-              onClick={() => handleOpenAddModal(selectedDate)}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold hover:border-orange-400 hover:text-orange-600 transition"
-            >
-              <Plus className="w-3.5 h-3.5" /> 새 일정 만들기
-            </button>
           </div>
         ) : (
           <div className="space-y-2">
