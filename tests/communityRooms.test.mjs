@@ -41,7 +41,7 @@ test("3. [캐시 마이그레이션 정합성] repository.ts 에서 삭제된 �
   const repoContent = fs.readFileSync(new URL("../src/services/repository.ts", import.meta.url), "utf8");
 
   // storage key 버전 갱신 검증
-  assert.ok(repoContent.includes('dongguk_e_eum_demo_state_v2'));
+  assert.ok(repoContent.includes('dongguk_e_eum_demo_state_v3'));
 
   // 삭제된 방 필터링 로직 검증
   assert.ok(repoContent.includes('const removedRoomIds = new Set(["room-dm-econ", "room-dm-psych", "room-dm-cs"]);'));

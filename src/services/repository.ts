@@ -35,7 +35,7 @@ import {
  * - 추후 Firebase Firestore 또는 Supabase PostgreSQL 연결 시 이 파일의 함수 내부만 비동기 API 호출로 교체하면 됩니다.
  */
 
-const STORAGE_KEY = "dongguk_e_eum_demo_state_v2";
+const STORAGE_KEY = "dongguk_e_eum_demo_state_v3";
 
 export interface PlatformDataState {
   users: User[];
@@ -98,9 +98,30 @@ export const PlatformRepository = {
           loadedPosts.push(initPost);
         }
       }
+      const mapDoubleMajor = (dm?: string): string | undefined => {
+        if (!dm) return dm;
+        if (dm === "심리학") return "경영학";
+        if (dm === "국어국문학") return "국어교육학과";
+        if (dm === "컴퓨터공학") return "기타";
+        if (dm === "경제학") return "법학과";
+        return dm;
+      };
+
+      const loadedAlumniProfiles = (parsed.alumniProfiles || initial.alumniProfiles).map((a) => ({
+        ...a,
+        doubleMajor: mapDoubleMajor(a.doubleMajor) || a.doubleMajor,
+      }));
+
+      const loadedUsers = (parsed.users || initial.users).map((u) => ({
+        ...u,
+        doubleMajor: mapDoubleMajor(u.doubleMajor),
+      }));
+
       return {
         ...initial,
         ...parsed,
+        users: loadedUsers,
+        alumniProfiles: loadedAlumniProfiles,
         communityRooms: loadedRooms,
         communityPosts: loadedPosts,
       };

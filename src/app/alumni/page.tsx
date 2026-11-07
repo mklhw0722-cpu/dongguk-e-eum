@@ -64,7 +64,7 @@ export default function AlumniPage() {
   // 졸업생 본인 프로필 등록/수정 상태
   const [profName, setProfName] = useState("동문 멘토");
   const [profGradYear, setProfGradYear] = useState(2023);
-  const [profDoubleMajor, setProfDoubleMajor] = useState("심리학");
+  const [profDoubleMajor, setProfDoubleMajor] = useState("국어교육학과");
   const [profCareer, setProfCareer] = useState<CareerTrack>("기업 HRD");
   const [profRoleTitle, setProfRoleTitle] = useState("교육기획 매니저");
   const [profOrg, setProfOrg] = useState("국내 기업 (예시)");
@@ -108,16 +108,28 @@ export default function AlumniPage() {
     }
   }, [myAlumniProfile?.id, currentUserId, isAlumni, currentUser.name, currentUser.studentIdOrYear]);
 
+  const STANDARD_DOUBLE_MAJORS = [
+    "경영학",
+    "국어교육학과",
+    "법학과",
+    "단일전공(교육학)",
+    "기타",
+  ];
+
   const doubleMajorOptions = [
     "전체",
-    ...Array.from(new Set(alumniProfiles.map((a) => a.doubleMajor))),
+    ...STANDARD_DOUBLE_MAJORS,
   ];
 
   const filteredAlumni = alumniProfiles.filter((a) => {
     const matchCareer =
       selectedCareer === "전체" || a.careerTrack === selectedCareer;
     const matchDM =
-      selectedDoubleMajor === "전체" || a.doubleMajor === selectedDoubleMajor;
+      selectedDoubleMajor === "전체"
+        ? true
+        : selectedDoubleMajor === "기타"
+        ? a.doubleMajor === "기타" || !["경영학", "국어교육학과", "법학과", "단일전공(교육학)"].includes(a.doubleMajor)
+        : a.doubleMajor === selectedDoubleMajor;
     const q = searchQuery.trim().toLowerCase();
     const matchQuery =
       !q ||
@@ -483,11 +495,19 @@ export default function AlumniPage() {
               <label className="block font-bold mb-1">복수전공 이수 내역</label>
               <input
                 type="text"
+                list="double-major-suggestions"
                 value={profDoubleMajor}
                 onChange={(e) => setProfDoubleMajor(e.target.value)}
-                placeholder="예: 심리학, 경영학, 단일전공(교육학)"
+                placeholder="예: 국어교육학과, 경영학, 법학과, 단일전공(교육학), 기타"
                 className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
               />
+              <datalist id="double-major-suggestions">
+                <option value="경영학" />
+                <option value="국어교육학과" />
+                <option value="법학과" />
+                <option value="단일전공(교육학)" />
+                <option value="기타" />
+              </datalist>
             </div>
 
             <div>
