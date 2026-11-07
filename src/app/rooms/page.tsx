@@ -462,7 +462,7 @@ export default function RoomsPage() {
                     required
                     value={newPostTitle}
                     onChange={(e) => setNewPostTitle(e.target.value)}
-                    placeholder="예: [심리학 복전] 선수과목 수강 순서 및 학점 팁 공유"
+                    placeholder="예: [국어교육 복전] 선수과목 수강 순서 및 학점 팁 공유"
                     className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                   />
                 </div>
@@ -561,7 +561,7 @@ export default function RoomsPage() {
       <SearchAndFilterBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        placeholder="공유방 이름(예: 기업 HRD, 교직, 심리학, 경영학, 컴퓨터공학) 검색..."
+        placeholder="공유방 이름(예: 기업 HRD, 교직, 국어교육, 경영학, 법학) 검색..."
         categories={ROOM_FILTER_TABS}
         selectedCategory={selectedRoomFilter}
         onSelectCategory={setSelectedRoomFilter}

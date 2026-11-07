@@ -35,7 +35,7 @@ import {
  * - 추후 Firebase Firestore 또는 Supabase PostgreSQL 연결 시 이 파일의 함수 내부만 비동기 API 호출로 교체하면 됩니다.
  */
 
-const STORAGE_KEY = "dongguk_e_eum_demo_state_v1";
+const STORAGE_KEY = "dongguk_e_eum_demo_state_v2";
 
 export interface PlatformDataState {
   users: User[];
@@ -81,9 +81,28 @@ export const PlatformRepository = {
       if (!saved) return getInitialDataState();
       const parsed = JSON.parse(saved) as Partial<PlatformDataState>;
       const initial = getInitialDataState();
+      const removedRoomIds = new Set(["room-dm-econ", "room-dm-psych", "room-dm-cs"]);
+      const loadedRooms = (parsed.communityRooms || initial.communityRooms).filter(
+        (r) => !removedRoomIds.has(r.id)
+      );
+      for (const initRoom of initial.communityRooms) {
+        if (!loadedRooms.some((r) => r.id === initRoom.id)) {
+          loadedRooms.push(initRoom);
+        }
+      }
+      const loadedPosts = (parsed.communityPosts || initial.communityPosts).filter(
+        (p) => !removedRoomIds.has(p.roomId)
+      );
+      for (const initPost of initial.communityPosts) {
+        if (!loadedPosts.some((p) => p.id === initPost.id)) {
+          loadedPosts.push(initPost);
+        }
+      }
       return {
         ...initial,
         ...parsed,
+        communityRooms: loadedRooms,
+        communityPosts: loadedPosts,
       };
     } catch {
       return getInitialDataState();
