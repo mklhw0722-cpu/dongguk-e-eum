@@ -250,3 +250,16 @@ test("14. [인증 화면 및 상단바 UI 정리] DB연결 초록색 설명창, 
   assert.equal(authContent.includes("(Firebase Auth 연동)"), false);
   assert.ok(authContent.includes("동국대학교 교육학과 승인 회원 전용"));
 });
+
+test("15. [전역 오렌지 테마 채도 완화] #f54900 대신 눈이 편안한 #fea73e 팔레트가 Tailwind 테마 및 CSS 변수에 등록되어 있다", () => {
+  const globalsCss = fs.readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+
+  // 1. @theme 블록 내에서 orange-600이 #fea73e로 정의되어 있는지 확인
+  assert.ok(globalsCss.includes("--color-orange-600: #fea73e;"));
+
+  // 2. 호버 톤(orange-700)과 주변 톤이 자연스럽게 정의되어 있는지 확인
+  assert.ok(globalsCss.includes("--color-orange-700: #e69129;"));
+
+  // 3. :root의 --brand-primary도 #fea73e로 동기화되어 있는지 확인
+  assert.ok(globalsCss.includes("--brand-primary: #fea73e;"));
+});
