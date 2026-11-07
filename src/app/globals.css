@@ -7,24 +7,6 @@
  */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/*
- * 채도가 지나치게 높던 오렌지(#f54900) 대신 눈이 편안하고 따뜻한 #fc9125 톤으로 전역 오렌지 테마 재정의
- * 사용자가 요청한 #fc9125를 기본 핵심(orange-600)으로 지정하여 모든 버튼과 UI의 채도를 부드럽게 조정합니다.
- */
-@theme {
-  --color-orange-50: #fff9f2;
-  --color-orange-100: #fef0df;
-  --color-orange-200: #fddebd;
-  --color-orange-300: #fbc693;
-  --color-orange-400: #fca858;
-  --color-orange-500: #fc9c3a;
-  --color-orange-600: #fc9125;
-  --color-orange-700: #e37a13;
-  --color-orange-800: #b75e11;
-  --color-orange-900: #924d13;
-  --color-orange-950: #4f2607;
-}
-
 :root {
   color-scheme: light;
   /* 라이트모드 기본 테마 (선명하고 편안한 고대비 가독성 확보) */
@@ -35,10 +17,10 @@
   --text-sub: #334155;  /* 보조 텍스트 대비 향상 */
   --text-muted: #64748b;
   --border-color: #e2e8f0;
-  --brand-primary: #fc9125; /* 동국e음 부드러운 오렌지 포인트 (#fc9125) */
-  --brand-primary-hover: #e37a13;
-  --brand-primary-soft: #fff9f2;
-  --brand-primary-border: #fddebd;
+  --brand-primary: #ea580c; /* 동국e음 공식 오렌지 포인트 */
+  --brand-primary-hover: #c2410c;
+  --brand-primary-soft: #fff7ed;
+  --brand-primary-border: #fed7aa;
   --brand-secondary: #1e293b;
 }
 
@@ -50,10 +32,10 @@
   --text-sub: #cbd5e1;
   --text-muted: #64748b;
   --border-color: #334155;
-  --brand-primary: #fc9125;
-  --brand-primary-hover: #e37a13;
-  --brand-primary-soft: #382008;
-  --brand-primary-border: #754210;
+  --brand-primary: #f97316;
+  --brand-primary-hover: #ea580c;
+  --brand-primary-soft: #431407;
+  --brand-primary-border: #7c2d12;
   --brand-secondary: #f8fafc;
 }
 
