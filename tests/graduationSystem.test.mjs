@@ -1137,3 +1137,54 @@ test("22. [전공필수 교직학점 이중가산 차단 및 봉사활동 총 �
   assert.ok(totalCard2);
   assert.equal(totalCard2.earnedValue, 5);
 });
+
+test("23. [특수교육학개론과 교육학개론 등 이종 강좌 중복 오판 방지] 특수교육학개론(ERC0019)은 교육학개론(EDU2013)과 다른 과목이므로 중복으로 감지되지 않는다", () => {
+  const existingList = [
+    {
+      id: "c-edu-intro",
+      courseCode: "EDU2013",
+      courseTitle: "교육학개론",
+      credits: 3,
+      yearTaken: 2024,
+      semesterTaken: "1학기",
+      category: "전공필수 (교육학과)",
+      isCompleted: true,
+      recognitionStatus: "confirmed",
+      createdAt: "2026-11-08",
+    },
+  ];
+
+  // 1) 특수교육학개론(ERC0019, 교직소양) 입력 시 중복이 아니어야 함
+  const specialEdu = detectDuplicateCourses(
+    {
+      courseCode: "ERC0019",
+      courseTitle: "특수교육학개론",
+      category: "교직소양",
+    },
+    existingList
+  );
+  assert.equal(specialEdu.hasExactDuplicate, false);
+  assert.equal(specialEdu.hasSimilarWarning, false);
+
+  // 2) 학수번호 없이 '특수교육학개론' 이름만 입력해도 '교육학개론'과 다른 과목이므로 중복이 아니어야 함
+  const specialEduNoCode = detectDuplicateCourses(
+    {
+      courseCode: "",
+      courseTitle: "특수교육학개론",
+      category: "교직소양",
+    },
+    existingList
+  );
+  assert.equal(specialEduNoCode.hasExactDuplicate, false);
+
+  // 3) 반면 동일 강좌인 '교육학개론' 또는 학수번호 'EDU2013' 입력 시는 중복으로 정확히 감지
+  const exactEduIntro = detectDuplicateCourses(
+    {
+      courseCode: "EDU2013",
+      courseTitle: "교육학개론",
+      category: "전공필수 (교육학과)",
+    },
+    existingList
+  );
+  assert.equal(exactEduIntro.hasExactDuplicate, true);
+});

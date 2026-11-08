@@ -327,7 +327,7 @@ export default function GraduationPage() {
       studentProgress.courses || []
     );
 
-    if (dupCheck.hasExactDuplicate || dupCheck.hasSimilarWarning) {
+    if (dupCheck.hasExactDuplicate) {
       setDuplicateWarningModal({
         warningMessage: dupCheck.warningMessage,
       });
