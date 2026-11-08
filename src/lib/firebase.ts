@@ -237,6 +237,8 @@ export interface UserProfileDoc extends PlatformUser {
   verificationNote?: string;
   adminComment?: string;
   updatedAt?: string;
+  sessionStartedAt?: unknown;
+  sessionExpiresAtMs?: number;
 }
 
 /**
@@ -323,6 +325,28 @@ export async function logoutUser(): Promise<void> {
   const { auth } = getFirebaseInstances();
   if (!auth) return;
   await signOut(auth);
+}
+
+/**
+ * 로그인 성공 또는 '로그인 연장' 클릭 시 서버(Firestore users/{uid})에
+ * 서버 타임스탬프(sessionStartedAt: serverTimestamp())와 만료 예정 시각(sessionExpiresAtMs)을 기록합니다.
+ * Firestore Security Rules에서 request.time과 대조하여 클라이언트 시각 조작을 방지합니다.
+ */
+export async function syncUserSessionToFirestore(
+  uid: string,
+  expiresAtMs: number
+): Promise<void> {
+  const { db } = getFirestoreInstance();
+  if (!db || !uid) return;
+  try {
+    const userDocRef = doc(db, USERS_COLLECTION, uid);
+    await updateDoc(userDocRef, {
+      sessionStartedAt: serverTimestamp(),
+      sessionExpiresAtMs: expiresAtMs,
+    });
+  } catch {
+    // 가입 직후이거나 오프라인 등 문서 갱신 실패 시 조용히 무시
+  }
 }
 
 /**

@@ -8,11 +8,29 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // 헬퍼 함수: 요청자가 '승인된(approved)' 회원인지 검증
+    // 헬퍼 함수: 서버 시각(request.time) 기준 60분(3,600,000ms) 로그인 세션 유효성 검증
+    // - 클라이언트가 localStorage 타이머를 조작하더라도 서버 타임스탬프(sessionStartedAt)로부터 60분이 경과하면 차단
+    // - 기존 회원 문서(sessionStartedAt 미기록 문서)와의 하위 호환성 유지
+    function isSessionValid(userData) {
+      return !('sessionStartedAt' in userData)
+        || userData.sessionStartedAt == null
+        || !(userData.sessionStartedAt is timestamp)
+        || request.time.toMillis() <= userData.sessionStartedAt.toMillis() + 3600000;
+    }
+
+    // 헬퍼 함수: 세션 시작/연장 타임스탬프(sessionStartedAt) 갱신 무결성 검증
+    // - 클라이언트가 임의의 미래 시각을 넣지 못하도록 반드시 request.time(serverTimestamp())과 일치해야 함
+    function isValidSessionRefresh(incomingData) {
+      return !('sessionStartedAt' in incomingData)
+        || incomingData.sessionStartedAt == request.time;
+    }
+
+    // 헬퍼 함수: 요청자가 '승인된(approved)' 회원이고 60분 세션이 유효한지 검증
     function isApprovedUser() {
       return isAuthenticated()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approvalStatus == 'approved';
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approvalStatus == 'approved'
+        && isSessionValid(get(/databases/$(database)/documents/users/$(request.auth.uid)).data);
     }
 
     // 헬퍼 함수: 요청자가 '승인된 관리자(admin)'인지 검증
@@ -94,6 +112,7 @@ service cloud.firestore {
           request.auth.uid == userId
           && !request.resource.data.diff(resource.data).affectedKeys()
                 .hasAny(['approvalStatus', 'role', 'uid', 'id', 'email', 'adminComment', 'advisorProfessorId', 'advisorAssignedAt'])
+          && isValidSessionRefresh(request.resource.data)
         )
       );
 
