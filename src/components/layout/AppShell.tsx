@@ -31,6 +31,39 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+/** 긴 입학년도·학번 문자열을 '00학번' 형태로 간결하게 변환 */
+function formatShortHakbun(value?: string | null): string {
+  if (!value || typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  // 1. 이미 '23학번' 형태가 포함된 경우 (예: '23학번', '23학번 (3학년 재학)')
+  const twoDigitHakbun = trimmed.match(/(\d{2})\s*학번/);
+  if (twoDigitHakbun) {
+    return `${twoDigitHakbun[1]}학번`;
+  }
+
+  // 2. '2023학년도', '2023학년도 신입학', '2023학번' 등 4자리 연도가 포함된 경우
+  const fourDigitYear = trimmed.match(/(?:20|19)(\d{2})(?:학년도|학번|\s*신입학|\s*편입학)/);
+  if (fourDigitYear) {
+    return `${fourDigitYear[1]}학번`;
+  }
+
+  // 3. 8~10자리 학번 숫자 (예: '2023112345')
+  const studentIdNumber = trimmed.match(/^(?:20|19)(\d{2})\d{4,8}$/);
+  if (studentIdNumber) {
+    return `${studentIdNumber[1]}학번`;
+  }
+
+  // 4. 연도 4자리 (예: '2023년', '2023')
+  const standaloneYear = trimmed.match(/(?:20|19)(\d{2})/);
+  if (standaloneYear) {
+    return `${standaloneYear[1]}학번`;
+  }
+
+  return trimmed;
+}
+
 /** 브랜드 로고 심볼: 'e'와 작은 점(사람·잇다 의미) */
 function BrandMark({ size = "md" }: { size?: "sm" | "md" }) {
   return (
@@ -301,10 +334,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         <RoleBadge role={currentUser.role} />
                       </div>
                       <p className="truncate text-xs text-ink-3">
-                        {currentUser.studentIdOrYear ||
-                          (currentUser.role === "admin"
-                            ? "학과 관리자"
-                            : currentUser.email || "")}
+                        {currentUser.role === "admin"
+                          ? "학과 관리자"
+                          : currentUser.role === "professor"
+                          ? "학과 전임교원"
+                          : formatShortHakbun(currentUser.studentIdOrYear) ||
+                            currentUser.studentIdOrYear ||
+                            currentUser.email ||
+                            ""}
                       </p>
                     </div>
                   </div>
