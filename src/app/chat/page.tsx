@@ -1009,7 +1009,7 @@ export default function ChatPage() {
                               setActiveConvId(c.conversationId!);
                               markConversationRead(c.conversationId!);
                             }}
-                            className="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-xs transition flex items-center gap-1.5"
+                            className="px-3.5 py-1.5 rounded-lg border border-line bg-surface text-ink hover:bg-surface-2 text-xs font-semibold shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
                           >
                             <MessageSquare className="w-3.5 h-3.5" />
                             1:1 대화방으로 바로 이동
@@ -1062,12 +1062,14 @@ export default function ChatPage() {
                     type="button"
                     onClick={() => handleSelectConversation(conv.id)}
                     className={`w-full text-left p-3.5 flex items-start gap-3 transition ${
-                      isSelected
-                        ? "bg-orange-50/80  border-l-4 border-orange-600"
-                        : "hover:bg-slate-50 :bg-slate-800/50"
+                      isSelected ? "bg-accent-soft/40 border-l-3 border-[#f58220]" : "hover:bg-surface-2"
                     }`}
                   >
-                    <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
+                    <div className={`w-10 h-10 font-bold text-xs flex items-center justify-center shrink-0 ${
+                      conv.isGroup
+                        ? "rounded-xl bg-surface-3 text-ink-2"
+                        : "rounded-full bg-accent-soft text-accent"
+                    }`}>
                       {conv.isGroup ? <Users className="w-4 h-4" /> : conv.title.slice(0, 1)}
                     </div>
 
@@ -1273,7 +1275,7 @@ export default function ChatPage() {
                         <div
                           className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-2xs break-words ${
                             isMe
-                              ? "bg-orange-600 text-white rounded-br-xs"
+                              ? "bg-[#f58220] text-white font-medium rounded-br-xs shadow-xs"
                               : "bg-white  text-slate-800  border border-slate-200  rounded-bl-xs"
                           }`}
                         >
@@ -1764,7 +1766,7 @@ export default function ChatPage() {
 
             {/* 교수 정보 요약 */}
             <div className="p-3.5 rounded-2xl bg-orange-50/70 border border-orange-100 flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-orange-600 text-white font-extrabold text-sm flex items-center justify-center shrink-0">
+              <div className="w-12 h-12 rounded-full bg-accent-soft text-accent font-extrabold text-sm flex items-center justify-center shrink-0">
                 {getAvatarInitials(selectedProfessorForConsultation.name, selectedProfessorForConsultation.role) ||
                   selectedProfessorForConsultation.avatarInitials}
               </div>
