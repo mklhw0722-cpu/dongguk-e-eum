@@ -1817,36 +1817,55 @@ export default function GraduationPage() {
             ))}
           </div>
 
-          {/* 학교현장실습 참여 사전 요건 점검 (선이수 3과목 + 인적성/응급처치/성인지/인권존중) */}
-          <div className="p-3.5 rounded-xl bg-surface-2 border border-line space-y-3 text-xs">
-            <div className="flex items-center justify-between">
-              <span className="font-extrabold text-ink">
-                학교현장실습 참여 가능 사전 요건 (공식 가이드 기준)
-              </span>
+          {/* 학교현장실습 참여 사전 요건 점검 (DESIGN.md 단일 층위 카드 & 정갈한 그리드 레이아웃) */}
+          <div className="rounded-2xl border border-line bg-surface p-4 sm:p-5 space-y-4 shadow-2xs">
+            {/* 상단 타이틀 및 전체 사전 요건 충족 뱃지 */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-line">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-orange-50 border border-orange-200/70 flex items-center justify-center text-brand-600 shrink-0">
+                  <GraduationCap className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-ink leading-tight">
+                    학교현장실습 참여 가능 사전 요건
+                  </h3>
+                  <p className="text-[11px] text-ink-3">
+                    공식 학사 가이드 기준 필수 선이수 과목 및 교직 소양 요건
+                  </p>
+                </div>
+              </div>
               <span
-                className={`font-bold ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold shrink-0 self-start sm:self-auto border transition ${
                   audit.practicumEvaluation.prerequisites.allPrerequisitesMet
-                    ? "text-emerald-600"
-                    : "text-amber-600"
+                    ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                    : "bg-amber-50 border-amber-200 text-amber-700"
                 }`}
               >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    audit.practicumEvaluation.prerequisites.allPrerequisitesMet
+                      ? "bg-emerald-500"
+                      : "bg-amber-500"
+                  }`}
+                />
                 {audit.practicumEvaluation.prerequisites.allPrerequisitesMet
                   ? "사전 요건 모두 충족"
                   : "일부 사전 요건 미충족"}
               </span>
             </div>
 
-            {/* 필수 선이수 과목 (사고와 표현, 교육학교재연구및지도법, 교육학교육론) */}
-            <div className="p-2.5 rounded-lg bg-accent-soft/80 border border-accent-line space-y-2">
+            {/* 1. 필수 선이수 과목 섹션 (3열 반응형 인터랙티브 카드) */}
+            <div className="space-y-2.5">
               <div className="flex items-center justify-between">
-                <span className="font-bold text-orange-900 text-xs flex items-center gap-1">
-                  <span>📌</span> 필수 선이수 과목
+                <span className="text-xs font-bold text-ink-2 flex items-center gap-1.5">
+                  <BookOpen className="w-3.5 h-3.5 text-brand-600" />
+                  필수 선이수 과목
                 </span>
                 <span
-                  className={`text-xs font-extrabold px-1.5 py-0.5 rounded ${
+                  className={`text-[11px] font-extrabold px-2 py-0.5 rounded-md border transition ${
                     audit.practicumEvaluation.prerequisites.prerequisiteCoursesAllMet
-                      ? "bg-emerald-100  text-emerald-700 "
-                      : "bg-amber-100  text-amber-700 "
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                      : "bg-slate-100 border-line text-ink-3"
                   }`}
                 >
                   {audit.practicumEvaluation.prerequisites.prerequisiteCoursesAllMet
@@ -1854,104 +1873,173 @@ export default function GraduationPage() {
                     : "선이수 과목 미완료"}
                 </span>
               </div>
-              <div className="flex flex-col gap-1.5 text-xs pt-0.5">
-                <label className="flex items-center gap-2 cursor-pointer py-0.5">
-                  <input
-                    type="checkbox"
-                    checked={audit.practicumEvaluation.prerequisites.thoughtAndExpressionCompleted}
-                    onChange={(e) =>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {[
+                  {
+                    id: "thought",
+                    title: "사고와 표현",
+                    desc: "기초교양 필수",
+                    checked: audit.practicumEvaluation.prerequisites.thoughtAndExpressionCompleted,
+                    onToggle: (checked: boolean) =>
                       updateSchoolPracticumState({
-                        thoughtAndExpressionCompleted: e.target.checked,
-                      })
-                    }
-                    className="rounded border-line text-brand-600 focus:ring-brand-500"
-                  />
-                  <span
-                    className={
-                      audit.practicumEvaluation.prerequisites.thoughtAndExpressionCompleted
-                        ? "font-bold text-emerald-700 "
-                        : "text-ink-2 "
-                    }
-                  >
-                    사고와 표현
-                  </span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer py-0.5">
-                  <input
-                    type="checkbox"
-                    checked={audit.practicumEvaluation.prerequisites.teachingMaterialsAndMethodsCompleted}
-                    onChange={(e) =>
+                        thoughtAndExpressionCompleted: checked,
+                      }),
+                  },
+                  {
+                    id: "materials",
+                    title: "교육학교재연구및지도법",
+                    desc: "교직이론 필수",
+                    checked: audit.practicumEvaluation.prerequisites.teachingMaterialsAndMethodsCompleted,
+                    onToggle: (checked: boolean) =>
                       updateSchoolPracticumState({
-                        teachingMaterialsAndMethodsCompleted: e.target.checked,
-                      })
-                    }
-                    className="rounded border-line text-brand-600 focus:ring-brand-500"
-                  />
-                  <span
-                    className={
-                      audit.practicumEvaluation.prerequisites.teachingMaterialsAndMethodsCompleted
-                        ? "font-bold text-emerald-700 "
-                        : "text-ink-2 "
-                    }
-                  >
-                    교육학교재연구및지도법
-                  </span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer py-0.5">
-                  <input
-                    type="checkbox"
-                    checked={audit.practicumEvaluation.prerequisites.educationTheoryCompleted}
-                    onChange={(e) =>
+                        teachingMaterialsAndMethodsCompleted: checked,
+                      }),
+                  },
+                  {
+                    id: "theory",
+                    title: "교육학교육론",
+                    desc: "교직이론 필수",
+                    checked: audit.practicumEvaluation.prerequisites.educationTheoryCompleted,
+                    onToggle: (checked: boolean) =>
                       updateSchoolPracticumState({
-                        educationTheoryCompleted: e.target.checked,
-                      })
-                    }
-                    className="rounded border-line text-brand-600 focus:ring-brand-500"
-                  />
-                  <span
-                    className={
-                      audit.practicumEvaluation.prerequisites.educationTheoryCompleted
-                        ? "font-bold text-emerald-700 "
-                        : "text-ink-2 "
-                    }
+                        educationTheoryCompleted: checked,
+                      }),
+                  },
+                ].map((course) => (
+                  <label
+                    key={course.id}
+                    className={`flex items-center gap-2.5 p-3 rounded-xl border transition cursor-pointer select-none ${
+                      course.checked
+                        ? "bg-emerald-50/40 border-emerald-200 text-emerald-950 shadow-2xs"
+                        : "bg-surface-2/60 border-line text-ink hover:bg-surface-2 hover:border-line-strong"
+                    }`}
                   >
-                    교육학교육론
-                  </span>
-                </label>
+                    <input
+                      type="checkbox"
+                      checked={course.checked}
+                      onChange={(e) => course.onToggle(e.target.checked)}
+                      className="w-4 h-4 rounded border-line text-brand-600 focus:ring-brand-500 shrink-0 cursor-pointer"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={`text-xs font-bold leading-snug truncate ${
+                          course.checked ? "text-emerald-800" : "text-ink"
+                        }`}
+                      >
+                        {course.title}
+                      </p>
+                      <p className="text-[11px] text-ink-3 mt-0.5">
+                        {course.desc}
+                      </p>
+                    </div>
+                    {course.checked && (
+                      <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    )}
+                  </label>
+                ))}
               </div>
             </div>
 
-            {/* 기타 실습 사전 요건 */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs pt-0.5">
-              <p>
-                {audit.practicumEvaluation.prerequisites.personalityTestOnce
-                  ? "✔"
-                  : "•"}{" "}
-                교직 적성 및 인성검사 1회 이상 적격
-              </p>
-              <p>
-                {audit.practicumEvaluation.prerequisites.cprOnce ? "✔" : "•"}{" "}
-                응급처치 및 심폐소생술 실습 1회 이상 이수
-              </p>
-              <p>
-                {audit.practicumEvaluation.prerequisites.genderSensitivityOnce
-                  ? "✔"
-                  : "•"}{" "}
-                성인지 교육 1회 이상 이수
-              </p>
-              <label className="flex items-center gap-1.5 cursor-pointer font-semibold text-brand-600">
-                <input
-                  type="checkbox"
-                  checked={ps.humanRightsEducationCompleted}
-                  onChange={(e) =>
-                    updateSchoolPracticumState({
-                      humanRightsEducationCompleted: e.target.checked,
-                    })
-                  }
-                  className="rounded border-line text-brand-600"
-                />
-                <span>온라인 인권존중 교육 이수 완료</span>
-              </label>
+            {/* 2. 교직 기본 소양 요건 섹션 (2x2 단정한 카드 그리드) */}
+            <div className="space-y-2.5 pt-1">
+              <span className="text-xs font-bold text-ink-2 flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-brand-600" />
+                교직 기본 소양 및 교육 요건
+              </span>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                {/* 1) 인적성검사 */}
+                <div
+                  className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition ${
+                    audit.practicumEvaluation.prerequisites.personalityTestOnce
+                      ? "bg-emerald-50/30 border-emerald-200/70 text-emerald-900"
+                      : "bg-surface-2/50 border-line text-ink-3"
+                  }`}
+                >
+                  <span
+                    className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold ${
+                      audit.practicumEvaluation.prerequisites.personalityTestOnce
+                        ? "bg-emerald-600 text-white"
+                        : "bg-slate-200 text-slate-500"
+                    }`}
+                  >
+                    {audit.practicumEvaluation.prerequisites.personalityTestOnce ? "✓" : "•"}
+                  </span>
+                  <span className="font-medium text-xs truncate">
+                    교직 적성 및 인성검사 1회 이상 적격
+                  </span>
+                </div>
+
+                {/* 2) 심폐소생술 */}
+                <div
+                  className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition ${
+                    audit.practicumEvaluation.prerequisites.cprOnce
+                      ? "bg-emerald-50/30 border-emerald-200/70 text-emerald-900"
+                      : "bg-surface-2/50 border-line text-ink-3"
+                  }`}
+                >
+                  <span
+                    className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold ${
+                      audit.practicumEvaluation.prerequisites.cprOnce
+                        ? "bg-emerald-600 text-white"
+                        : "bg-slate-200 text-slate-500"
+                    }`}
+                  >
+                    {audit.practicumEvaluation.prerequisites.cprOnce ? "✓" : "•"}
+                  </span>
+                  <span className="font-medium text-xs truncate">
+                    응급처치 및 심폐소생술 실습 1회 이상 이수
+                  </span>
+                </div>
+
+                {/* 3) 성인지 교육 */}
+                <div
+                  className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition ${
+                    audit.practicumEvaluation.prerequisites.genderSensitivityOnce
+                      ? "bg-emerald-50/30 border-emerald-200/70 text-emerald-900"
+                      : "bg-surface-2/50 border-line text-ink-3"
+                  }`}
+                >
+                  <span
+                    className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold ${
+                      audit.practicumEvaluation.prerequisites.genderSensitivityOnce
+                        ? "bg-emerald-600 text-white"
+                        : "bg-slate-200 text-slate-500"
+                    }`}
+                  >
+                    {audit.practicumEvaluation.prerequisites.genderSensitivityOnce ? "✓" : "•"}
+                  </span>
+                  <span className="font-medium text-xs truncate">
+                    성인지 교육 1회 이상 이수
+                  </span>
+                </div>
+
+                {/* 4) 온라인 인권존중 교육 (직접 체크 가능) */}
+                <label
+                  className={`flex items-center gap-2.5 p-2.5 rounded-xl border transition cursor-pointer select-none ${
+                    ps.humanRightsEducationCompleted
+                      ? "bg-emerald-50/30 border-emerald-200/70 text-emerald-900"
+                      : "bg-surface-2/50 border-line text-ink-3 hover:bg-surface-2 hover:border-line-strong"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={ps.humanRightsEducationCompleted}
+                    onChange={(e) =>
+                      updateSchoolPracticumState({
+                        humanRightsEducationCompleted: e.target.checked,
+                      })
+                    }
+                    className="w-4 h-4 rounded border-line text-brand-600 focus:ring-brand-500 shrink-0 cursor-pointer"
+                  />
+                  <span className={`text-xs font-medium truncate ${
+                    ps.humanRightsEducationCompleted ? "text-emerald-800 font-bold" : "text-ink-2"
+                  }`}>
+                    온라인 인권존중 교육 이수 완료
+                  </span>
+                </label>
+              </div>
             </div>
           </div>
         </div>
