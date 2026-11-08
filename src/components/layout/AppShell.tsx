@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   UserCheck,
   LogOut,
+  Lock,
   ShieldAlert,
   Loader2,
   type LucideIcon,
@@ -127,6 +128,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     Boolean(rawFirebaseUser) && canAccessAdmin(accessGate, authUserProfile);
   const isGraduationAllowed = canAccessGraduation(authUserProfile || currentUser);
 
+  // 권한 및 로그인 상태에 따른 메뉴 노출 필터링
+  // - 로그아웃/미승인 상태: 홈 대시보드~관리자센터 등 내부 메뉴는 전혀 노출되지 않고, 로그인/가입 메뉴만 노출
+  // - 승인 회원: 내부 메뉴만 노출되며, 관리자 메뉴는 승인된 관리자만, 졸업요건은 권한 있는 회원만 노출
+  const isItemVisible = (href: string) => {
+    if (accessGate === "signed_out") return href === "/auth";
+    if (!isAccessAllowed) return false;
+    if (href === "/auth") return false;
+    if (href === "/admin") return isApprovedAdminUser;
+    if (href === "/graduation") return isGraduationAllowed;
+    return true;
+  };
+
+  const visibleGroups = NAV_GROUPS.map((group) => ({
+    ...group,
+    hrefs: group.hrefs.filter(isItemVisible),
+  })).filter((group) => group.hrefs.length > 0);
+
   // 경로 정규화: GitHub Pages의 basePath(/dongguk-e-eum), 후행 슬래시(/) 등 대응
   const normalizedPath =
     (pathname || "")
@@ -179,11 +197,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Link>
             </div>
 
-            {/* 내비게이션 메뉴 (소통 / 학업 / 가입·운영 그룹화) */}
+            {/* 내비게이션 메뉴 (로그인/승인 상태에 맞춰 필터링된 그룹 노출) */}
             <nav aria-label="메인 메뉴" className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
-              {NAV_GROUPS.map((group, gi) => (
+              {visibleGroups.map((group, gi) => (
                 <div key={gi} className={cn(gi > 0 && "mt-5")}>
-                  {group.label && (
+                  {group.label && visibleGroups.length > 1 && (
                     <p className="mb-1 px-3 text-xs font-semibold text-ink-3">
                       {group.label}
                     </p>
@@ -227,50 +245,84 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </nav>
           </div>
 
-          {/* 하단 현재 접속 프로필 카드 */}
+          {/* 하단 프로필 카드: 로그아웃 상태에서는 사용자 정보 일체 미표시, 승인 회원만 프로필 표시 */}
           <div className="border-t border-line p-4 bg-surface shrink-0">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <Avatar
-                  name={currentUser.name}
-                  initials={
-                    getAvatarInitials(currentUser.name, currentUser.role) ||
-                    currentUser.avatarInitials
-                  }
-                  role={currentUser.role}
-                  size="md"
-                />
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="truncate text-sm font-semibold text-ink">
-                      {currentUser.name}
+            {!isAccessAllowed ? (
+              // 로그아웃 또는 승인 대기 상태
+              <div>
+                <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-surface-2 border border-line text-xs">
+                  <Lock className="size-4 text-brand-600 shrink-0" aria-hidden="true" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-ink-2">
+                      {accessGate === "signed_out"
+                        ? "로그인이 필요합니다"
+                        : isAuthLoading
+                        ? "계정 확인 중..."
+                        : "승인 완료 후 이용 가능"}
                     </p>
-                    <RoleBadge role={currentUser.role} />
+                    {rawFirebaseUser && (
+                      <p className="truncate text-[11px] text-ink-3">{rawFirebaseUser.email}</p>
+                    )}
                   </div>
-                  <p className="truncate text-xs text-ink-3">
-                    {currentUser.studentIdOrYear ||
-                      (currentUser.role === "admin"
-                        ? "학과 관리자"
-                        : currentUser.email || "")}
-                  </p>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <p className="text-xs text-ink-3">동국대학교 교육학과 전용 플랫폼</p>
+                  {rawFirebaseUser && (
+                    <button
+                      type="button"
+                      onClick={() => handleLogout()}
+                      className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+                    >
+                      <LogOut className="size-3.5" aria-hidden="true" />
+                      <span>로그아웃</span>
+                    </button>
+                  )}
                 </div>
               </div>
-              {rawFirebaseUser && (
-                <button
-                  type="button"
-                  onClick={() => handleLogout()}
-                  title="로그아웃"
-                  className="shrink-0 p-1.5 rounded-lg text-ink-3 hover:text-danger hover:bg-surface-2 transition-colors cursor-pointer"
-                >
-                  <LogOut className="size-4" aria-hidden="true" />
-                  <span className="sr-only">로그아웃</span>
-                </button>
-              )}
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-ink-3">
-              동국대학교 교육학과 폐쇄형 커뮤니티 프로토타입 · ※ 모든 데이터는 개발용 가상
-              데이터입니다.
-            </p>
+            ) : (
+              // 정상 승인 완료 회원 프로필
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <Avatar
+                      name={currentUser.name}
+                      initials={
+                        getAvatarInitials(currentUser.name, currentUser.role) ||
+                        currentUser.avatarInitials
+                      }
+                      role={currentUser.role}
+                      size="md"
+                    />
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="truncate text-sm font-semibold text-ink">
+                          {currentUser.name}
+                        </p>
+                        <RoleBadge role={currentUser.role} />
+                      </div>
+                      <p className="truncate text-xs text-ink-3">
+                        {currentUser.studentIdOrYear ||
+                          (currentUser.role === "admin"
+                            ? "학과 관리자"
+                            : currentUser.email || "")}
+                      </p>
+                    </div>
+                  </div>
+                  {/* 명확한 로그아웃 버튼 (텍스트 포함) */}
+                  <button
+                    type="button"
+                    onClick={() => handleLogout()}
+                    className="shrink-0 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 border border-rose-200 transition-colors cursor-pointer"
+                  >
+                    <LogOut className="size-3.5" aria-hidden="true" />
+                    <span>로그아웃</span>
+                  </button>
+                </div>
+                <p className="mt-3 text-xs leading-relaxed text-ink-3">
+                  동국대학교 교육학과 전용 플랫폼
+                </p>
+              </div>
+            )}
           </div>
         </aside>
 
@@ -305,9 +357,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => handleLogout()}
-                  className="px-2.5 py-1 rounded-lg bg-surface-2 text-xs font-semibold text-ink hover:bg-surface-3 transition cursor-pointer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-surface-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 transition cursor-pointer"
                 >
-                  로그아웃
+                  <LogOut className="size-3.5" aria-hidden="true" />
+                  <span>로그아웃</span>
                 </button>
               )}
             </div>
