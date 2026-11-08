@@ -241,11 +241,9 @@ export default function GraduationPage() {
   >("confirmed");
   const [courseIsSubjEduInput, setCourseIsSubjEduInput] = useState(false);
 
-  // 중복 강좌 감지 시 사용자 재확인 모달 상태
+  // 중복 강좌 감지 시 안내 모달 상태 (동일 강좌 중복 저장 방지)
   const [duplicateWarningModal, setDuplicateWarningModal] = useState<{
     warningMessage: string;
-    pendingPayload: Omit<EnrolledCourse, "id" | "createdAt">;
-    targetEditId: string | null;
   } | null>(null);
 
   const handleSelectPresetCourse = (presetCode: string) => {
@@ -332,8 +330,6 @@ export default function GraduationPage() {
     if (dupCheck.hasExactDuplicate || dupCheck.hasSimilarWarning) {
       setDuplicateWarningModal({
         warningMessage: dupCheck.warningMessage,
-        pendingPayload: payload,
-        targetEditId: editingCourseId,
       });
       return;
     }
@@ -1370,42 +1366,30 @@ export default function GraduationPage() {
           </div>
         </form>
 
-        {/* 중복 강좌 감지 시 사용자 재확인 모달 (자동 삭제 금지 원칙 준수) */}
+        {/* 중복 강좌 감지 시 이미 등록된 강좌 안내 (중복 입력 방지) */}
         {duplicateWarningModal && (
           <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-400 space-y-3 text-xs">
             <div className="flex items-start gap-2.5">
               <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
               <div>
                 <p className="font-extrabold text-amber-950 text-sm">
-                  동일 또는 유사 강좌 중복 등록 확인 안내
+                  이미 입력된 강좌 안내 (중복 등록 불가)
                 </p>
                 <p className="text-amber-900 mt-1">
                   {duplicateWarningModal.warningMessage}
                 </p>
                 <p className="text-amber-800 mt-1">
-                  ※ 동일 강좌를 중복 등록하면 학점이 이중으로 합산될 수 있습니다. 재수강이거나 별도 강좌여서 그대로 등록하시겠습니까?
+                  ※ 동일한 강좌를 재수강하더라도 학적 계산 시 졸업 요건 학점에 중복 반영되지 않으므로 추가 저장되지 않습니다. 기존에 등록된 강좌 내역을 확인해 주세요.
                 </p>
               </div>
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end">
               <button
                 type="button"
                 onClick={() => setDuplicateWarningModal(null)}
-                className="px-3.5 py-1.5 rounded-xl bg-surface border border-amber-300 text-amber-900 font-bold"
-              >
-                등록 취소 및 다시 확인
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  commitCourseSave(
-                    duplicateWarningModal.pendingPayload,
-                    duplicateWarningModal.targetEditId
-                  )
-                }
                 className="px-4 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold"
               >
-                확인했으며 그대로 저장
+                확인
               </button>
             </div>
           </div>

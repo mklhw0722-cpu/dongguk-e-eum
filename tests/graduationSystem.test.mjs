@@ -1066,3 +1066,74 @@ test("21. [학교현장실습 선이수 3과목 요건 검증] 사고와 표현,
   assert.equal(coursesResult.prerequisites.allPrerequisitesMet, true);
 });
 
+
+test("22. [전공필수 교직학점 이중가산 차단 및 봉사활동 총 졸업학점 반영 검증] 전공필수는 교육학전공에만 반영되고 교직10학점에 가산되지 않으며, 봉사활동 이수 버튼 클릭 시 총 졸업학점에 정상 합산된다", () => {
+  // 1) 전공필수 강좌(EDU2013 교육학개론 3학점) 등록
+  const majorCourse = {
+    id: "c-major-1",
+    courseCode: "EDU2013",
+    courseTitle: "교육학개론",
+    credits: 3,
+    yearTaken: 2023,
+    semesterTaken: "1학기",
+    category: "전공필수 (교육학과)",
+    isCompleted: true,
+    recognitionStatus: "confirmed",
+    createdAt: "2026-11-08",
+  };
+
+  const progress = migrateStudentProgress({
+    userId: "u-test-major-teaching",
+    academicProfile: {
+      admissionYearNumber: 2023,
+      admissionYearLabel: "2023학년도 신입학 (23학번)",
+      majorPlanType: "single",
+      hasDoubleMajor: false,
+      doubleMajorDepartment: "",
+      teachingTrackStatus: "educational_major",
+      isEnglishTrack: false,
+      updatedAt: "2026-11-08",
+    },
+    courses: [majorCourse],
+    credits: {},
+    volunteeringRecords: [],
+    checklist: [],
+    volunteeringState: {
+      eduVolunteering1Completed: false,
+      eduVolunteering2Completed: false,
+      confirmationSubmitted: false,
+    },
+  });
+
+  const audit1 = calculateGraduationAudit(progress, OFFICIAL_GRADUATION_CATALOG);
+
+  // 전공필수는 교육학과 전공학점(3학점) 및 총학점(3학점)에만 반영
+  assert.equal(audit1.eduMajorEarnedCredits, 3);
+  assert.equal(audit1.totalEarnedCredits, 3);
+
+  // 교직과목 이수 현황(10학점 기준: 소양6 + 실습4)에는 전공필수의 2학점이 포함되지 않아야 함! (0학점이어야 함)
+  const teachingCard1 = audit1.categoryCards.find((c) => c.id === "card-teaching");
+  assert.ok(teachingCard1);
+  assert.equal(teachingCard1.earnedValue, 0);
+
+  // 단, 교직이론 대체인정 여부(teachingTheoryAudit)에는 1과목으로 정상 기록됨
+  assert.equal(audit1.teachingTheoryAudit.recognizedSubjectCount, 1);
+  assert.equal(audit1.teachingTheoryAudit.recognizedEquivalentCredits, 2);
+
+  // 2) 봉사활동 이수 버튼(교육봉사활동 1, 2)을 체크한 경우
+  progress.volunteeringState.eduVolunteering1Completed = true;
+  progress.volunteeringState.eduVolunteering2Completed = true;
+
+  const audit2 = calculateGraduationAudit(progress, OFFICIAL_GRADUATION_CATALOG);
+
+  // 봉사활동 2과목(각 1학점 = 2학점)이 교직과목 이수 현황에 반영 (2학점)
+  const teachingCard2 = audit2.categoryCards.find((c) => c.id === "card-teaching");
+  assert.ok(teachingCard2);
+  assert.equal(teachingCard2.earnedValue, 2);
+
+  // ★ 중요: 봉사활동 2학점이 총 졸업 이수 학점(130학점 기준)에도 3 + 2 = 5학점으로 정확히 반영됨!
+  assert.equal(audit2.totalEarnedCredits, 5);
+  const totalCard2 = audit2.categoryCards.find((c) => c.id === "card-total");
+  assert.ok(totalCard2);
+  assert.equal(totalCard2.earnedValue, 5);
+});
