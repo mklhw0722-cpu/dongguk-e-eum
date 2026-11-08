@@ -682,12 +682,16 @@ export default function ChatPage() {
     );
     if (!confirmed) return;
 
+    const leavingId = activeConversation.id;
+    const remaining = conversations.filter((c) => c.id !== leavingId);
+
     try {
-      await leaveChat(activeConversation.id);
-      const remaining = conversations.filter((c) => c.id !== activeConversation.id);
-      setActiveConvId(remaining[0]?.id || "");
       setShowMemberPanel(false);
+      // 메시지 구독 및 UI 상태를 다음 대화방으로 먼저 전환하여 리스너 권한 충돌 방지
+      setActiveConvId(remaining[0]?.id || "");
+      await leaveChat(leavingId);
     } catch (err: any) {
+      setActiveConvId(leavingId);
       alert(err?.message || "대화방 나가기 중 오류가 발생했습니다.");
     }
   };

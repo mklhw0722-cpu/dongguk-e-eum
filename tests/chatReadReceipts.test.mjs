@@ -384,3 +384,20 @@ test("11. [채팅방 참여 구성원 카드 포맷팅] 관리자 및 교수는 
   assert.equal(formatChatMemberHakbun(null), "");
   assert.equal(formatChatMemberHakbun({ role: "student" }), "");
 });
+
+test("15. [대화방 나가기 보안 권한 및 원자적 배치 검증] 대화방 퇴장 시 시스템 메시지 전송과 참여자 제거가 안전하게 처리되어 'Missing or insufficient permissions' 오류를 방지한다", () => {
+  const firebaseSrc = fs.readFileSync(new URL("../src/lib/firebase.ts", import.meta.url), "utf8");
+  const chatPageSrc = fs.readFileSync(new URL("../src/app/chat/page.tsx", import.meta.url), "utf8");
+
+  // 1) firebase.ts에서 leaveChatInFirestore가 batch로 시스템 메시지와 참여자 제거를 함께 묶어 원자적으로 처리하는지 검증
+  assert.match(
+    firebaseSrc,
+    /writeBatch\(db\)[\s\S]*?batch\.set\(sysMsgRef[\s\S]*?batch\.update\(chatDocRef[\s\S]*?participants:\s*arrayRemove\(currentUser\.id\)/
+  );
+
+  // 2) chat/page.tsx에서 대화방 나가기 전 activeConvId를 먼저 전환하여 잔여 리스너 권한 충돌을 방지하는지 검증
+  assert.match(
+    chatPageSrc,
+    /setActiveConvId\(remaining\[0\]\?\.id\s*\|\|\s*""\)[\s\S]*?await leaveChat\(leavingId\)/
+  );
+});
