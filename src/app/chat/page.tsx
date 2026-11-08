@@ -272,6 +272,7 @@ export default function ChatPage() {
       if (qConvId) {
         newlySelectedConvIdRef.current = qConvId;
         setActiveConvId(qConvId);
+        setMobileView("thread");
       }
 
       const profId = searchParams.get("consultProfessorId");
@@ -899,7 +900,7 @@ export default function ChatPage() {
                           type="button"
                           disabled={isUpdatingConsultation}
                           onClick={() => handleProfessorReject(c)}
-                          className="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold text-xs hover:bg-white :bg-slate-800 transition disabled:opacity-50"
+                          className="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold text-xs hover:bg-white transition disabled:opacity-50"
                         >
                           미승인 (거절)
                         </button>
@@ -977,7 +978,7 @@ export default function ChatPage() {
                             onClick={() =>
                               handleCancelStudentConsultation(c.id)
                             }
-                            className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-100 :bg-slate-800 font-bold text-xs transition"
+                            className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-100 font-bold text-xs transition"
                           >
                             신청 취소
                           </button>
@@ -1125,7 +1126,7 @@ export default function ChatPage() {
                   <button
                     type="button"
                     onClick={() => setShowMemberPanel((prev) => !prev)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 :bg-slate-800 inline-flex items-center gap-1 transition"
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 inline-flex items-center gap-1 transition"
                   >
                     <Info className="w-3.5 h-3.5 text-orange-600" />
                     참여자 {showMemberPanel ? "닫기" : "관리"}
@@ -1151,7 +1152,7 @@ export default function ChatPage() {
                       <button
                         type="button"
                         onClick={handleLeaveCurrentChat}
-                        className="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-rose-100 hover:text-rose-700 :bg-rose-950 text-slate-700 text-xs font-semibold inline-flex items-center gap-1 transition"
+                        className="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-rose-100 hover:text-rose-700 text-slate-700 text-xs font-semibold inline-flex items-center gap-1 transition"
                       >
                         <LogOut className="w-3.5 h-3.5" /> 방 나가기
                       </button>
@@ -1402,7 +1403,7 @@ export default function ChatPage() {
                   <button
                     type="button"
                     onClick={() => refreshApprovedMembers()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-xs text-slate-700 hover:bg-slate-200 :bg-slate-700 font-bold transition mt-1"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-xs text-slate-700 hover:bg-slate-200 font-bold transition mt-1"
                   >
                     <RefreshCw className="w-3.5 h-3.5" /> 목록 다시 불러오기
                   </button>
@@ -1415,7 +1416,7 @@ export default function ChatPage() {
                 searchableUsers.map((u) => (
                   <div
                     key={u.id}
-                    className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50 :bg-slate-800/40"
+                    className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50"
                   >
                     <div>
                       <div className="flex items-center gap-1.5">
@@ -1558,7 +1559,7 @@ export default function ChatPage() {
                             className={`w-full text-left p-3 flex items-center justify-between transition ${
                               checked
                                 ? "bg-orange-50 "
-                                : "hover:bg-slate-50 :bg-slate-800/40"
+                                : "hover:bg-slate-50"
                             }`}
                           >
                             <div>
@@ -1676,7 +1677,7 @@ export default function ChatPage() {
                             className={`w-full text-left p-3 flex items-center justify-between transition ${
                               checked
                                 ? "bg-orange-50 "
-                                : "hover:bg-slate-50 :bg-slate-800/40"
+                                : "hover:bg-slate-50"
                             }`}
                           >
                             <div>
@@ -1739,7 +1740,7 @@ export default function ChatPage() {
               <button
                 type="button"
                 onClick={() => setConsultationModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 :text-slate-200 hover:bg-slate-100 :bg-slate-800 transition"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1853,7 +1854,7 @@ export default function ChatPage() {
                 <button
                   type="button"
                   onClick={() => setConsultationModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 :bg-slate-800 transition"
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition"
                 >
                   취소
                 </button>

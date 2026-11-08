@@ -95,6 +95,20 @@ export default function AlumniPage() {
   const [profShowEmail, setProfShowEmail] = useState(false);
   const [profMentoringAvail, setProfMentoringAvail] = useState(true);
 
+  // 홈 대시보드 등에서 ?alumniId=... 로 진입 시 해당 졸업생 상세 모달 즉시 오픈
+  useEffect(() => {
+    if (typeof window === "undefined" || alumniProfiles.length === 0) return;
+    const params = new URLSearchParams(window.location.search);
+    const targetAlumniId = params.get("alumniId");
+    if (targetAlumniId) {
+      const found = alumniProfiles.find((a) => a.id === targetAlumniId);
+      if (found) {
+        setActiveTab("directory");
+        setDetailAlumni(found);
+      }
+    }
+  }, [alumniProfiles]);
+
   // 비졸업생이 프로필 설정 탭에 머물러 있는 경우 자동으로 목록 탭으로 전환
   useEffect(() => {
     if (!isAlumni && activeTab === "my_profile") {
@@ -219,24 +233,24 @@ export default function AlumniPage() {
         <div>
           <div className="flex items-center gap-2">
             <Users className="w-6 h-6 text-orange-600" />
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900">
               졸업생 동문 연결 네트워크
             </h1>
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-slate-500 mt-1">
             교직, 교육행정, 공공기관, 기업 HRD, 에듀테크, 대학원 등 각 분야로 진출한 교육학과 선배들과 연결하세요.
           </p>
         </div>
 
         {/* 상단 탭 전환 */}
-        <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 self-start">
+        <div className="flex items-center gap-1.5 bg-white p-1.5 rounded-2xl border border-slate-200 self-start">
           <button
             type="button"
             onClick={() => setActiveTab("directory")}
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
               activeTab === "directory"
                 ? "bg-orange-600 text-white"
-                : "text-slate-600 dark:text-slate-300"
+                : "text-slate-600"
             }`}
           >
             동문 프로필 탐색 ({alumniProfiles.length})
@@ -247,7 +261,7 @@ export default function AlumniPage() {
             className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
               activeTab === "mentoring"
                 ? "bg-orange-600 text-white"
-                : "text-slate-600 dark:text-slate-300"
+                : "text-slate-600"
             }`}
           >
             멘토링 요청 현황 ({visibleMentoringRequests.length})
@@ -259,7 +273,7 @@ export default function AlumniPage() {
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
                 activeTab === "my_profile"
                   ? "bg-orange-600 text-white"
-                  : "text-slate-600 dark:text-slate-300"
+                  : "text-slate-600"
               }`}
             >
               졸업생 프로필·공개범위 설정
@@ -287,7 +301,7 @@ export default function AlumniPage() {
       {activeTab === "directory" && (
         <>
           {/* 검색 및 진로·복수전공 이중 필터 */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3 shadow-xs">
+          <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 shadow-xs">
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
@@ -295,7 +309,7 @@ export default function AlumniPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="선배 이름, 직무, 관심 키워드(예: 온보딩, 임용, PM, NCS) 검색..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
 
@@ -312,7 +326,7 @@ export default function AlumniPage() {
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
                       selectedCareer === track
                         ? "bg-orange-600 text-white"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                        : "bg-slate-100 text-slate-600"
                     }`}
                   >
                     {track}
@@ -331,8 +345,8 @@ export default function AlumniPage() {
                     onClick={() => setSelectedDoubleMajor(dm)}
                     className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition ${
                       selectedDoubleMajor === dm
-                        ? "bg-slate-900 dark:bg-slate-700 text-white"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                        ? "bg-slate-900 text-white"
+                        : "bg-slate-100 text-slate-600"
                     }`}
                   >
                     {dm}
@@ -403,36 +417,36 @@ export default function AlumniPage() {
                 return (
                   <div
                     key={req.id}
-                    className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs"
+                    className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3 shadow-xs"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span
                           className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                             req.status === "수락됨"
-                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                              ? "bg-emerald-100 text-emerald-800"
                               : req.status === "답변완료"
-                              ? "bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
-                              : "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                              ? "bg-blue-100 text-blue-800"
+                              : "bg-amber-100 text-amber-800"
                           }`}
                         >
                           {req.status}
                         </span>
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                        <span className="text-xs font-bold text-slate-700">
                           신청자: {req.fromUserName} → 멘토: {req.toAlumniName}
                         </span>
                         {isMentee && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 dark:bg-orange-950/50 dark:text-orange-300">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800">
                             내가 신청함
                           </span>
                         )}
                         {isMentor && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800">
                             나에게 온 요청
                           </span>
                         )}
                         {isAdmin && !isMentor && !isMentee && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
                             관리자 모니터링 (열람 전용)
                           </span>
                         )}
@@ -440,10 +454,10 @@ export default function AlumniPage() {
                       <span className="text-xs text-slate-400">{req.createdAt}</span>
                     </div>
 
-                    <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
+                    <h3 className="font-bold text-sm sm:text-base text-slate-900">
                       {req.topic}
                     </h3>
-                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl whitespace-pre-wrap">
+                    <p className="text-xs sm:text-sm text-slate-600 bg-slate-50 p-3.5 rounded-xl whitespace-pre-wrap">
                       {req.message}
                     </p>
 
@@ -462,7 +476,7 @@ export default function AlumniPage() {
                             멘토링 수락
                           </button>
                         ) : (
-                          <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                          <span className="text-xs text-amber-700 font-medium">
                             {isAdmin
                               ? "멘토 동문 선배님의 수락 대기 중입니다. (관리자는 열람만 가능합니다)"
                               : "멘토 선배님의 수락을 기다리고 있습니다."}
@@ -473,7 +487,7 @@ export default function AlumniPage() {
 
                     {/* 수락됨 상태 안내 (멘티 또는 관리자에게 표시) */}
                     {req.status === "수락됨" && !canManage && (
-                      <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-xl p-3 text-xs text-emerald-800 dark:text-emerald-200 flex items-center gap-2">
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800 flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
                         <span>
                           {isAdmin
@@ -485,9 +499,9 @@ export default function AlumniPage() {
 
                     {/* 답변 작성 폼 (멘토 또는 관리자에게 표시) */}
                     {showReplyForm && (
-                      <div className="bg-orange-50/70 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/40 rounded-xl p-4 space-y-3 mt-2">
+                      <div className="bg-orange-50/70 border border-orange-200 rounded-xl p-4 space-y-3 mt-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-orange-950 dark:text-orange-200 flex items-center gap-1.5">
+                          <span className="text-xs font-bold text-orange-950 flex items-center gap-1.5">
                             <MessageSquare className="w-4 h-4 text-orange-600" />
                             후배를 위한 멘토링 답변 작성
                           </span>
@@ -512,7 +526,7 @@ export default function AlumniPage() {
                             setReplyDrafts({ ...replyDrafts, [req.id]: e.target.value })
                           }
                           placeholder="후배의 질문에 대한 조언과 답변을 정성껏 작성해 주세요. (이메일, 카카오톡 오픈채팅 등 추가 소통 방식도 함께 남겨주실 수 있습니다)"
-                          className="w-full text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-900 dark:text-white"
+                          className="w-full text-xs sm:text-sm bg-white border border-slate-200 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-900"
                         />
                         <div className="flex justify-end gap-2">
                           <button
@@ -544,13 +558,13 @@ export default function AlumniPage() {
 
                     {/* 답변 완료된 답변 본문 카드 */}
                     {req.status === "답변완료" && req.replyMessage && !isEditing && (
-                      <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl p-4 space-y-2 mt-2">
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 mt-2">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 text-[11px] font-bold">
+                            <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 text-[11px] font-bold">
                               멘토 선배님 답변
                             </span>
-                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                            <span className="text-xs font-bold text-slate-800">
                               {req.toAlumniName}
                             </span>
                           </div>
@@ -577,7 +591,7 @@ export default function AlumniPage() {
                             )}
                           </div>
                         </div>
-                        <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
+                        <p className="text-xs sm:text-sm text-slate-700 whitespace-pre-wrap leading-relaxed">
                           {req.replyMessage}
                         </p>
                       </div>
@@ -592,9 +606,9 @@ export default function AlumniPage() {
 
       {activeTab === "my_profile" && (
         !isAlumni ? (
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8 text-center space-y-3 shadow-xs">
+          <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center space-y-3 shadow-xs">
             <Lock className="w-10 h-10 text-orange-600 mx-auto" />
-            <h2 className="text-lg font-black text-slate-900 dark:text-white">
+            <h2 className="text-lg font-black text-slate-900">
               졸업생 전용 설정 화면입니다
             </h2>
             <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
@@ -609,10 +623,10 @@ export default function AlumniPage() {
             </button>
           </div>
         ) : (
-        <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-xs">
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4 shadow-xs">
           <div className="flex items-center gap-2">
             <UserCog className="w-5 h-5 text-orange-600" />
-            <h2 className="text-lg font-black text-slate-900 dark:text-white">
+            <h2 className="text-lg font-black text-slate-900">
               졸업생 진로 프로필 등록 및 개인정보 공개 범위 설정
             </h2>
           </div>
@@ -630,7 +644,7 @@ export default function AlumniPage() {
                 type="text"
                 value={profName}
                 onChange={(e) => setProfName(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50"
               />
             </div>
 
@@ -640,7 +654,7 @@ export default function AlumniPage() {
                 type="number"
                 value={profGradYear}
                 onChange={(e) => setProfGradYear(Number(e.target.value))}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50"
               />
             </div>
 
@@ -649,7 +663,7 @@ export default function AlumniPage() {
               <select
                 value={profCareer}
                 onChange={(e) => setProfCareer(e.target.value as CareerTrack)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50"
               >
                 {CAREER_TRACK_LIST.map((c) => (
                   <option key={c} value={c}>
@@ -667,7 +681,7 @@ export default function AlumniPage() {
                 value={profDoubleMajor}
                 onChange={(e) => setProfDoubleMajor(e.target.value)}
                 placeholder="예: 국어교육학과, 경영학, 법학과, 단일전공(교육학), 기타"
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50"
               />
               <datalist id="double-major-suggestions">
                 <option value="경영학" />
@@ -684,7 +698,7 @@ export default function AlumniPage() {
                 type="text"
                 value={profRoleTitle}
                 onChange={(e) => setProfRoleTitle(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50"
               />
             </div>
 
@@ -694,7 +708,7 @@ export default function AlumniPage() {
                 type="text"
                 value={profOrg}
                 onChange={(e) => setProfOrg(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50"
               />
             </div>
 
@@ -704,7 +718,7 @@ export default function AlumniPage() {
                 type="text"
                 value={profBio}
                 onChange={(e) => setProfBio(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50"
               />
             </div>
 
@@ -714,13 +728,13 @@ export default function AlumniPage() {
                 rows={3}
                 value={profExp}
                 onChange={(e) => setProfExp(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50"
               />
             </div>
 
             {/* 개인정보 공개 범위 설정 박스 */}
-            <div className="sm:col-span-2 p-4 rounded-2xl bg-orange-50/60 dark:bg-slate-800 border border-orange-200 dark:border-slate-700 space-y-2">
-              <p className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+            <div className="sm:col-span-2 p-4 rounded-2xl bg-orange-50/60 border border-orange-200 space-y-2">
+              <p className="font-bold text-slate-900 flex items-center gap-1.5">
                 <Lock className="w-4 h-4 text-orange-600" /> 개인정보 및 멘토링 공개 범위 설정
               </p>
               <label className="flex items-center gap-2 cursor-pointer">
@@ -766,13 +780,13 @@ export default function AlumniPage() {
       {/* 상세 프로필 모달 */}
       {detailAlumni && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 space-y-4 shadow-xl">
+          <div className="bg-white rounded-3xl border border-slate-200 max-w-lg w-full p-6 space-y-4 shadow-xl">
             <div className="flex items-start justify-between">
               <div>
                 <span className="px-2.5 py-0.5 rounded-md bg-orange-100 text-orange-800 text-xs font-bold">
                   {detailAlumni.careerTrack} 트랙
                 </span>
-                <h2 className="text-xl font-black text-slate-900 dark:text-white mt-1">
+                <h2 className="text-xl font-black text-slate-900 mt-1">
                   {detailAlumni.displayName}
                 </h2>
                 <p className="text-xs text-slate-500">
@@ -783,13 +797,13 @@ export default function AlumniPage() {
               <button
                 type="button"
                 onClick={() => setDetailAlumni(null)}
-                className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800"
+                className="p-1.5 rounded-lg bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/70 space-y-2 text-xs sm:text-sm">
+            <div className="p-4 rounded-2xl bg-slate-50 space-y-2 text-xs sm:text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-500">현재 직무</span>
                 <span className="font-bold">{detailAlumni.currentRoleTitle}</span>
@@ -797,7 +811,7 @@ export default function AlumniPage() {
               <div className="flex justify-between">
                 <span className="text-slate-500">현재 소속 (선택 공개)</span>
                 {detailAlumni.privacy.showOrganization ? (
-                  <span className="font-semibold flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
+                  <span className="font-semibold flex items-center gap-1 text-emerald-700">
                     <Globe className="w-3.5 h-3.5" /> {detailAlumni.organization}
                   </span>
                 ) : (
@@ -809,23 +823,23 @@ export default function AlumniPage() {
             </div>
 
             <div className="space-y-2 text-xs sm:text-sm">
-              <h3 className="font-bold text-slate-900 dark:text-white">소개 및 진로 스토리</h3>
-              <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+              <h3 className="font-bold text-slate-900">소개 및 진로 스토리</h3>
+              <p className="text-slate-600 leading-relaxed">
                 {detailAlumni.bio}
               </p>
-              <h3 className="font-bold text-slate-900 dark:text-white pt-2">
+              <h3 className="font-bold text-slate-900 pt-2">
                 멘토링 가능 주제 및 경험 요약
               </h3>
-              <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+              <p className="text-slate-600 leading-relaxed">
                 {detailAlumni.experienceSummary}
               </p>
             </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setDetailAlumni(null)}
-                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-50 transition"
               >
                 닫기
               </button>
@@ -848,10 +862,10 @@ export default function AlumniPage() {
       {/* 멘토링 신청 모달 */}
       {mentoringTarget && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 space-y-4 shadow-xl">
+          <div className="bg-white rounded-3xl border border-slate-200 max-w-lg w-full p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white">
+                <h2 className="text-lg font-black text-slate-900">
                   {mentoringTarget.displayName} 동문에게 멘토링 신청
                 </h2>
                 <p className="text-xs text-slate-500">
@@ -861,7 +875,7 @@ export default function AlumniPage() {
               <button
                 type="button"
                 onClick={() => setMentoringTarget(null)}
-                className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800"
+                className="p-1.5 rounded-lg bg-slate-100"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -876,7 +890,7 @@ export default function AlumniPage() {
                   value={mentoringTopic}
                   onChange={(e) => setMentoringTopic(e.target.value)}
                   placeholder="예: 복수전공 학점 관리와 직무 인턴 준비 시기 문의"
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50"
                 />
               </div>
 
@@ -888,7 +902,7 @@ export default function AlumniPage() {
                   value={mentoringMsg}
                   onChange={(e) => setMentoringMsg(e.target.value)}
                   placeholder="선배님이 답변하기 쉽도록 본인의 학년, 관심 분야, 궁금한 점을 구체적으로 적어주세요."
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50"
                 />
               </div>
 
@@ -896,7 +910,7 @@ export default function AlumniPage() {
                 <button
                   type="button"
                   onClick={() => setMentoringTarget(null)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 font-semibold"
+                  className="px-4 py-2 rounded-xl border border-slate-200 font-semibold"
                 >
                   취소
                 </button>

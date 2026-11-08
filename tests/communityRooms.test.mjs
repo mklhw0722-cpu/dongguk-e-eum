@@ -131,3 +131,32 @@ test("7. [도움이 됐어요 중복 방지 및 토글 취소, 초기값 0 검�
   assert.ok(roomsPage.includes("isLikedByMe"), "내가 누른 상태를 판별하는 isLikedByMe가 포함되어야 함");
   assert.ok(roomsPage.includes("도움이 됐어요 취소"), "이미 누른 경우 취소 툴팁이 제공되어야 함");
 });
+
+test("8. [동국이음 사용성 및 디자인 개선] 라이트 모드 통일, 홈 카드 딥링크 연결, 게시글 수정 및 댓글 삭제, 관리자 상단 설명창 제거가 정상 반영된다", () => {
+  const homePage = fs.readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const roomsPage = fs.readFileSync(new URL("../src/app/rooms/page.tsx", import.meta.url), "utf8");
+  const adminPage = fs.readFileSync(new URL("../src/app/admin/page.tsx", import.meta.url), "utf8");
+  const alumniPage = fs.readFileSync(new URL("../src/app/alumni/page.tsx", import.meta.url), "utf8");
+
+  // 1) 다크모드 잔존 클래스 제거 검증
+  assert.equal(roomsPage.includes("dark:"), false, "rooms/page.tsx에 dark: 클래스가 남아있지 않아야 함");
+  assert.equal(alumniPage.includes("dark:"), false, "alumni/page.tsx에 dark: 클래스가 남아있지 않아야 함");
+
+  // 2) 홈 대시보드 딥링크 검증
+  assert.ok(homePage.includes("/rooms?roomId="), "홈에서 선택한 게시판으로 바로 이동하는 roomId 딥링크가 연결되어야 함");
+  assert.ok(homePage.includes("&postId="), "홈에서 선택한 후기 글로 바로 이동하는 postId 딥링크가 연결되어야 함");
+  assert.ok(homePage.includes("/chat?convId="), "홈에서 읽지 않은 대화방으로 바로 이동하는 convId 딥링크가 연결되어야 함");
+  assert.ok(homePage.includes("/alumni?alumniId="), "홈에서 추천 동문 상세 모달로 바로 이동하는 alumniId 딥링크가 연결되어야 함");
+
+  // 3) 게시글 수정 및 댓글 삭제 기능 검증
+  assert.ok(roomsPage.includes("updateCommunityPost"), "게시글 수정 함수가 연결되어야 함");
+  assert.ok(roomsPage.includes("deleteCommunityComment"), "댓글 삭제 함수가 연결되어야 함");
+  assert.ok(roomsPage.includes("게시글 수정"), "게시글 수정 모달 UI가 존재해야 함");
+
+  // 4) 관리자 페이지 상단 설명 배너 제거 검증
+  assert.equal(adminPage.includes("관리자 권한 및 승인 통제 원칙"), false, "관리자 센터 상단 설명 배너가 제거되어야 함");
+
+  // 5) 교수님 홈 지도학생 카드 학번 포맷팅 검증
+  assert.ok(homePage.includes("formatChatMemberHakbun(student)"), "지도학생 카드에 학번 포맷 함수가 적용되어야 함");
+});
+

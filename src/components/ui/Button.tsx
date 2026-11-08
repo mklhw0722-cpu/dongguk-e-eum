@@ -24,7 +24,7 @@ const VARIANTS: Record<ButtonVariant, string> = {
   dark: "bg-ink text-ink-inverse hover:bg-ink/85 active:bg-ink/75",
   secondary:
     "border border-line bg-surface text-ink hover:border-line-strong hover:bg-surface-2 active:bg-surface-3",
-  soft: "bg-accent-soft text-accent hover:bg-brand-100 dark:hover:bg-brand-950 active:bg-brand-200 dark:active:bg-brand-900",
+  soft: "bg-accent-soft text-accent hover:bg-brand-100 active:bg-brand-200",
   ghost: "text-ink-2 hover:bg-surface-2 hover:text-ink active:bg-surface-3",
   success:
     "bg-success-soft text-success hover:bg-success hover:text-ink-inverse active:opacity-90",

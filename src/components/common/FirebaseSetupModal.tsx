@@ -287,7 +287,7 @@ export function FirebaseSetupModal({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-5 shadow-2xl text-slate-900 dark:text-slate-100">
+      <div className="bg-white rounded-3xl border border-slate-200 max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-5 shadow-2xl text-slate-900">
         {/* 상단 헤더 */}
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -298,7 +298,7 @@ export function FirebaseSetupModal({
               <h2 className="text-lg font-black">
                 Firebase Firestore 실시간 공유 연결 설정 (무료 Spark 요금제)
               </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-slate-500">
                 결제 수단 등록 없이 [학우들이 쓴 글]을 모든 컴퓨터와 스마트폰에서 실시간으로 함께 볼 수 있습니다.
               </p>
             </div>
@@ -306,7 +306,7 @@ export function FirebaseSetupModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-500"
+            className="p-1.5 rounded-lg bg-slate-100 text-slate-500"
           >
             <X className="w-5 h-5" />
           </button>
@@ -314,9 +314,9 @@ export function FirebaseSetupModal({
 
         {/* 현재 연결 상태 배너 */}
         {isFirestoreConnected ? (
-          <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 space-y-2.5 text-xs">
+          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-2.5 text-xs">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <span className="font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5 text-sm">
+              <span className="font-bold text-emerald-900 flex items-center gap-1.5 text-sm">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                 현재 Firebase Firestore와 실시간 연결되어 있습니다! (프로젝트:{" "}
                 <code>{firebaseProjectId}</code>)
@@ -324,12 +324,12 @@ export function FirebaseSetupModal({
               <button
                 type="button"
                 onClick={disconnectFirebaseConfig}
-                className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-rose-200 text-rose-600 font-semibold inline-flex items-center gap-1"
+                className="px-2.5 py-1 rounded-lg bg-white border border-rose-200 text-rose-600 font-semibold inline-flex items-center gap-1"
               >
                 <Trash2 className="w-3.5 h-3.5" /> 연결 해제
               </button>
             </div>
-            <p className="text-emerald-800 dark:text-emerald-300">
+            <p className="text-emerald-800">
               이제 [진로·복전 게시판]에서 글을 쓰거나 댓글·공감을 누르면 다른 컴퓨터에서도 똑같이 보입니다.
             </p>
             <div className="pt-1">
@@ -346,7 +346,7 @@ export function FirebaseSetupModal({
             </div>
           </div>
         ) : (
-          <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-900 dark:text-amber-200">
+          <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-xs text-amber-900">
             현재는 <strong>로컬 데모 모드</strong>입니다. 아래에 Firebase 웹 앱 설정(`firebaseConfig`)을 붙여넣으면 즉시 클라우드 실시간 모드로 전환됩니다.
           </div>
         )}
@@ -369,7 +369,7 @@ export function FirebaseSetupModal({
               value={rawSnippet}
               onChange={(e) => handleSnippetChange(e.target.value)}
               placeholder={`예시) Firebase 콘솔에서 복사한 코드를 그대로 붙여넣으세요:\nconst firebaseConfig = {\n  apiKey: "AIzaSy...",\n  projectId: "dongguk-e-eum"\n};`}
-              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 font-mono text-xs"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 font-mono text-xs"
             />
             {parseFeedback && (
               <p className="text-xs font-bold text-emerald-600">
@@ -389,7 +389,7 @@ export function FirebaseSetupModal({
                 value={manualApiKey}
                 onChange={(e) => setManualApiKey(e.target.value)}
                 placeholder="AIzaSy..."
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs"
               />
             </div>
             <div>
@@ -402,7 +402,7 @@ export function FirebaseSetupModal({
                 value={manualApiKey ? manualProjectId : manualProjectId}
                 onChange={(e) => setManualProjectId(e.target.value)}
                 placeholder="예: dongguk-e-eum-12345"
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs"
               />
             </div>
           </div>
@@ -418,7 +418,7 @@ export function FirebaseSetupModal({
         </form>
 
         {/* Step 2: 보안 규칙 복사 박스 */}
-        <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+        <div className="pt-4 border-t border-slate-200 space-y-2.5">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5">
               <ShieldCheck className="w-4 h-4 text-orange-600" />
@@ -429,7 +429,7 @@ export function FirebaseSetupModal({
             <button
               type="button"
               onClick={handleCopyRules}
-              className="px-3 py-1.5 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-bold inline-flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold inline-flex items-center gap-1.5"
             >
               <Copy className="w-3.5 h-3.5" />
               {copiedRules ? "규칙 복사 완료!" : "보안 규칙 복사하기"}

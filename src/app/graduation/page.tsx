@@ -443,7 +443,7 @@ export default function GraduationPage() {
             </Link>
             <Link
               href="/rooms"
-              className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 :bg-slate-700 text-ink-2 font-bold text-sm transition inline-flex items-center justify-center gap-2"
+              className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-ink-2 font-bold text-sm transition inline-flex items-center justify-center gap-2"
             >
               진로·복전 게시판 둘러보기
             </Link>
@@ -925,7 +925,7 @@ export default function GraduationPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {applicable.items.map((item) => (
-                <tr key={item.id} className="hover:bg-surface-2 :bg-slate-800/30">
+                <tr key={item.id} className="hover:bg-surface-2">
                   <td className="py-2.5 px-3 font-bold text-brand-600 whitespace-nowrap">
                     {item.category}
                   </td>
@@ -1449,7 +1449,7 @@ export default function GraduationPage() {
                 filteredCourses.map((course) => (
                   <tr
                     key={course.id}
-                    className="hover:bg-surface-2 :bg-slate-800/30"
+                    className="hover:bg-surface-2"
                   >
                     <td className="py-2.5 px-3 font-semibold text-ink-2 whitespace-nowrap">
                       {course.yearTaken}년 {course.semesterTaken}
