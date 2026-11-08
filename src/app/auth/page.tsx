@@ -51,6 +51,8 @@ export default function AuthPage() {
     handleResetPassword,
     handleClaimInitialAdmin,
     isFirestoreConnected,
+    sessionExpiredNotice,
+    clearSessionExpiredNotice,
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<AuthScreenTab>(
@@ -237,6 +239,23 @@ export default function AuthPage() {
           </p>
         </div>
       </div>
+
+      {/* 60분 세션 만료로 자동 로그아웃된 경우 안내 배너 */}
+      {sessionExpiredNotice && !rawFirebaseUser && (
+        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs sm:text-sm flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <Clock className="w-5 h-5 text-amber-600 shrink-0" />
+            <span className="font-semibold">{sessionExpiredNotice}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => clearSessionExpiredNotice()}
+            className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 text-xs font-bold shrink-0 transition cursor-pointer"
+          >
+            확인
+          </button>
+        </div>
+      )}
 
       {/* 현재 로그인 세션 상태 표시 (로그인 상태일 때) */}
       {isRealAuthActive && authUserProfile && (

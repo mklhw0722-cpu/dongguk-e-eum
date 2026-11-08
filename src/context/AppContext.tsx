@@ -64,6 +64,7 @@ import {
   registerWithEmailAndPassword,
   loginWithEmailAndPassword,
   logoutUser,
+  syncUserSessionToFirestore,
   sendPasswordReset,
   subscribeToAuthStatus,
   subscribeToAllUsersForAdmin,
@@ -109,6 +110,19 @@ import { extractScheduleFromTitle } from "@/lib/officialNoticeParser";
 import { User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import {
+  AuthSessionRecord,
+  SessionEvaluation,
+  createNewSession,
+  extendSessionRecord,
+  evaluateSessionStatus,
+  restoreOrInitSessionOnAuth,
+  loadSessionFromStorage,
+  saveSessionToStorage,
+  clearSessionFromStorage,
+  consumeExpiredSessionNotice,
+  subscribeToMultiTabSessionSync,
+} from "@/lib/sessionManager";
+import {
   AccessGateState,
   ProfileFetchStatus,
   resolveAccessGate,
@@ -141,6 +155,13 @@ interface AppContextValue extends PlatformDataState {
   isRealAuthActive: boolean;
   isAccessAllowed: boolean; // 로그인 + 회원 문서 approved 일 때만 true
   accessGate: AccessGateState; // 비로그인 / 승인대기 / 승인완료 등 현재 사용자 상태
+
+  // 1시간(60분) 로그인 유지 및 자동 로그아웃 세션 관리
+  authSession: AuthSessionRecord | null;
+  sessionEvaluation: SessionEvaluation;
+  sessionExpiredNotice: string | null;
+  extendLoginSession: () => Promise<void>;
+  clearSessionExpiredNotice: () => void;
 
   // 실제 인증 액션
   handleSignUp: (params: {
@@ -357,6 +378,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [authUserProfile, setAuthUserProfile] = useState<UserProfileDoc | null>(null);
   const [authResolved, setAuthResolved] = useState(false);
   const [profileStatus, setProfileStatus] = useState<ProfileFetchStatus>("idle");
+
+  // 1시간(60분) 로그인 세션 상태
+  const [authSession, setAuthSession] = useState<AuthSessionRecord | null>(null);
+  const [sessionNowMs, setSessionNowMs] = useState<number>(() => Date.now());
+  const [sessionExpiredNotice, setSessionExpiredNotice] = useState<string | null>(null);
+  const isSessionExpiryLogoutInFlightRef = useRef<boolean>(false);
   const profileMissingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [realUsersForAdmin, setRealUsersForAdmin] = useState<UserProfileDoc[]>([]);
   const [cloudConsultations, setCloudConsultations] = useState<ConsultationRequest[]>([]);
@@ -474,12 +501,53 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProfileStatus("idle");
 
     const unsubAuth = subscribeToAuthStatus({
-      // 1단계: 로그인 여부 확인 (회원 문서 조회보다 항상 먼저)
+      // 1단계: 로그인 여부 및 60분 세션 만료 여부 확인 (회원 문서 조회보다 항상 먼저)
       onAuthUserChange: (rawUser) => {
         clearMissingTimer();
+        if (!rawUser) {
+          setRawFirebaseUser(null);
+          setAuthUserProfile(null);
+          setAuthSession(null);
+          setProfileStatus("idle");
+          setAuthResolved(true);
+          setIsFirestoreConnected(true);
+          const expiredNotice = consumeExpiredSessionNotice();
+          if (expiredNotice) {
+            setSessionExpiredNotice(expiredNotice);
+          }
+          return;
+        }
+
+        const now = Date.now();
+        const storedSession = loadSessionFromStorage();
+        const restored = restoreOrInitSessionOnAuth(rawUser.uid, storedSession, now);
+
+        if (restored.action === "expire") {
+          // 이미 60분이 지났거나 로컬 스토리지 만료 시각이 위변조된 경우 즉시 강제 로그아웃
+          clearSessionFromStorage("expired");
+          setAuthSession(null);
+          setRawFirebaseUser(null);
+          setAuthUserProfile(null);
+          setProfileStatus("idle");
+          setAuthResolved(true);
+          setIsFirestoreConnected(true);
+          setSessionExpiredNotice(
+            "로그인 유지 시간(60분)이 만료되어 자동 로그아웃되었습니다. 다시 로그인해 주세요."
+          );
+          logoutUser().catch(() => {});
+          return;
+        }
+
+        if (restored.action === "create" && restored.record) {
+          saveSessionToStorage(restored.record);
+          syncUserSessionToFirestore(rawUser.uid, restored.record.expiresAt).catch(() => {});
+        }
+
+        setAuthSession(restored.record);
+        setSessionNowMs(now);
         setRawFirebaseUser(rawUser);
         setAuthUserProfile(null);
-        setProfileStatus(rawUser ? "loading" : "idle");
+        setProfileStatus("loading");
         setAuthResolved(true);
         setIsFirestoreConnected(true);
       },
@@ -948,12 +1016,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // 폐쇄형 학과 플랫폼 접근 제어: 로그인 → 회원 문서 → 승인 상태 순서로 판정
+  // 60분 로그인 세션 실시간 상태 평가
+  const sessionEvaluation: SessionEvaluation = useMemo(
+    () =>
+      evaluateSessionStatus(
+        authSession,
+        rawFirebaseUser ? rawFirebaseUser.uid : null,
+        sessionNowMs
+      ),
+    [authSession, rawFirebaseUser, sessionNowMs]
+  );
+
+  // 폐쇄형 학과 플랫폼 접근 제어: 로그인 → 60분 세션 유효성 → 회원 문서 → 승인 상태 순서로 판정
   const accessGate: AccessGateState = resolveAccessGate({
     authResolved: hydrated && authResolved,
     firebaseUser: rawFirebaseUser,
     profileStatus,
     profile: authUserProfile,
+    sessionExpired: Boolean(rawFirebaseUser && authSession && sessionEvaluation.isExpired),
   });
   const isAuthLoading = isGateLoading(accessGate);
   // 승인 완료(approved)된 정회원만 true, 비로그인/미승인/거절/정지/문서누락 상태는 모두 차단(false)
@@ -1122,7 +1202,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     academicProfile?: StudentAcademicProfile;
     doubleMajor?: string;
   }) => {
+    clearSessionFromStorage("logout");
+    setSessionExpiredNotice(null);
     const createdProfile = await registerWithEmailAndPassword(params);
+    const now = Date.now();
+    const freshSession = createNewSession(createdProfile.id, now);
+    saveSessionToStorage(freshSession);
+    setAuthSession(freshSession);
+    setSessionNowMs(now);
+    await syncUserSessionToFirestore(createdProfile.id, freshSession.expiresAt);
     setAuthUserProfile(createdProfile);
     setProfileStatus("loaded");
     if (params.academicProfile) {
@@ -1145,15 +1233,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleLogin = async (email: string, password: string) => {
-    await loginWithEmailAndPassword(email, password);
+    // 새 로그인 시 기존 만료 안내 제거 후 새로운 60분 세션 시작
+    clearSessionFromStorage("logout");
+    setSessionExpiredNotice(null);
+    const loggedInUser = await loginWithEmailAndPassword(email, password);
+    const now = Date.now();
+    const freshSession = createNewSession(loggedInUser.uid, now);
+    saveSessionToStorage(freshSession);
+    setAuthSession(freshSession);
+    setSessionNowMs(now);
+    await syncUserSessionToFirestore(loggedInUser.uid, freshSession.expiresAt);
   };
 
-  const handleLogout = async () => {
+  const performLogoutWithReason = async (reason: "logout" | "expired" = "logout") => {
     // 로그아웃 직전 대기 중인 디바운스 저장이 있다면 즉시 플러시
     if (saveDebounceTimerRef.current && activeGraduationUidRef.current) {
       clearTimeout(saveDebounceTimerRef.current);
       saveDebounceTimerRef.current = null;
       await flushGraduationSaveQueue(activeGraduationUidRef.current);
+    }
+    clearSessionFromStorage(reason);
+    setAuthSession(null);
+    if (reason === "expired") {
+      setSessionExpiredNotice(
+        "로그인 유지 시간(60분)이 만료되어 자동 로그아웃되었습니다. 다시 로그인해 주세요."
+      );
+    } else {
+      setSessionExpiredNotice(null);
     }
     await logoutUser();
     activeGraduationUidRef.current = "";
@@ -1176,6 +1282,134 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       studentProgress: demoInitial,
     }));
   };
+
+  const handleLogout = async () => {
+    await performLogoutWithReason("logout");
+  };
+
+  /**
+   * 사용자가 명시적으로 '로그인 연장' 버튼을 클릭했을 때만 호출됩니다.
+   * 클릭 시점부터 다시 정확히 60분 동안 로그인 상태를 유지합니다.
+   */
+  const extendLoginSession = async () => {
+    if (!rawFirebaseUser || !authSession) return;
+    const now = Date.now();
+    const currentEval = evaluateSessionStatus(authSession, rawFirebaseUser.uid, now);
+    if (currentEval.isExpired) {
+      await performLogoutWithReason("expired");
+      return;
+    }
+    const extended = extendSessionRecord(authSession, now);
+    saveSessionToStorage(extended);
+    setAuthSession(extended);
+    setSessionNowMs(now);
+    await syncUserSessionToFirestore(rawFirebaseUser.uid, extended.expiresAt);
+  };
+
+  const clearSessionExpiredNotice = () => {
+    setSessionExpiredNotice(null);
+    consumeExpiredSessionNotice();
+  };
+
+  // 1초 주기 세션 타이머 및 정확한 만료 시점 자동 로그아웃 이펙트
+  // (마우스 이동, 키보드 입력, 화면 이동, 채팅 활동으로는 절대 연장하지 않음)
+  useEffect(() => {
+    if (!hydrated || !rawFirebaseUser || !authSession) return;
+
+    const checkSessionTick = () => {
+      const now = Date.now();
+      setSessionNowMs(now);
+
+      // localStorage 에 저장된 세션 레코드 무결성 재검증 (DevTools 조작 즉시 감지)
+      const stored = loadSessionFromStorage();
+      const status = evaluateSessionStatus(
+        stored || authSession,
+        rawFirebaseUser.uid,
+        now
+      );
+
+      if (status.isExpired && !isSessionExpiryLogoutInFlightRef.current) {
+        isSessionExpiryLogoutInFlightRef.current = true;
+        performLogoutWithReason("expired").finally(() => {
+          isSessionExpiryLogoutInFlightRef.current = false;
+        });
+      }
+    };
+
+    checkSessionTick();
+
+    const intervalId = setInterval(checkSessionTick, 1000);
+    const msUntilExpiry = Math.max(0, authSession.expiresAt - Date.now());
+    const exactTimeoutId = setTimeout(checkSessionTick, msUntilExpiry + 50);
+
+    const handleVisibilityOrFocus = () => {
+      if (typeof document === "undefined" || document.visibilityState === "visible") {
+        checkSessionTick();
+      }
+    };
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("focus", handleVisibilityOrFocus);
+      document.addEventListener("visibilitychange", handleVisibilityOrFocus);
+    }
+
+    return () => {
+      clearInterval(intervalId);
+      clearTimeout(exactTimeoutId);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("focus", handleVisibilityOrFocus);
+        document.removeEventListener("visibilitychange", handleVisibilityOrFocus);
+      }
+    };
+  }, [hydrated, rawFirebaseUser, authSession]);
+
+  // 다중 탭(Multi-tab) 간 세션 연장 및 로그아웃/만료 상태 실시간 동기화
+  useEffect(() => {
+    if (!hydrated) return;
+
+    const unsubSync = subscribeToMultiTabSessionSync((syncedRecord, reason) => {
+      if (!syncedRecord) {
+        setAuthSession(null);
+        if (reason === "expired") {
+          setSessionExpiredNotice(
+            "로그인 유지 시간(60분)이 만료되어 자동 로그아웃되었습니다. 다시 로그인해 주세요."
+          );
+        }
+        if (rawFirebaseUser && !isSessionExpiryLogoutInFlightRef.current) {
+          isSessionExpiryLogoutInFlightRef.current = true;
+          logoutUser()
+            .catch(() => {})
+            .finally(() => {
+              setRawFirebaseUser(null);
+              setAuthUserProfile(null);
+              setProfileStatus("idle");
+              isSessionExpiryLogoutInFlightRef.current = false;
+            });
+        }
+        return;
+      }
+
+      if (rawFirebaseUser && syncedRecord.uid === rawFirebaseUser.uid) {
+        const now = Date.now();
+        const evalResult = evaluateSessionStatus(syncedRecord, rawFirebaseUser.uid, now);
+        if (evalResult.isExpired) {
+          if (!isSessionExpiryLogoutInFlightRef.current) {
+            isSessionExpiryLogoutInFlightRef.current = true;
+            performLogoutWithReason("expired").finally(() => {
+              isSessionExpiryLogoutInFlightRef.current = false;
+            });
+          }
+        } else {
+          setAuthSession(syncedRecord);
+          setSessionNowMs(now);
+        }
+      }
+    });
+
+    return () => {
+      unsubSync();
+    };
+  }, [hydrated, rawFirebaseUser]);
 
   const handleResetPassword = async (email: string) => {
     await sendPasswordReset(email);
@@ -3261,6 +3495,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isRealAuthActive,
         isAccessAllowed,
         accessGate,
+        authSession,
+        sessionEvaluation,
+        sessionExpiredNotice,
+        extendLoginSession,
+        clearSessionExpiredNotice,
         handleSignUp,
         handleLogin,
         handleLogout,

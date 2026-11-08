@@ -3,7 +3,7 @@
  *
  * 상태 확인 순서
  * 1. Firebase Authentication 초기화 및 로그인 여부 확인 (확인 중이면 auth_loading)
- * 2. 로그인한 사용자가 없으면 signed_out
+ * 2. 로그인한 사용자가 없거나 60분 로그인 세션이 만료된 경우 signed_out
  * 3. 로그인한 사용자가 있으면 Firestore users/{uid} 회원 문서 확인 (확인 중이면 profile_loading)
  * 4. 회원 문서의 approvalStatus 에 따라 pending / approved / rejected / suspended 등으로 분기
  * 5. 회원 문서가 없거나 조회에 실패하면 자동 승인하지 않고 profile_missing / profile_error 로 차단
@@ -35,12 +35,15 @@ export interface AccessGateInput {
   profileStatus: ProfileFetchStatus;
   /** Firestore 회원 문서 (loaded 일 때만 의미 있음) */
   profile: { approvalStatus?: unknown; role?: unknown } | null;
+  /** 60분 로그인 세션 만료 여부 (true 이면 즉시 signed_out 으로 판정하여 내부 접근 차단) */
+  sessionExpired?: boolean;
 }
 
 export function resolveAccessGate(input: AccessGateInput): AccessGateState {
-  // 1~2. 로그인 여부를 가장 먼저 확인 (승인 상태보다 항상 먼저)
+  // 1~2. 로그인 여부 및 세션 만료 여부를 가장 먼저 확인 (승인 상태보다 항상 먼저)
   if (!input.authResolved) return "auth_loading";
   if (!input.firebaseUser) return "signed_out";
+  if (input.sessionExpired) return "signed_out";
 
   // 3. 회원 문서 조회 상태 확인
   switch (input.profileStatus) {

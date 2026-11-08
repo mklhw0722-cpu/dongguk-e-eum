@@ -14,6 +14,7 @@ import { useApp } from "@/context/AppContext";
 import { ROLE_LABELS, RoleBadge } from "@/components/common/Cards";
 import { FirebaseSetupModal } from "@/components/common/FirebaseSetupModal";
 import { getAvatarInitials } from "@/lib/firebase";
+import { SESSION_EXPIRY_WARNING_MESSAGE } from "@/lib/sessionManager";
 import { Avatar, CountBadge, cn } from "@/components/ui";
 import {
   Home,
@@ -28,6 +29,8 @@ import {
   Lock,
   ShieldAlert,
   Loader2,
+  Clock,
+  RefreshCw,
   type LucideIcon,
 } from "lucide-react";
 
@@ -129,6 +132,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     firestoreError,
     handleLogout,
     realUsersForAdmin,
+    authSession,
+    sessionEvaluation,
+    extendLoginSession,
   } = useApp();
   const router = useRouter();
 
@@ -355,7 +361,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     <span>로그아웃</span>
                   </button>
                 </div>
-                <p className="mt-3 text-xs leading-relaxed text-ink-3">
+                {rawFirebaseUser && authSession && !sessionEvaluation.isExpired && (
+                  <div className="mt-2.5 flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-2.5 py-1.5 border border-line text-[11px]">
+                    <span className="inline-flex items-center gap-1.5 text-ink-2 font-medium">
+                      <Clock className="size-3.5 text-brand-600 shrink-0" aria-hidden="true" />
+                      <span>남은 시간</span>
+                      <strong className="font-bold tabular text-ink">
+                        {sessionEvaluation.formattedMMSS}
+                      </strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => extendLoginSession()}
+                      className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-semibold text-brand-600 hover:bg-accent-soft transition cursor-pointer"
+                      title="클릭 시점부터 60분으로 로그인 시간 연장"
+                    >
+                      <RefreshCw className="size-3" aria-hidden="true" />
+                      <span>로그인 연장</span>
+                    </button>
+                  </div>
+                )}
+                <p className="mt-2.5 text-xs leading-relaxed text-ink-3">
                   동국대학교 교육학과 전용 플랫폼
                 </p>
               </div>
@@ -516,6 +542,66 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+      )}
+
+      {/* 로그인 만료 10분 전 안내 모달 (로그인 후 50분 경과 시 자동 표시) */}
+      {Boolean(rawFirebaseUser) && sessionEvaluation.isWarningVisible && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="session-expiry-modal-title"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div className="bg-surface rounded-3xl border border-line max-w-md w-full p-6 space-y-5 shadow-xl">
+            <div className="flex items-start gap-3.5">
+              <div className="size-11 rounded-2xl bg-accent-soft text-accent flex items-center justify-center shrink-0">
+                <Clock className="size-6" aria-hidden="true" />
+              </div>
+              <div className="space-y-1.5">
+                <h2
+                  id="session-expiry-modal-title"
+                  className="text-base sm:text-lg font-black text-ink"
+                >
+                  로그인 시간 만료 안내
+                </h2>
+                <p className="text-xs sm:text-sm text-ink-2 leading-relaxed font-medium">
+                  {SESSION_EXPIRY_WARNING_MESSAGE}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl bg-surface-2 border border-line p-4 flex items-center justify-between">
+              <span className="text-xs font-semibold text-ink-3">
+                자동 로그아웃까지 남은 시간
+              </span>
+              <span
+                data-testid="session-remaining-time"
+                className="text-base sm:text-lg font-black tabular text-brand-600"
+              >
+                {sessionEvaluation.formattedKorean} ({sessionEvaluation.formattedMMSS})
+              </span>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => handleLogout()}
+                className="h-10 px-4 rounded-xl border border-line bg-surface hover:bg-surface-2 text-ink-2 text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <LogOut className="size-4" aria-hidden="true" />
+                <span>로그아웃</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => extendLoginSession()}
+                className="h-10 px-5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 shadow-raise transition cursor-pointer"
+              >
+                <RefreshCw className="size-4" aria-hidden="true" />
+                <span>로그인 연장</span>
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Firebase 설정 및 보안규칙 모달 */}
