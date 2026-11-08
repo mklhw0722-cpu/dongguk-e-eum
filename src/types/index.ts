@@ -265,6 +265,8 @@ export interface MentoringRequest {
   message: string;
   status: "대기중" | "수락됨" | "답변완료";
   createdAt: string;
+  replyMessage?: string;
+  repliedAt?: string;
 }
 
 export type CommunityRoomType = "career" | "double_major";

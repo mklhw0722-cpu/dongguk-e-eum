@@ -243,7 +243,8 @@ interface AppContextValue extends PlatformDataState {
   ) => void;
   updateMentoringStatus: (
     requestId: string,
-    status: "대기중" | "수락됨" | "답변완료"
+    status: "대기중" | "수락됨" | "답변완료",
+    replyMessage?: string
   ) => void;
   upsertAlumniProfile: (profile: Omit<AlumniProfile, "id" | "userId">) => Promise<AlumniProfile>;
 
@@ -2327,13 +2328,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateMentoringStatus = (
     requestId: string,
-    status: "대기중" | "수락됨" | "답변완료"
+    status: "대기중" | "수락됨" | "답변완료",
+    replyMessage?: string
   ) => {
     setState((prev) => ({
       ...prev,
-      mentoringRequests: prev.mentoringRequests.map((r) =>
-        r.id === requestId ? { ...r, status } : r
-      ),
+      mentoringRequests: prev.mentoringRequests.map((r) => {
+        if (r.id !== requestId) return r;
+        const updated: MentoringRequest = {
+          ...r,
+          status,
+        };
+        if (replyMessage !== undefined) {
+          updated.replyMessage = replyMessage;
+          updated.repliedAt = new Date().toISOString().slice(0, 10);
+        }
+        return updated;
+      }),
     }));
   };
 

@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useApp, CAREER_TRACK_LIST } from "@/context/AppContext";
-import { AlumniProfile, CareerTrack } from "@/types";
+import { AlumniProfile, CareerTrack, MentoringRequest } from "@/types";
 import {
   AlumniCard,
   EmptyStateBox,
@@ -54,12 +54,29 @@ export default function AlumniPage() {
   const [mentoringTopic, setMentoringTopic] = useState("");
   const [mentoringMsg, setMentoringMsg] = useState("");
   const [feedbackBanner, setFeedbackBanner] = useState<string | null>(null);
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [editingReplyId, setEditingReplyId] = useState<string | null>(null);
 
-  // 현재 접속 계정의 동문 프로필 매칭
+  // 현재 접속 계정의 동문 프로필 매칭 및 열람 권한 판별
   const currentUserId = authUserProfile?.id || authUserProfile?.uid || currentUser.id;
+  const currentUserName = authUserProfile?.name || currentUser.name;
+  const isAdmin = userRole === "admin" || currentUser.role === "admin";
   const myAlumniProfile = alumniProfiles.find(
     (p) => p.userId === currentUserId || (currentUser.name && p.displayName.includes(currentUser.name))
   );
+
+  // 멘토링 요청 열람 권한: 멘토링 신청자(멘티), 멘토링 요청받은 자(멘토), 관리자만
+  const visibleMentoringRequests = mentoringRequests.filter((req: MentoringRequest) => {
+    if (isAdmin) return true;
+    const isMentee =
+      req.fromUserId === currentUserId ||
+      (Boolean(currentUserName) && req.fromUserName.includes(currentUserName));
+    const isMentor =
+      (myAlumniProfile && req.toAlumniProfileId === myAlumniProfile.id) ||
+      req.toAlumniProfileId === currentUserId ||
+      (Boolean(currentUserName) && req.toAlumniName.includes(currentUserName));
+    return isMentee || isMentor;
+  });
 
   // 졸업생 본인 프로필 등록/수정 상태
   const [profName, setProfName] = useState("동문 멘토");
@@ -233,7 +250,7 @@ export default function AlumniPage() {
                 : "text-slate-600 dark:text-slate-300"
             }`}
           >
-            멘토링 요청 현황 ({mentoringRequests.length})
+            멘토링 요청 현황 ({visibleMentoringRequests.length})
           </button>
           {isAlumni && (
             <button
@@ -355,70 +372,203 @@ export default function AlumniPage() {
 
       {activeTab === "mentoring" && (
         <div className="space-y-4">
-          <DemoInfoBanner
-            title="멘토링 요청 확인 및 상태 변경"
-            description="재학생이 신청한 멘토링 내역을 확인하고, 졸업생 역할에서는 '수락됨' 또는 '답변완료'로 상태를 변경할 수 있습니다."
-          />
+          {visibleMentoringRequests.length === 0 ? (
+            <EmptyStateBox
+              title="참여 중인 멘토링 요청 내역이 없습니다"
+              description={
+                isAlumni
+                  ? "후배들이 신청한 멘토링 요청이 도착하면 이곳에서 확인하고 답변을 작성할 수 있습니다."
+                  : "관심 있는 진로 분야의 선배님 프로필에서 [멘토링 신청]을 해보세요!"
+              }
+              actionLabel="동문 프로필 탐색하기"
+              onAction={() => setActiveTab("directory")}
+            />
+          ) : (
+            <div className="space-y-3">
+              {visibleMentoringRequests.map((req) => {
+                const isMentee =
+                  req.fromUserId === currentUserId ||
+                  (Boolean(currentUserName) && req.fromUserName.includes(currentUserName));
+                const isMentor =
+                  (myAlumniProfile && req.toAlumniProfileId === myAlumniProfile.id) ||
+                  req.toAlumniProfileId === currentUserId ||
+                  (Boolean(currentUserName) && req.toAlumniName.includes(currentUserName));
+                const canManage = isMentor || isAdmin;
+                const isEditing = editingReplyId === req.id;
+                const showReplyForm = canManage && (req.status === "수락됨" || isEditing);
 
-          <div className="space-y-3">
-            {mentoringRequests.map((req) => (
-              <div
-                key={req.id}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
-                        req.status === "수락됨"
-                          ? "bg-emerald-100 text-emerald-800"
-                          : req.status === "답변완료"
-                          ? "bg-blue-100 text-blue-800"
-                          : "bg-amber-100 text-amber-800"
-                      }`}
-                    >
-                      {req.status}
-                    </span>
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                      신청자: {req.fromUserName} → 멘토: {req.toAlumniName}
-                    </span>
+                return (
+                  <div
+                    key={req.id}
+                    className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                            req.status === "수락됨"
+                              ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+                              : req.status === "답변완료"
+                              ? "bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300"
+                              : "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                          }`}
+                        >
+                          {req.status}
+                        </span>
+                        <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                          신청자: {req.fromUserName} → 멘토: {req.toAlumniName}
+                        </span>
+                        {isMentee && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-100 text-orange-800 dark:bg-orange-950/50 dark:text-orange-300">
+                            내가 신청함
+                          </span>
+                        )}
+                        {isMentor && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300">
+                            나에게 온 요청
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-slate-400">{req.createdAt}</span>
+                    </div>
+
+                    <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
+                      {req.topic}
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl whitespace-pre-wrap">
+                      {req.message}
+                    </p>
+
+                    {/* 대기중 상태 액션 */}
+                    {req.status === "대기중" && (
+                      <div className="flex items-center justify-between pt-1">
+                        {canManage ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateMentoringStatus(req.id, "수락됨");
+                              setEditingReplyId(req.id);
+                            }}
+                            className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs"
+                          >
+                            멘토링 수락
+                          </button>
+                        ) : (
+                          <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">
+                            멘토 선배님의 수락을 기다리고 있습니다.
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 수락됨 상태 안내 (멘티에게 표시) */}
+                    {req.status === "수락됨" && !canManage && (
+                      <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-xl p-3 text-xs text-emerald-800 dark:text-emerald-200 flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        <span>선배님이 멘토링 요청을 수락했습니다! 답변이 작성되는 대로 이곳에 표시됩니다.</span>
+                      </div>
+                    )}
+
+                    {/* 답변 작성 폼 (멘토 또는 관리자에게 표시) */}
+                    {showReplyForm && (
+                      <div className="bg-orange-50/70 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800/40 rounded-xl p-4 space-y-3 mt-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-orange-950 dark:text-orange-200 flex items-center gap-1.5">
+                            <MessageSquare className="w-4 h-4 text-orange-600" />
+                            후배를 위한 멘토링 답변 작성
+                          </span>
+                          {req.status === "답변완료" && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingReplyId(null)}
+                              className="text-xs text-slate-400 hover:text-slate-600"
+                            >
+                              수정 취소
+                            </button>
+                          )}
+                        </div>
+                        <textarea
+                          rows={4}
+                          value={
+                            replyDrafts[req.id] !== undefined
+                              ? replyDrafts[req.id]
+                              : req.replyMessage || ""
+                          }
+                          onChange={(e) =>
+                            setReplyDrafts({ ...replyDrafts, [req.id]: e.target.value })
+                          }
+                          placeholder="후배의 질문에 대한 조언과 답변을 정성껏 작성해 주세요. (이메일, 카카오톡 오픈채팅 등 추가 소통 방식도 함께 남겨주실 수 있습니다)"
+                          className="w-full text-xs sm:text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 focus:outline-none focus:ring-2 focus:ring-orange-500 text-slate-900 dark:text-white"
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const draft = (
+                                replyDrafts[req.id] !== undefined
+                                  ? replyDrafts[req.id]
+                                  : req.replyMessage || ""
+                              ).trim();
+                              if (!draft) {
+                                alert("답변 내용을 입력해 주세요.");
+                                return;
+                              }
+                              updateMentoringStatus(req.id, "답변완료", draft);
+                              setEditingReplyId(null);
+                            }}
+                            className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition shadow-xs"
+                          >
+                            답변 등록
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 답변 완료된 답변 본문 카드 */}
+                    {req.status === "답변완료" && req.replyMessage && !isEditing && (
+                      <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 rounded-xl p-4 space-y-2 mt-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-300 text-[11px] font-bold">
+                              멘토 선배님 답변
+                            </span>
+                            <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                              {req.toAlumniName}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {req.repliedAt && (
+                              <span className="text-[11px] text-slate-400">
+                                답변일: {req.repliedAt}
+                              </span>
+                            )}
+                            {canManage && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingReplyId(req.id);
+                                  setReplyDrafts((prev) => ({
+                                    ...prev,
+                                    [req.id]: req.replyMessage || "",
+                                  }));
+                                }}
+                                className="text-xs font-bold text-orange-600 hover:text-orange-700 underline ml-2"
+                              >
+                                답변 수정
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
+                          {req.replyMessage}
+                        </p>
+                      </div>
+                    )}
                   </div>
-                  <span className="text-xs text-slate-400">{req.createdAt}</span>
-                </div>
-
-                <h3 className="font-bold text-sm sm:text-base text-slate-900 dark:text-white">
-                  {req.topic}
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/60 p-3.5 rounded-xl">
-                  {req.message}
-                </p>
-
-                <div className="flex items-center justify-between pt-2">
-                  <span className="text-[11px] text-slate-400">
-                    {currentRole === "alumni"
-                      ? "졸업생 모드: 요청 상태를 변경할 수 있습니다."
-                      : "상단에서 '졸업생' 역할로 전환하면 수락/답변완료 처리가 가능합니다."}
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => updateMentoringStatus(req.id, "수락됨")}
-                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold"
-                    >
-                      멘토링 수락
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateMentoringStatus(req.id, "답변완료")}
-                      className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold"
-                    >
-                      답변완료 표시
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
