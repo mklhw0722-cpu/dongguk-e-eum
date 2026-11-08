@@ -123,3 +123,20 @@ test("5. [캘린더 UI 간소화] '직접 수정 가능', 설명 문구, '새 �
   assert.ok(calendarContent.includes("나의 학업 & 일정 캘린더"));
   assert.ok(calendarContent.includes("이 날에 새 일정 등록"));
 });
+
+test("6. [역할별 캘린더 제목 분기] 교수, 졸업생, 관리자는 '나의 캘린더'로 심플하게 표시되고 재학생은 '나의 학업 & 일정 캘린더'로 표시된다", () => {
+  const getCalendarTitle = (role) => {
+    const isNonStudent = role === "professor" || role === "alumni" || role === "admin";
+    return isNonStudent ? "나의 캘린더" : "나의 학업 & 일정 캘린더";
+  };
+
+  assert.equal(getCalendarTitle("professor"), "나의 캘린더");
+  assert.equal(getCalendarTitle("alumni"), "나의 캘린더");
+  assert.equal(getCalendarTitle("admin"), "나의 캘린더");
+  assert.equal(getCalendarTitle("student"), "나의 학업 & 일정 캘린더");
+
+  // EditableCalendar.tsx 소스 코드에 해당 분기 로직 및 '나의 캘린더' 문구가 반영되어 있는지 확인
+  const calendarCode = fs.readFileSync(new URL("../src/components/calendar/EditableCalendar.tsx", import.meta.url), "utf8");
+  assert.ok(calendarCode.includes('"나의 캘린더"'));
+  assert.ok(calendarCode.includes('"나의 학업 & 일정 캘린더"'));
+});

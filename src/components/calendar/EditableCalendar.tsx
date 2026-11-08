@@ -75,6 +75,7 @@ interface NoticeItem {
 interface EditableCalendarProps {
   officialNotices?: NoticeItem[];
   className?: string;
+  title?: string;
 }
 
 const CATEGORY_MAP: Record<
@@ -130,8 +131,21 @@ const formatDateKey = (year: number, month: number, day: number): string => {
 export default function EditableCalendar({
   officialNotices = [],
   className = "",
+  title,
 }: EditableCalendarProps) {
-  const { currentUser } = useApp();
+  const { currentUser, currentRole } = useApp();
+
+  // 교수, 졸업생, 관리자로 로그인했을 때는 '나의 캘린더'로 심플하게 표시
+  const isNonStudent =
+    currentUser?.role === "professor" ||
+    currentRole === "professor" ||
+    currentUser?.role === "alumni" ||
+    currentRole === "alumni" ||
+    currentUser?.role === "admin" ||
+    currentRole === "admin";
+
+  const calendarTitle =
+    title || (isNonStudent ? "나의 캘린더" : "나의 학업 & 일정 캘린더");
 
   // 현재 보고 있는 달력 기준 날짜
   const today = useMemo(() => new Date(), []);
@@ -477,7 +491,7 @@ export default function EditableCalendar({
             </div>
             <div>
               <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                나의 학업 & 일정 캘린더
+                {calendarTitle}
               </h2>
             </div>
           </div>
