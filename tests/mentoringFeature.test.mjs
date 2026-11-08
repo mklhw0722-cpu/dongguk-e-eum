@@ -125,9 +125,13 @@ test("3. 멘토링 수락 및 답변 등록 시 상태 '답변완료' 및 답변
   assert.equal(requests[0].repliedAt, "2026-11-08");
 });
 
-test("4. alumni/page.tsx UI에서 불필요한 문구 및 버튼 제거 검증", () => {
+test("4. alumni/page.tsx 및 Cards.tsx UI에서 불필요한 문구 및 버튼 제거 검증", () => {
   const pageCode = fs.readFileSync(
     path.join(rootDir, "src/app/alumni/page.tsx"),
+    "utf8"
+  );
+  const cardsCode = fs.readFileSync(
+    path.join(rootDir, "src/components/common/Cards.tsx"),
     "utf8"
   );
 
@@ -143,6 +147,10 @@ test("4. alumni/page.tsx UI에서 불필요한 문구 및 버튼 제거 검증",
   assert.ok(
     !pageCode.includes("멘토링 요청 확인 및 상태 변경"),
     "'멘토링 요청 확인 및 상태 변경' 설명 배너가 완전히 제거되어야 함"
+  );
+  assert.ok(
+    !cardsCode.includes("> 대화 요청<"),
+    "동문 카드에서 '대화 요청' 버튼이 제거되어야 함"
   );
 
   // 새롭게 추가된 필수 로직 검증

@@ -806,14 +806,10 @@ export default function AlumniPage() {
             <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
               <button
                 type="button"
-                onClick={() => {
-                  const target = detailAlumni;
-                  setDetailAlumni(null);
-                  handleRequestChat(target);
-                }}
-                className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold inline-flex items-center gap-1.5"
+                onClick={() => setDetailAlumni(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition"
               >
-                <MessageSquare className="w-3.5 h-3.5" /> 1:1 대화 요청
+                닫기
               </button>
               <button
                 type="button"
@@ -822,7 +818,7 @@ export default function AlumniPage() {
                   setDetailAlumni(null);
                   setMentoringTarget(target);
                 }}
-                className="px-4 py-2 rounded-xl bg-orange-600 text-white text-xs font-bold inline-flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl bg-orange-600 text-white text-xs font-bold inline-flex items-center gap-1.5 hover:bg-orange-700 transition"
               >
                 <Sparkles className="w-3.5 h-3.5" /> 멘토링 신청하기
               </button>

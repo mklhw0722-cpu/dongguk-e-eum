@@ -344,20 +344,13 @@ export function AlumniCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+      <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
         <button
           type="button"
           onClick={() => onSelectProfile(alumni)}
           className="px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
         >
           상세 프로필
-        </button>
-        <button
-          type="button"
-          onClick={() => onRequestChat(alumni)}
-          className="px-2.5 py-2 rounded-xl bg-slate-900 dark:bg-slate-700 text-white text-xs font-semibold hover:bg-slate-800 transition flex items-center justify-center gap-1"
-        >
-          <MessageSquare className="w-3.5 h-3.5" /> 대화 요청
         </button>
         <button
           type="button"
