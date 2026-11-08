@@ -1,7 +1,8 @@
 # 동국e음 디자인 시스템
 
 화면을 새로 만들거나 고칠 때 이 문서의 규칙과 `src/components/ui`의 공통 컴포넌트를 먼저 쓴다.
-AI에게 화면 작업을 맡길 때도 "docs/design-system.md를 따라 줘"라고 같이 알려 주면 톤이 맞춰진다.
+AI에게 화면 작업을 맡길 때도 "DESIGN.md와 docs/design-system.md를 따라 줘"라고 같이 알려 주면 톤과 동작이 완벽하게 맞춰집니다.
+글로벌 서비스들의 디자인 벤치마크 명세서는 [docs/design-references/](./design-references/README.md)에서 확인할 수 있습니다.
 
 ## 원칙
 
