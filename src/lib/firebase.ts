@@ -1736,26 +1736,39 @@ export async function leaveChatInFirestore(
   const { db } = getFirestoreInstance();
   if (!db) return;
 
-  await updateDoc(doc(db, CHATS_COLLECTION, chatId), {
-    participants: arrayRemove(currentUser.id),
-  });
-
+  const chatDocRef = doc(db, CHATS_COLLECTION, chatId);
+  const sysMsgRef = doc(collection(db, CHATS_COLLECTION, chatId, "messages"));
   const nowTime = new Date().toLocaleTimeString("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
   });
-  const sysMsgRef = doc(collection(db, CHATS_COLLECTION, chatId, "messages"));
-  await setDoc(sysMsgRef, {
-    id: sysMsgRef.id,
-    chatId,
-    senderId: currentUser.id,
-    senderName: currentUser.name,
-    senderRole: currentUser.role,
-    content: `${currentUser.name}님이 대화방을 나갔습니다.`,
-    createdAt: nowTime,
-    timestamp: serverTimestamp(),
-    isSystemMessage: true,
-  });
+
+  try {
+    const batch = writeBatch(db);
+    // 1) 시스템 메시지 생성 (작성 시점에 아직 참여자 상태여야 Firestore 보안 규칙 통과)
+    batch.set(sysMsgRef, {
+      id: sysMsgRef.id,
+      chatId,
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      senderRole: currentUser.role,
+      content: `${currentUser.name}님이 대화방을 나갔습니다.`,
+      createdAt: nowTime,
+      timestamp: serverTimestamp(),
+      isSystemMessage: true,
+    });
+    // 2) 참여자 목록에서 본인 제거
+    batch.update(chatDocRef, {
+      participants: arrayRemove(currentUser.id),
+    });
+    await batch.commit();
+  } catch (batchErr) {
+    // 혹시 모를 배치 쓰기 예외 시에도 최소한 본인이 대화방에서 정상 퇴장되도록 폴백 처리
+    console.warn("대화방 퇴장 시스템 메시지 기록 실패, 참여자 제거 단독 수행:", batchErr);
+    await updateDoc(chatDocRef, {
+      participants: arrayRemove(currentUser.id),
+    });
+  }
 }
 
 // ==========================================
