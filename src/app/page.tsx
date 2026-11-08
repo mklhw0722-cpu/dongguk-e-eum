@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
@@ -9,7 +9,14 @@ import { ROLE_LABELS } from "@/components/common/Cards";
 import { formatUnreadBadge } from "@/lib/chatReadReceipts";
 import { getAvatarInitials } from "@/lib/firebase";
 import EditableCalendar from "@/components/calendar/EditableCalendar";
-import { ConsultationStatus, ConsultationType, ConsultationRequest } from "@/types";
+import {
+  Avatar,
+  Badge,
+  CountBadge,
+  Panel,
+  SectionHeader,
+  textLinkClass,
+} from "@/components/ui";
 import {
   Megaphone,
   MessageSquare,
@@ -17,24 +24,10 @@ import {
   Users,
   CheckSquare,
   ArrowRight,
-  Pin,
-  BookOpen,
   Sparkles,
-  UserCheck,
-  ShieldCheck,
-  Briefcase,
   GraduationCap,
-  Calendar,
   AlertCircle,
-  Clock,
-  X,
-  RotateCcw,
-  CheckCircle2,
-  XCircle,
-  Inbox,
-  MessageCircle,
-  Check,
-  Send,
+  BookOpen,
 } from "lucide-react";
 
 export default function HomePage() {
@@ -71,8 +64,6 @@ export default function HomePage() {
   // 추천 졸업생 (상위 3명)
   const recommendedAlumni = alumniProfiles.slice(0, 3);
 
-  // 역할별 맞춤형 바로가기 구성
-  
   // 재학생 모드 판별 (관리자, 교수진, 졸업생은 false)
   const isStudent =
     (currentUser.role === "student" || currentRole === "student") &&
@@ -85,236 +76,212 @@ export default function HomePage() {
 
   // 진로·복수전공 게시판 바로가기 위젯
   const renderJoinedRoomsSection = () => (
-    <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Compass className="w-5 h-5 text-orange-600" />
-          <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-            진로·복수전공 게시판 ({featuredBoards.length})
-          </h2>
-        </div>
-        <Link
-          href="/rooms"
-          className="text-xs font-semibold text-orange-600 hover:underline flex items-center gap-1"
-        >
-          전체 게시판 보기 <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
-      </div>
+    <Panel as="section">
+      <SectionHeader
+        title={`진로·복수전공 게시판 (${featuredBoards.length})`}
+        icon={<Compass className="w-5 h-5 text-accent" />}
+        action={
+          <Link href="/rooms" className={textLinkClass}>
+            전체 게시판 보기 <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        }
+      />
 
       {featuredBoards.length === 0 ? (
-        <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-center text-xs text-slate-500">
+        <div className="p-5 rounded-2xl bg-surface-2 text-center text-xs text-ink-3">
           등록된 게시판이 없습니다.
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
           {featuredBoards.slice(0, 4).map((room) => {
             const count = communityPosts.filter((p) => p.roomId === room.id).length;
             return (
               <Link
                 key={room.id}
                 href="/rooms"
-                className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-orange-400 transition bg-slate-50/50 dark:bg-slate-800/40"
+                className="group p-4 rounded-2xl border border-line hover:border-line-strong hover:bg-surface-2 transition flex flex-col justify-between gap-2"
               >
-                <span className="inline-block px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-[10px] font-bold mb-1.5">
-                  {room.type === "career" ? "진로 트랙" : "복수전공"} · {room.categoryName}
-                </span>
-                <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 mb-1">
-                  {room.name.replace(/공유방/g, "게시판")}
-                </h3>
-                <p className="text-[11px] text-slate-500 line-clamp-1">
-                  게시글 {count}건
+                <div>
+                  <Badge tone={room.type === "career" ? "brand" : "info"} className="mb-2">
+                    {room.type === "career" ? "진로 트랙" : "복수전공"} · {room.categoryName}
+                  </Badge>
+                  <h3 className="text-sm font-bold text-ink group-hover:text-accent transition-colors line-clamp-1">
+                    {room.name.replace(/공유방/g, "게시판")}
+                  </h3>
+                </div>
+                <p className="text-xs text-ink-3 font-medium">
+                  게시글 <span className="text-ink-2 font-bold tabular">{count}</span>건
                 </p>
               </Link>
             );
           })}
         </div>
       )}
-    </section>
+    </Panel>
   );
 
   // 최근 등록된 복수전공 후기 위젯
   const renderDoubleMajorReviewsSection = () => (
-    <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <BookOpen className="w-5 h-5 text-orange-600" />
-          <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-            최근 등록된 복수전공 후기
-          </h2>
-        </div>
-        <Link
-          href="/rooms"
-          className="text-xs font-semibold text-orange-600 hover:underline flex items-center gap-1"
-        >
-          후기 더보기 <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
-      </div>
+    <Panel as="section">
+      <SectionHeader
+        title="최근 등록된 복수전공 후기"
+        icon={<BookOpen className="w-5 h-5 text-accent" />}
+        action={
+          <Link href="/rooms" className={textLinkClass}>
+            후기 더보기 <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        }
+      />
 
-      <div className="space-y-2.5">
+      <div className="divide-y divide-line mt-2">
         {doubleMajorReviews.map((post) => (
           <Link
             key={post.id}
             href="/rooms"
-            className="block p-3.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:border-orange-300 bg-slate-50/60 dark:bg-slate-800/40 transition"
+            className="group block py-3 px-1 hover:bg-surface-2 rounded-xl transition"
           >
-            <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1">
-              <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+            <div className="flex items-center justify-between text-xs text-ink-3 mb-1">
+              <span className="font-bold text-accent">
                 [{post.roomName}]
               </span>
               <span>
                 {post.authorName} ({post.authorBadge})
               </span>
             </div>
-            <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 line-clamp-1">
+            <p className="text-sm font-semibold text-ink group-hover:text-accent transition-colors line-clamp-1">
               {post.title}
             </p>
           </Link>
         ))}
       </div>
-    </section>
+    </Panel>
   );
 
   return (
     <div className="space-y-6">
-      {/* 환영 배너 */}
-      <section className="rounded-3xl bg-gradient-to-br from-orange-600 via-orange-500 to-amber-500 text-white p-6 sm:p-8 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs text-xs font-bold">
-              <Sparkles className="w-3.5 h-3.5" />
-              동국대학교 교육학과 전용 소통 플랫폼 · 동국e음
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-black tracking-tight">
-              반갑습니다, {currentUser.name}님!{currentRole === "admin" ? ` (${ROLE_LABELS.admin} 모드)` : ""}
-            </h1>
-            <p className="text-xs sm:text-sm text-orange-50 max-w-2xl leading-relaxed">
-              교육(e)으로 사람과 사람을 잇는 <strong>동국e음</strong>입니다. 학과 공지부터
-              졸업요건 자가점검, 진로·복수전공 게시판, 동문 멘토링까지 한곳에서 연결하세요.
-            </p>
-          </div>
+      {/* 환영 배너 (사람과 사람을 잇는 '이음' 일러스트 포함) */}
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-brand-500 to-amber-500 text-white p-6 sm:p-8 shadow-sm">
+        <ConnectionMotif />
 
-          
+        <div className="relative z-10 max-w-2xl space-y-2.5">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs text-xs font-bold text-white shadow-2xs">
+            <Sparkles className="w-3.5 h-3.5" />
+            동국대학교 교육학과 전용 종합 플랫폼 · 동국e음
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+            반갑습니다, {currentUser.name}님!
+            {currentRole === "admin" ? ` (${ROLE_LABELS.admin} 모드)` : ""}
+          </h1>
+          <p className="text-xs sm:text-sm text-brand-50 leading-relaxed font-medium">
+            교육(e)으로 사람과 사람을 잇는 <strong>동국e음</strong>입니다. 학과 공지부터
+            졸업요건 자가점검, 진로·복수전공 게시판, 동문 멘토링까지 한곳에서 안전하게 연결하세요.
+          </p>
         </div>
       </section>
 
-      
-      {/* 중단 2단 그리드: 최근 학과 공지 & 읽지 않은 채팅 + 졸업요건 바로가기 */}
+      {/* 중단 2단 그리드: 직접 일정 수정 캘린더 & 지도교수/대화/졸업요건 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* 직접 일정 수정 가능한 캘린더 (기존 홈화면 공지란 대체) */}
+        {/* 직접 일정 수정 가능한 캘린더 */}
         <EditableCalendar className="lg:col-span-7" />
 
-        {/* 우측: 지도교수 & 읽지 않은 채팅 & 나의 졸업요건 확인 바로가기 */}
+        {/* 우측 패널: 지도교수 & 읽지 않은 대화 & 졸업요건 요약 */}
         <div className="lg:col-span-5 space-y-6">
           {/* 학생 전용: 나의 지도교수 영역 */}
           {isStudent && (
-            <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <GraduationCap className="w-5 h-5 text-orange-600" />
-                  <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                    나의 지도교수
-                  </h2>
-                </div>
-                <span className="text-xs text-slate-400 font-semibold">
-                  교육학과 학생 지도 시스템
-                </span>
-              </div>
+            <Panel as="section">
+              <SectionHeader
+                title="나의 지도교수"
+                icon={<GraduationCap className="w-5 h-5 text-accent" />}
+                action={
+                  <span className="text-xs text-ink-3 font-medium">
+                    학생 지도 시스템
+                  </span>
+                }
+              />
 
               {myAdvisorInfo.status === "assigned" && myAdvisorInfo.professor ? (
-                <div className="p-4 rounded-xl border border-orange-200 dark:border-orange-900/60 bg-gradient-to-r from-orange-50/50 via-white to-orange-50/30 dark:from-slate-800/60 dark:to-slate-800/30 flex flex-col gap-3">
+                <div className="p-4 rounded-2xl border border-line bg-surface-2 flex flex-col gap-3 mt-3">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-orange-600 text-white font-black text-sm flex items-center justify-center shrink-0 shadow-xs">
-                      {getAvatarInitials(myAdvisorInfo.professor.name, myAdvisorInfo.professor.role) || myAdvisorInfo.professor.avatarInitials}
-                    </div>
+                    <Avatar
+                      name={myAdvisorInfo.professor.name}
+                      role="professor"
+                      size="lg"
+                    />
                     <div className="space-y-0.5 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-base font-black text-slate-900 dark:text-white">
+                        <span className="text-base font-bold text-ink">
                           {myAdvisorInfo.professor.name}
                         </span>
-                        <span className="text-xs font-bold text-orange-700 dark:text-orange-300">
+                        <span className="text-xs font-semibold text-accent">
                           {myAdvisorInfo.professor.studentIdOrYear || "교육학과 전임교원"}
                         </span>
-                        {((myAdvisorInfo.professor as any).id === "u-prof-1" || (myAdvisorInfo.professor as any).email?.includes("@sample.dgu.edu")) && (
-                          <span className="px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold">
-                            테스트 계정
-                          </span>
-                        )}
                       </div>
-                      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                        소속: 동국대학교 사범대학 교육학과
+                      <p className="text-xs text-ink-2">
+                        동국대학교 사범대학 교육학과
                       </p>
                       {myAdvisorInfo.professor.specialty && (
-                        <p className="text-xs text-slate-500 truncate">
+                        <p className="text-xs text-ink-3 truncate">
                           전문 분야: {myAdvisorInfo.professor.specialty}
                         </p>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-orange-100 dark:border-orange-900/30">
-                    <span
-                      className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                        myAdvisorInfo.professor.consultationAvailable !== false
-                          ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                          : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
-                      }`}
+                  <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-line text-xs">
+                    <Badge
+                      tone={myAdvisorInfo.professor.consultationAvailable !== false ? "success" : "neutral"}
                     >
                       {myAdvisorInfo.professor.consultationAvailable !== false
                         ? "● 상담 가능"
                         : "현재 상담 불가"}
-                    </span>
+                    </Badge>
                     <Link
                       href={`/chat?consultProfessorId=${myAdvisorInfo.professor.id}`}
-                      className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-xs transition inline-flex items-center"
+                      className="px-3.5 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-xs transition inline-flex items-center gap-1"
                     >
                       상담 신청
                     </Link>
                   </div>
                 </div>
               ) : myAdvisorInfo.status === "invalid_status" ? (
-                <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/60 dark:bg-amber-950/30 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50/70 text-xs text-amber-900 flex items-center gap-2 mt-3">
                   <AlertCircle className="w-5 h-5 text-amber-600 shrink-0" />
                   <div>
-                    <p className="font-bold">지정된 지도교수 계정의 이용 상태를 확인할 수 없습니다.</p>
-                    <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                      교수 계정 권한이 변경되었거나 이용 정지 상태일 수 있습니다. 학과사무실(관리자)에 문의해 주세요.
+                    <p className="font-bold">지정된 지도교수 계정 상태를 확인할 수 없습니다.</p>
+                    <p className="text-amber-700 mt-0.5">
+                      학과사무실 또는 관리자에게 지도교수 지정을 문의해 주세요.
                     </p>
                   </div>
                 </div>
               ) : (
-                <div className="p-5 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center space-y-1 bg-slate-50/50 dark:bg-slate-800/20">
-                  <p className="text-sm font-bold text-slate-700 dark:text-slate-300">지도교수 미등록</p>
-                  <p className="text-xs text-slate-400">
-                    아직 배정된 지도교수님이 없습니다. 학과사무실 또는 관리자에게 지도교수 지정을 요청해 주세요.
+                <div className="p-6 rounded-2xl border border-dashed border-line text-center space-y-1 bg-surface-2 mt-3">
+                  <p className="text-sm font-bold text-ink">지도교수 미배정</p>
+                  <p className="text-xs text-ink-3">
+                    배정된 지도교수님이 없습니다. 학과사무실에 지정을 요청해 주세요.
                   </p>
                 </div>
               )}
-            </section>
+            </Panel>
           )}
 
-          {/* 읽지 않은 채팅 */}
-          <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-orange-600" />
-                <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                  읽지 않은 대화
-                </h2>
-              </div>
-              <Link
-                href="/chat"
-                className="text-xs font-semibold text-orange-600 hover:underline flex items-center gap-1"
-              >
-                대화창 이동 <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
+          {/* 읽지 않은 대화 */}
+          <Panel as="section">
+            <SectionHeader
+              title="읽지 않은 대화"
+              icon={<MessageSquare className="w-5 h-5 text-accent" />}
+              action={
+                <Link href="/chat" className={textLinkClass}>
+                  대화창 이동 <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              }
+            />
 
             {unreadConversations.length === 0 ? (
-              <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-center text-xs text-slate-500">
+              <div className="p-5 rounded-2xl bg-surface-2 text-center text-xs text-ink-3 mt-3">
                 현재 읽지 않은 새 메시지가 없습니다.
               </div>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-2 mt-3">
                 {unreadConversations.map((conv) => {
                   const myMember = conv.members.find(
                     (m) => m.userId === currentUser.id
@@ -323,22 +290,20 @@ export default function HomePage() {
                     <Link
                       key={conv.id}
                       href="/chat"
-                      className="flex items-center justify-between gap-3 p-3 rounded-xl bg-orange-50/60 dark:bg-orange-950/20 border border-orange-200/70 dark:border-orange-900/40 hover:border-orange-400 transition"
+                      className="group flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-surface-2 hover:bg-surface-3 transition border border-transparent hover:border-line"
                     >
                       <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 truncate">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-bold text-ink truncate group-hover:text-accent transition-colors">
                             {conv.title}
                           </p>
-                          <span className="px-1.5 py-0.5 rounded bg-orange-600 text-white text-[10px] font-bold">
-                            +{formatUnreadBadge(myMember?.unreadCount || 0)}
-                          </span>
+                          <CountBadge count={myMember?.unreadCount || 0} />
                         </div>
-                        <p className="text-xs text-slate-600 dark:text-slate-300 truncate mt-0.5">
+                        <p className="text-xs text-ink-2 truncate mt-1">
                           {conv.lastMessageText}
                         </p>
                       </div>
-                      <span className="text-[11px] text-slate-400 shrink-0">
+                      <span className="text-xs text-ink-3 shrink-0 tabular">
                         {conv.lastMessageAt}
                       </span>
                     </Link>
@@ -346,61 +311,55 @@ export default function HomePage() {
                 })}
               </div>
             )}
-          </section>
+          </Panel>
 
-          {/* 나의 졸업요건 확인 바로가기 (재학생/관리자 전용) */}
           {/* 재학생 전용: 나의 졸업요건 자가점검 요약 */}
           {isStudent && (
-          <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CheckSquare className="w-5 h-5 text-orange-600" />
-                <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-                  나의 졸업요건 자가점검 요약
-                </h2>
-              </div>
-              <Link
-                href="/graduation"
-                className="text-xs font-semibold text-orange-600 hover:underline"
-              >
-                상세 기록하기 →
-              </Link>
-            </div>
+            <Panel as="section">
+              <SectionHeader
+                title="졸업요건 자가점검 요약"
+                icon={<CheckSquare className="w-5 h-5 text-accent" />}
+                action={
+                  <Link href="/graduation" className={textLinkClass}>
+                    상세 기록하기 <ArrowRight className="w-3.5 h-3.5" />
+                  </Link>
+                }
+              />
 
-            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/70 dark:border-slate-700 space-y-2 text-xs">
-              {(() => {
-                const homeAudit = calculateGraduationAudit(studentProgress, graduationCatalog);
-                return (
-                  <>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">적용 기준 정보</span>
-                      <span className="font-bold text-slate-800 dark:text-slate-200">
-                        {homeAudit.profile.admissionYearLabel} · {studentProgress.majorType}
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">내가 기록한 총 이수 학점</span>
-                      <span className="font-bold text-orange-600">
-                        {homeAudit.totalEarnedCredits}학점 / {homeAudit.applicable.cohortRule.totalGraduationCredits}학점
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-500">내가 기록한 교육봉사 시간</span>
-                      <span className="font-bold text-orange-600">
-                        {homeAudit.volunteeringAudit.effectiveHours}시간 / {homeAudit.volunteeringAudit.targetHours}시간
-                      </span>
-                    </div>
-                  </>
-                );
-              })()}
-              <p className="text-[11px] text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-700">
-                ※ 공식 학사 시스템 연동 결과가 아닌 학생 개인의 자가점검 메모입니다.
-              </p>
-            </div>
-          </section>
+              <div className="p-4 rounded-2xl bg-surface-2 border border-line space-y-2.5 text-xs mt-3">
+                {(() => {
+                  const homeAudit = calculateGraduationAudit(studentProgress, graduationCatalog);
+                  return (
+                    <>
+                      <div className="flex justify-between items-center">
+                        <span className="text-ink-3">적용 기준</span>
+                        <span className="font-bold text-ink">
+                          {homeAudit.profile.admissionYearLabel} · {studentProgress.majorType}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-ink-3">총 이수 학점</span>
+                        <span className="font-bold text-accent tabular">
+                          {homeAudit.totalEarnedCredits}학점 / {homeAudit.applicable.cohortRule.totalGraduationCredits}학점
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-ink-3">교육봉사 시간</span>
+                        <span className="font-bold text-accent tabular">
+                          {homeAudit.volunteeringAudit.effectiveHours}시간 / {homeAudit.volunteeringAudit.targetHours}시간
+                        </span>
+                      </div>
+                    </>
+                  );
+                })()}
+                <p className="text-[11px] text-ink-3 pt-2 border-t border-line">
+                  ※ 공식 학사 시스템 연동이 아닌 개인 자가점검 메모입니다.
+                </p>
+              </div>
+            </Panel>
           )}
 
-          {/* 관리자·졸업생·교수진 모드: 캘린더 우측 빈 공간에 공유방 & 후기 배치 */}
+          {/* 비재학생(관리자·졸업생·교수진) 모드: 게시판 & 후기 배치 */}
           {!isStudent && (
             <>
               {renderJoinedRoomsSection()}
@@ -410,7 +369,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* 재학생 모드: 하단 2열에 진로 공유방 & 최근 복수전공 후기 배치 */}
+      {/* 재학생 모드: 하단 2열에 진로 게시판 & 복수전공 후기 */}
       {isStudent && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {renderJoinedRoomsSection()}
@@ -418,48 +377,95 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* 추천 졸업생 멘토 */}
-      <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Users className="w-5 h-5 text-orange-600" />
-            <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-              추천 졸업생 동문 프로필
-            </h2>
-          </div>
-          <Link
-            href="/alumni"
-            className="text-xs font-semibold text-orange-600 hover:underline flex items-center gap-1"
-          >
-            졸업생 전체 탐색 <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        </div>
+      {/* 추천 졸업생 동문 프로필 */}
+      <Panel as="section">
+        <SectionHeader
+          title="추천 졸업생 동문 프로필"
+          icon={<Users className="w-5 h-5 text-accent" />}
+          action={
+            <Link href="/alumni" className={textLinkClass}>
+              졸업생 전체 탐색 <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          }
+        />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
           {recommendedAlumni.map((alumni) => (
             <Link
               key={alumni.id}
               href="/alumni"
-              className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-orange-400 transition space-y-2"
+              className="group p-4 rounded-2xl border border-line bg-surface-2 hover:bg-surface-3 transition flex items-start gap-3.5"
             >
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-sm text-slate-900 dark:text-slate-100">
-                  {alumni.displayName}
-                </span>
-                <span className="px-2 py-0.5 rounded bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 text-[11px] font-bold">
-                  {alumni.careerTrack}
-                </span>
+              <Avatar name={alumni.displayName} role="alumni" size="md" />
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="font-bold text-sm text-ink group-hover:text-accent transition-colors">
+                    {alumni.displayName}
+                  </span>
+                  <Badge tone="brand">{alumni.careerTrack}</Badge>
+                </div>
+                <p className="text-xs font-semibold text-ink-2 truncate">
+                  {alumni.currentRoleTitle}
+                </p>
+                <p className="text-xs text-ink-3 truncate">
+                  {alumni.doubleMajor} · {alumni.graduationYear}년 졸업
+                </p>
               </div>
-              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                {alumni.currentRoleTitle}
-              </p>
-              <p className="text-xs text-slate-500">
-                복수전공: {alumni.doubleMajor} · {alumni.graduationYear}년 졸업
-              </p>
             </Link>
           ))}
         </div>
-      </section>
+      </Panel>
     </div>
+  );
+}
+
+/**
+ * 환영 배너 오른쪽의 '이음' 그림: 사람(점)과 사람을 잇는 선 SVG 애니메이션.
+ */
+function ConnectionMotif() {
+  const links = [
+    "M48 178 L142 96",
+    "M142 96 L246 150",
+    "M246 150 L330 58",
+    "M246 150 L372 196",
+    "M142 96 L330 58",
+    "M48 178 L196 224",
+    "M196 224 L246 150",
+  ];
+  const nodes: [number, number, number][] = [
+    [48, 178, 5],
+    [142, 96, 7],
+    [246, 150, 9],
+    [330, 58, 6],
+    [372, 196, 5],
+    [196, 224, 4],
+  ];
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 400 260"
+      fill="none"
+      className="pointer-events-none absolute top-1/2 -right-8 hidden h-[135%] -translate-y-1/2 text-white sm:block"
+    >
+      {links.map((d, i) => (
+        <path
+          key={d}
+          d={d}
+          pathLength={1}
+          stroke="currentColor"
+          strokeOpacity={i === 4 ? 0.14 : 0.26}
+          strokeWidth={1.5}
+          strokeDasharray={i === 4 ? "0.02 0.02" : "1"}
+          className={i === 4 ? undefined : "animate-draw [stroke-dashoffset:1]"}
+          style={i === 4 ? undefined : { animationDelay: `${i * 90}ms` }}
+        />
+      ))}
+      {nodes.map(([cx, cy, r], i) => (
+        <g key={i}>
+          <circle cx={cx} cy={cy} r={r + 7} stroke="currentColor" strokeOpacity={i === 2 ? 0.35 : 0.16} />
+          <circle cx={cx} cy={cy} r={r} fill="currentColor" fillOpacity={i === 2 ? 0.95 : 0.4} />
+        </g>
+      ))}
+    </svg>
   );
 }
