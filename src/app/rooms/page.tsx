@@ -304,13 +304,35 @@ export default function RoomsPage() {
                   </p>
 
                   <div className="flex items-center gap-4 pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => likeCommunityPost(post.id)}
-                      className="inline-flex items-center gap-1.5 font-bold text-orange-600 hover:underline"
-                    >
-                      <ThumbsUp className="w-4 h-4" /> 도움이 됐어요 ({post.likes})
-                    </button>
+                    {(() => {
+                      const currentUserId = currentUser.id;
+                      const isLikedByMe =
+                        Boolean(currentUserId) &&
+                        Array.isArray(post.likedUserIds) &&
+                        post.likedUserIds.includes(currentUserId);
+
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => likeCommunityPost(post.id)}
+                          className={`inline-flex items-center gap-1.5 font-bold transition cursor-pointer ${
+                            isLikedByMe
+                              ? "text-brand-600 dark:text-brand-400"
+                              : "text-slate-500 hover:text-brand-600 dark:text-slate-400 dark:hover:text-brand-300"
+                          }`}
+                          title={isLikedByMe ? "도움이 됐어요 취소" : "도움이 됐어요"}
+                        >
+                          <ThumbsUp
+                            className={`w-4 h-4 transition-transform active:scale-125 ${
+                              isLikedByMe
+                                ? "fill-brand-600 text-brand-600 dark:fill-brand-400 dark:text-brand-400"
+                                : ""
+                            }`}
+                          />
+                          도움이 됐어요 ({post.likes})
+                        </button>
+                      );
+                    })()}
                     <span className="inline-flex items-center gap-1 text-slate-500">
                       <MessageCircle className="w-4 h-4" /> 댓글 {post.comments.length}개
                     </span>

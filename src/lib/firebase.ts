@@ -865,11 +865,13 @@ export function subscribeToCommunityPosts(
       const loadedPosts: CommunityPost[] = [];
       snapshot.forEach((docSnap) => {
         const data = docSnap.data() as CommunityPost;
+        const likedUserIds = Array.isArray(data.likedUserIds) ? data.likedUserIds : [];
         loadedPosts.push({
           ...data,
           id: docSnap.id,
           comments: Array.isArray(data.comments) ? data.comments : [],
-          likes: typeof data.likes === "number" ? data.likes : 0,
+          likedUserIds,
+          likes: typeof data.likes === "number" ? data.likes : likedUserIds.length,
         });
       });
 
@@ -913,6 +915,20 @@ export async function addCommentInFirestore(
   if (!db) return;
   const postRef = doc(db, POSTS_COLLECTION, postId);
   await updateDoc(postRef, { comments: updatedComments });
+}
+
+export async function toggleLikeInFirestore(
+  postId: string,
+  newLikesCount: number,
+  likedUserIds: string[]
+): Promise<void> {
+  const { db } = getFirestoreInstance();
+  if (!db) return;
+  const postRef = doc(db, POSTS_COLLECTION, postId);
+  await updateDoc(postRef, {
+    likes: newLikesCount,
+    likedUserIds: likedUserIds,
+  });
 }
 
 export async function incrementLikeInFirestore(

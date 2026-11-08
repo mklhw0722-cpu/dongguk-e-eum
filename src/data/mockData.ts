@@ -634,7 +634,8 @@ export const MOCK_COMMUNITY_POSTS: CommunityPost[] = [
     authorRole: "alumni",
     authorBadge: "16학번 졸업 · 고등학교 교사",
     createdAt: "2026-10-18",
-    likes: 24,
+    likes: 0,
+    likedUserIds: [],
     comments: [
       {
         id: "cmt-1",
@@ -660,7 +661,8 @@ export const MOCK_COMMUNITY_POSTS: CommunityPost[] = [
     authorRole: "student",
     authorBadge: "22학번 재학 · 법학 복전",
     createdAt: "2026-10-19",
-    likes: 19,
+    likes: 0,
+    likedUserIds: [],
     comments: [
       {
         id: "cmt-2",
@@ -686,7 +688,8 @@ export const MOCK_COMMUNITY_POSTS: CommunityPost[] = [
     authorRole: "alumni",
     authorBadge: "18학번 졸업 · 기업 HRD",
     createdAt: "2026-10-16",
-    likes: 31,
+    likes: 0,
+    likedUserIds: [],
     comments: [
       {
         id: "cmt-3",
@@ -712,7 +715,8 @@ export const MOCK_COMMUNITY_POSTS: CommunityPost[] = [
     authorRole: "student",
     authorBadge: "24학번 재학 · 교직 트랙",
     createdAt: "2026-10-20",
-    likes: 12,
+    likes: 0,
+    likedUserIds: [],
     comments: [
       {
         id: "cmt-4",
@@ -738,7 +742,8 @@ export const MOCK_COMMUNITY_POSTS: CommunityPost[] = [
     authorRole: "alumni",
     authorBadge: "17학번 졸업 · 공공기관",
     createdAt: "2026-10-14",
-    likes: 17,
+    likes: 0,
+    likedUserIds: [],
     comments: [],
   },
 ];

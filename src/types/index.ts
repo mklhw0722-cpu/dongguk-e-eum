@@ -308,6 +308,7 @@ export interface CommunityPost {
   authorBadge: string;
   createdAt: string;
   likes: number;
+  likedUserIds?: string[];
   comments: CommunityComment[];
 }
 

@@ -100,3 +100,34 @@ test("6. [게시판 내부 동작 및 Firestore 보안 규칙] 글 목록, 글 �
   // Firestore 보안 규칙에서 승인된 회원(isApprovedUser)만 communityPosts 읽기/쓰기 가능한지 확인
   assert.match(rulesContent, /match \/communityPosts\/\{postId\}[\s\S]*?allow read:\s*if isApprovedUser\(\);/);
 });
+
+test("7. [도움이 됐어요 중복 방지 및 토글 취소, 초기값 0 검증] 한 계정당 1회만 누를 수 있고, 2회 누르면 취소되며, 모든 mock 게시글의 좋아요가 0으로 초기화된다", () => {
+  const mockContent = fs.readFileSync(new URL("../src/data/mockData.ts", import.meta.url), "utf8");
+  const appContext = fs.readFileSync(new URL("../src/context/AppContext.tsx", import.meta.url), "utf8");
+  const roomsPage = fs.readFileSync(new URL("../src/app/rooms/page.tsx", import.meta.url), "utf8");
+
+  // 1) mockData의 모든 게시글의 likes가 0으로 초기화되었는지 검증
+  const postLikesMatches = [...mockContent.matchAll(/id:\s*"post-\d+"[\s\S]*?likes:\s*(\d+)/g)];
+  assert.ok(postLikesMatches.length >= 5, "최소 5개의 게시글이 존재해야 함");
+  for (const match of postLikesMatches) {
+    assert.equal(match[1], "0", "모든 게시글의 초기 도움이 됐어요는 0이어야 함");
+  }
+
+  // 2) AppContext 내 1계정 1회 및 2회 누를 시 취소(토글) 로직 검증
+  assert.ok(
+    appContext.includes("hasLiked"),
+    "이미 공감을 눌렀는지 확인하는 hasLiked 변수가 존재해야 함"
+  );
+  assert.ok(
+    appContext.includes("Math.max(0, (targetPost.likes ?? 1) - 1)"),
+    "이미 누른 경우 2번째 누르면 공감이 취소(1 감소)되어야 함"
+  );
+  assert.ok(
+    appContext.includes("(targetPost.likes ?? 0) + 1"),
+    "처음 누른 경우 공감이 1 증가해야 함"
+  );
+
+  // 3) rooms/page.tsx 내 내가 누른 여부(isLikedByMe)에 따른 UI 및 취소 툴팁 검증
+  assert.ok(roomsPage.includes("isLikedByMe"), "내가 누른 상태를 판별하는 isLikedByMe가 포함되어야 함");
+  assert.ok(roomsPage.includes("도움이 됐어요 취소"), "이미 누른 경우 취소 툴팁이 제공되어야 함");
+});

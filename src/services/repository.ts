@@ -95,15 +95,24 @@ export const PlatformRepository = {
           loadedRooms.push(initRoom);
         }
       }
-      const loadedPosts = (parsed.communityPosts || initial.communityPosts)
+      const loadedPosts: CommunityPost[] = (parsed.communityPosts || initial.communityPosts)
         .filter((p) => !removedRoomIds.has(p.roomId))
-        .map((p) => ({
-          ...p,
-          roomName: (p.roomName || "").replace(/공유방/g, "게시판"),
-        }));
+        .map((p) => {
+          const likedUserIds = Array.isArray(p.likedUserIds) ? p.likedUserIds : [];
+          return {
+            ...p,
+            roomName: (p.roomName || "").replace(/공유방/g, "게시판"),
+            likes: likedUserIds.length,
+            likedUserIds,
+          };
+        });
       for (const initPost of initial.communityPosts) {
         if (!loadedPosts.some((p) => p.id === initPost.id)) {
-          loadedPosts.push(initPost);
+          loadedPosts.push({
+            ...initPost,
+            likedUserIds: Array.isArray(initPost.likedUserIds) ? initPost.likedUserIds : [],
+            likes: Array.isArray(initPost.likedUserIds) ? initPost.likedUserIds.length : 0,
+          });
         }
       }
       const mapDoubleMajor = (dm?: string): string | undefined => {

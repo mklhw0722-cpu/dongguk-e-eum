@@ -59,6 +59,7 @@ import {
   deletePostInFirestore,
   addCommentInFirestore,
   incrementLikeInFirestore,
+  toggleLikeInFirestore,
   UserProfileDoc,
   registerWithEmailAndPassword,
   loginWithEmailAndPassword,
@@ -3058,6 +3059,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       authorBadge: `${currentUser.studentIdOrYear} · ${roleLabel}`,
       createdAt: new Date().toISOString().slice(0, 10),
       likes: 0,
+      likedUserIds: [],
       comments: [],
     };
 
@@ -3125,18 +3127,39 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const likeCommunityPost = (postId: string) => {
+    const currentUserId = authUserProfile?.id || authUserProfile?.uid || currentUser.id;
+    if (!currentUserId) return;
+
     const targetPost = state.communityPosts.find((p) => p.id === postId);
-    const nextLikes = (targetPost?.likes ?? 0) + 1;
+    if (!targetPost) return;
+
+    const existingLiked = Array.isArray(targetPost.likedUserIds) ? targetPost.likedUserIds : [];
+    const hasLiked = existingLiked.includes(currentUserId);
+
+    let nextLikedUserIds: string[];
+    let nextLikes: number;
+
+    if (hasLiked) {
+      // 이미 누른 경우 2번째 누르면 취소
+      nextLikedUserIds = existingLiked.filter((id) => id !== currentUserId);
+      nextLikes = Math.max(0, (targetPost.likes ?? 1) - 1);
+    } else {
+      // 처음 누른 경우 1회 추가
+      nextLikedUserIds = [...existingLiked, currentUserId];
+      nextLikes = (targetPost.likes ?? 0) + 1;
+    }
 
     setState((prev) => ({
       ...prev,
       communityPosts: prev.communityPosts.map((p) =>
-        p.id === postId ? { ...p, likes: nextLikes } : p
+        p.id === postId
+          ? { ...p, likes: nextLikes, likedUserIds: nextLikedUserIds }
+          : p
       ),
     }));
 
     if (isFirestoreConnected) {
-      incrementLikeInFirestore(postId, nextLikes).catch((err) => {
+      toggleLikeInFirestore(postId, nextLikes, nextLikedUserIds).catch((err) => {
         setFirestoreError(
           `공감 반영 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
         );
