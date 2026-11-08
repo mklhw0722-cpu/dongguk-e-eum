@@ -35,6 +35,12 @@ export default function HomePage() {
   const {
     currentUser,
     currentRole,
+    authUserProfile,
+    users,
+    approvedMembers,
+    realUsersForAdmin,
+    consultations,
+    startOrOpenDirectChat,
     notices,
     conversations,
     communityRooms,
@@ -73,6 +79,74 @@ export default function HomePage() {
     currentRole !== "professor" &&
     currentUser.role !== "alumni" &&
     currentRole !== "alumni";
+
+  // 교수 모드 판별
+  const isProfessor =
+    currentUser.role === "professor" || currentRole === "professor";
+
+  // 교수 계정용: 나의 지도학생 목록 동적 추출
+  const myAdviseeStudents = React.useMemo(() => {
+    if (!isProfessor) return [];
+    const profIds = new Set(
+      [
+        currentUser?.id,
+        (currentUser as any)?.uid,
+        authUserProfile?.id,
+        authUserProfile?.uid,
+      ].filter(Boolean)
+    );
+
+    const map = new Map<string, any>();
+
+    // 1) 승인된 회원 목록 (Firestore publicProfiles & users)
+    if (Array.isArray(approvedMembers)) {
+      approvedMembers.forEach((m: any) => {
+        const mRole = m.role || "student";
+        const advId = m.advisorProfessorId;
+        if (mRole === "student" && advId && profIds.has(advId)) {
+          const key = m.id || m.uid;
+          if (key) map.set(key, m);
+        }
+      });
+    }
+
+    // 2) 관리자/실제 사용자 목록
+    if (Array.isArray(realUsersForAdmin)) {
+      realUsersForAdmin.forEach((u: any) => {
+        const uRole = u.role || "student";
+        const advId = u.advisorProfessorId;
+        if (uRole === "student" && advId && profIds.has(advId)) {
+          const key = u.id || u.uid;
+          if (key) map.set(key, u);
+        }
+      });
+    }
+
+    // 3) 목데이터 및 로컬 users 상태
+    if (Array.isArray(users)) {
+      users.forEach((u: any) => {
+        const uRole = u.role || "student";
+        const advId = u.advisorProfessorId;
+        if (uRole === "student" && advId && profIds.has(advId)) {
+          const key = u.id || u.uid;
+          if (key) map.set(key, u);
+        }
+      });
+    }
+
+    return Array.from(map.values()).sort((a, b) =>
+      (a.name || "").localeCompare(b.name || "", "ko-KR")
+    );
+  }, [isProfessor, currentUser, authUserProfile, approvedMembers, realUsersForAdmin, users]);
+
+  const handleStartChatWithStudent = async (studentId: string) => {
+    try {
+      await startOrOpenDirectChat(studentId, "지도학생 상담");
+      router.push("/chat");
+    } catch {
+      router.push("/chat");
+    }
+  };
 
   // 진로·복수전공 게시판 바로가기 위젯
   const renderJoinedRoomsSection = () => (
@@ -157,6 +231,84 @@ export default function HomePage() {
     </Panel>
   );
 
+  // 교수 전용: 나의 지도학생 위젯
+  const renderMyAdviseeStudentsSection = () => (
+    <Panel as="section">
+      <SectionHeader
+        title={`나의 지도학생 (${myAdviseeStudents.length}명)`}
+        icon={<GraduationCap className="w-5 h-5 text-accent" />}
+        action={
+          <Link href="/chat" className={textLinkClass}>
+            지도학생 상담 및 대화 <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        }
+      />
+
+      {myAdviseeStudents.length === 0 ? (
+        <div className="p-6 rounded-2xl border border-dashed border-line text-center space-y-1 bg-surface-2 mt-3">
+          <p className="text-sm font-bold text-ink">배정된 지도학생이 없습니다.</p>
+          <p className="text-xs text-ink-3">
+            학과사무실 또는 관리자 센터에서 지도학생이 배정되면 이곳에 실시간으로 표시됩니다.
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 mt-3">
+          {myAdviseeStudents.map((student) => {
+            const pendingConsults = (consultations || []).filter(
+              (c) =>
+                (c.studentId === student.id || c.studentEmail === student.email) &&
+                c.status === "pending"
+            );
+
+            return (
+              <div
+                key={student.id}
+                className="p-4 rounded-2xl border border-line bg-surface-2 hover:bg-surface-3 transition flex flex-col justify-between gap-3"
+              >
+                <div className="flex items-start gap-3">
+                  <Avatar name={student.name} role="student" size="md" />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center justify-between gap-1 flex-wrap">
+                      <span className="font-bold text-sm text-ink truncate">
+                        {student.name}
+                      </span>
+                      <Badge tone="brand">
+                        {student.studentIdOrYear ? student.studentIdOrYear : "재학생"}
+                      </Badge>
+                    </div>
+                    <p className="text-xs font-semibold text-ink-2 truncate">
+                      {student.careerTrack ? student.careerTrack : "진로 탐색 중"}
+                      {student.doubleMajor ? ` · 복수전공: ${student.doubleMajor}` : " · 단일전공"}
+                    </p>
+                    {pendingConsults.length > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-orange-700 bg-orange-100 px-2 py-0.5 rounded-full">
+                        상담 요청 대기 {pendingConsults.length}건
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2.5 border-t border-line text-xs">
+                  <span className="text-[11px] text-ink-3 truncate max-w-[130px]">
+                    {student.email || "동국대학교 교육학과"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleStartChatWithStudent(student.id)}
+                    className="px-3 py-1.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs inline-flex items-center gap-1 transition shadow-2xs cursor-pointer"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    1:1 대화
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Panel>
+  );
+
   return (
     <div className="space-y-6">
       {/* 환영 배너 (사람과 사람을 잇는 '이음' 일러스트 포함) */}
@@ -178,6 +330,9 @@ export default function HomePage() {
           </p>
         </div>
       </section>
+
+      {/* 교수 전용: 나의 지도학생 (환영 배너 바로 아래에 배치) */}
+      {isProfessor && renderMyAdviseeStudentsSection()}
 
       {/* 중단 2단 그리드: 직접 일정 수정 캘린더 & 지도교수/대화/졸업요건 */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -377,44 +532,46 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* 추천 졸업생 동문 프로필 */}
-      <Panel as="section">
-        <SectionHeader
-          title="추천 졸업생 동문 프로필"
-          icon={<Users className="w-5 h-5 text-accent" />}
-          action={
-            <Link href="/alumni" className={textLinkClass}>
-              졸업생 전체 탐색 <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          }
-        />
+      {/* 추천 졸업생 동문 프로필 (교수가 아닐 때만 하단에 표시) */}
+      {!isProfessor && (
+        <Panel as="section">
+          <SectionHeader
+            title="추천 졸업생 동문 프로필"
+            icon={<Users className="w-5 h-5 text-accent" />}
+            action={
+              <Link href="/alumni" className={textLinkClass}>
+                졸업생 전체 탐색 <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            }
+          />
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-          {recommendedAlumni.map((alumni) => (
-            <Link
-              key={alumni.id}
-              href="/alumni"
-              className="group p-4 rounded-2xl border border-line bg-surface-2 hover:bg-surface-3 transition flex items-start gap-3.5"
-            >
-              <Avatar name={alumni.displayName} role="alumni" size="md" />
-              <div className="min-w-0 flex-1 space-y-1">
-                <div className="flex items-center justify-between gap-1">
-                  <span className="font-bold text-sm text-ink group-hover:text-accent transition-colors">
-                    {alumni.displayName}
-                  </span>
-                  <Badge tone="brand">{alumni.careerTrack}</Badge>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+            {recommendedAlumni.map((alumni) => (
+              <Link
+                key={alumni.id}
+                href="/alumni"
+                className="group p-4 rounded-2xl border border-line bg-surface-2 hover:bg-surface-3 transition flex items-start gap-3.5"
+              >
+                <Avatar name={alumni.displayName} role="alumni" size="md" />
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="font-bold text-sm text-ink group-hover:text-accent transition-colors">
+                      {alumni.displayName}
+                    </span>
+                    <Badge tone="brand">{alumni.careerTrack}</Badge>
+                  </div>
+                  <p className="text-xs font-semibold text-ink-2 truncate">
+                    {alumni.currentRoleTitle}
+                  </p>
+                  <p className="text-xs text-ink-3 truncate">
+                    {alumni.doubleMajor} · {alumni.graduationYear}년 졸업
+                  </p>
                 </div>
-                <p className="text-xs font-semibold text-ink-2 truncate">
-                  {alumni.currentRoleTitle}
-                </p>
-                <p className="text-xs text-ink-3 truncate">
-                  {alumni.doubleMajor} · {alumni.graduationYear}년 졸업
-                </p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </Panel>
+              </Link>
+            ))}
+          </div>
+        </Panel>
+      )}
     </div>
   );
 }

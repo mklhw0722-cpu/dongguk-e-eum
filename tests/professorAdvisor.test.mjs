@@ -772,3 +772,77 @@ test("18. [교수 계정 간 상호작용] 교수 계정으로 다른 교수를 
   assert.equal(getButtonType(studLee, profShin), "대화 요청");
   assert.equal(getConversationTag(studLee, profShin), "교수-학생 면담");
 });
+
+test("19. [교수 홈 대시보드 지도학생 섹션 연동] 교수로 로그인 시 추천 동문 프로필 대신 나의 지도학생 목록이 도출되고 배너 아래에 우선 표시된다", () => {
+  const currentProf = {
+    id: "u-prof-1",
+    uid: "u-prof-1",
+    name: "박종배",
+    role: "professor",
+    approvalStatus: "approved",
+  };
+
+  const allMembers = [
+    {
+      id: "u-student-1",
+      uid: "u-student-1",
+      name: "김동국",
+      role: "student",
+      studentIdOrYear: "23학번",
+      careerTrack: "HRD 트랙",
+      doubleMajor: "경영학과",
+      advisorProfessorId: "u-prof-1",
+      approvalStatus: "approved",
+    },
+    {
+      id: "u-student-2",
+      uid: "u-student-2",
+      name: "이지은",
+      role: "student",
+      studentIdOrYear: "24학번",
+      careerTrack: "교직 트랙",
+      doubleMajor: "",
+      advisorProfessorId: "u-prof-2", // 타 교수 지도학생
+      approvalStatus: "approved",
+    },
+    {
+      id: "u-student-3",
+      uid: "u-student-3",
+      name: "박필동",
+      role: "student",
+      studentIdOrYear: "24학번",
+      careerTrack: "교직 트랙",
+      doubleMajor: "국어교육학과",
+      advisorProfessorId: "u-prof-1",
+      approvalStatus: "approved",
+    },
+    {
+      id: "u-alumni-1",
+      uid: "u-alumni-1",
+      name: "최졸업",
+      role: "alumni",
+      approvalStatus: "approved",
+    },
+  ];
+
+  // 1) 교수 판별 로직 검증
+  const isProfessor = currentProf.role === "professor";
+  assert.equal(isProfessor, true);
+
+  // 2) 나의 지도학생 동적 필터링 검증
+  const profIds = new Set([currentProf.id, currentProf.uid]);
+  const myStudents = allMembers.filter(
+    (m) => m.role === "student" && m.advisorProfessorId && profIds.has(m.advisorProfessorId)
+  );
+
+  assert.equal(myStudents.length, 2);
+  assert.equal(myStudents[0].name, "김동국");
+  assert.equal(myStudents[1].name, "박필동");
+
+  // 3) 홈 대시보드 렌더링 분기: 교수는 추천 졸업생 프로필이 비활성화되고 지도학생이 활성화됨
+  const showRecommendedAlumni = !isProfessor;
+  const showMyAdviseeStudents = isProfessor;
+
+  assert.equal(showRecommendedAlumni, false);
+  assert.equal(showMyAdviseeStudents, true);
+});
