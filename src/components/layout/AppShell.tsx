@@ -37,7 +37,7 @@ const NAV_ITEMS = [
   { href: "/", label: "홈 대시보드", shortLabel: "홈", icon: Home },
   { href: "/notices", label: "학교·학과 공지", shortLabel: "공지", icon: Megaphone },
   { href: "/chat", label: "대화창 (메신저)", shortLabel: "대화창", icon: MessageSquare },
-  { href: "/rooms", label: "진로·복전 공유방", shortLabel: "공유방", icon: Compass },
+  { href: "/rooms", label: "진로·복전 게시판", shortLabel: "게시판", icon: Compass },
   { href: "/alumni", label: "졸업생 동문 연결", shortLabel: "졸업생", icon: Users },
   { href: "/graduation", label: "졸업요건 관리", shortLabel: "졸업요건", icon: CheckSquare },
   { href: "/auth", label: "가입·인증 안내", shortLabel: "가입/인증", icon: UserCheck },
@@ -461,7 +461,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               { href: "/", shortLabel: "홈", icon: Home },
               { href: "/notices", shortLabel: "공지", icon: Megaphone },
               { href: "/chat", shortLabel: "대화창", icon: MessageSquare },
-              { href: "/rooms", shortLabel: "공유방", icon: Compass },
+              { href: "/rooms", shortLabel: "게시판", icon: Compass },
               ...(isGraduationAllowed
                 ? [{ href: "/graduation", shortLabel: "졸업요건", icon: CheckSquare }]
                 : []),

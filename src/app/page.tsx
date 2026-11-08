@@ -60,10 +60,8 @@ export default function HomePage() {
     return (member?.unreadCount || 0) > 0;
   });
 
-  // 내가 참여한 공유방
-  const myJoinedRooms = communityRooms.filter((r) =>
-    r.memberIds.includes(currentUser.id)
-  );
+  // 주요 진로·복수전공 게시판 목록
+  const featuredBoards = communityRooms;
 
   // 최근 복수전공 후기
   const doubleMajorReviews = communityPosts
@@ -85,47 +83,50 @@ export default function HomePage() {
     currentUser.role !== "alumni" &&
     currentRole !== "alumni";
 
-  // 내가 참여 중인 공유방 위젯
+  // 진로·복수전공 게시판 바로가기 위젯
   const renderJoinedRoomsSection = () => (
     <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 shadow-xs">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Compass className="w-5 h-5 text-orange-600" />
           <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
-            내가 참여 중인 공유방 ({myJoinedRooms.length})
+            진로·복수전공 게시판 ({featuredBoards.length})
           </h2>
         </div>
         <Link
           href="/rooms"
           className="text-xs font-semibold text-orange-600 hover:underline flex items-center gap-1"
         >
-          전체 공유방 탐색 <ArrowRight className="w-3.5 h-3.5" />
+          전체 게시판 보기 <ArrowRight className="w-3.5 h-3.5" />
         </Link>
       </div>
 
-      {myJoinedRooms.length === 0 ? (
+      {featuredBoards.length === 0 ? (
         <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-center text-xs text-slate-500">
-          현재 참여 중인 공유방이 없습니다.
+          등록된 게시판이 없습니다.
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {myJoinedRooms.slice(0, 4).map((room) => (
-            <Link
-              key={room.id}
-              href="/rooms"
-              className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-orange-400 transition bg-slate-50/50 dark:bg-slate-800/40"
-            >
-              <span className="inline-block px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-[10px] font-bold mb-1.5">
-                {room.type === "career" ? "진로 트랙" : "복수전공"} · {room.categoryName}
-              </span>
-              <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 mb-1">
-                {room.name}
-              </h3>
-              <p className="text-[11px] text-slate-500 line-clamp-1">
-                참여 인원 {room.memberIds.length}명
-              </p>
-            </Link>
-          ))}
+          {featuredBoards.slice(0, 4).map((room) => {
+            const count = communityPosts.filter((p) => p.roomId === room.id).length;
+            return (
+              <Link
+                key={room.id}
+                href="/rooms"
+                className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-orange-400 transition bg-slate-50/50 dark:bg-slate-800/40"
+              >
+                <span className="inline-block px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-[10px] font-bold mb-1.5">
+                  {room.type === "career" ? "진로 트랙" : "복수전공"} · {room.categoryName}
+                </span>
+                <h3 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-slate-100 mb-1">
+                  {room.name.replace(/공유방/g, "게시판")}
+                </h3>
+                <p className="text-[11px] text-slate-500 line-clamp-1">
+                  게시글 {count}건
+                </p>
+              </Link>
+            );
+          })}
         </div>
       )}
     </section>
@@ -188,7 +189,7 @@ export default function HomePage() {
             </h1>
             <p className="text-xs sm:text-sm text-orange-50 max-w-2xl leading-relaxed">
               교육(e)으로 사람과 사람을 잇는 <strong>동국e음</strong>입니다. 학과 공지부터
-              졸업요건 자가점검, 복수전공·진로 트랙 공유방, 동문 멘토링까지 한곳에서 연결하세요.
+              졸업요건 자가점검, 진로·복수전공 게시판, 동문 멘토링까지 한곳에서 연결하세요.
             </p>
           </div>
 

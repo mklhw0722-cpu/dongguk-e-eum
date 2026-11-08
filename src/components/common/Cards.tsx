@@ -373,19 +373,20 @@ export function AlumniCard({
 
 export function CommunityRoomCard({
   room,
-  isJoined,
   postCount,
-  onToggleJoin,
+  latestPostDate,
   onSelectRoom,
 }: {
   room: CommunityRoom;
-  isJoined: boolean;
   postCount: number;
-  onToggleJoin: (roomId: string) => void;
+  latestPostDate?: string | null;
   onSelectRoom: (roomId: string) => void;
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-between shadow-xs hover:border-orange-300 transition">
+    <div
+      onClick={() => onSelectRoom(room.id)}
+      className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-between shadow-xs hover:border-orange-300 transition cursor-pointer"
+    >
       <div>
         <div className="flex items-center justify-between gap-2 mb-2.5">
           <span
@@ -395,11 +396,12 @@ export function CommunityRoomCard({
                 : "bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300"
             }`}
           >
-            {room.type === "career" ? "진로 트랙 공유방" : "복수전공 공유방"} ·{" "}
+            {room.type === "career" ? "진로 트랙 게시판" : "복수전공 게시판"} ·{" "}
             {room.categoryName}
           </span>
           <span className="text-xs text-slate-400 flex items-center gap-1">
-            <Users className="w-3.5 h-3.5" /> {room.memberIds.length}명 참여
+            <Calendar className="w-3.5 h-3.5" />{" "}
+            {latestPostDate ? `최근 글 ${latestPostDate}` : "등록된 글 없음"}
           </span>
         </div>
 
@@ -413,26 +415,18 @@ export function CommunityRoomCard({
 
       <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
         <span className="text-xs text-slate-500">
-          축적된 게시글 <strong className="text-slate-800 dark:text-slate-200">{postCount}건</strong>
+          게시글 <strong className="text-slate-800 dark:text-slate-200">{postCount}건</strong>
         </span>
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => onToggleJoin(room.id)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition ${
-              isJoined
-                ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-rose-50 hover:text-rose-600"
-                : "bg-orange-50 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800"
-            }`}
-          >
-            {isJoined ? "참여중 (나가기)" : "+ 참여하기"}
-          </button>
-          <button
-            type="button"
-            onClick={() => onSelectRoom(room.id)}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectRoom(room.id);
+            }}
             className="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold transition"
           >
-            입장하기
+            게시판 보기
           </button>
         </div>
       </div>

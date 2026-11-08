@@ -82,17 +82,25 @@ export const PlatformRepository = {
       const parsed = JSON.parse(saved) as Partial<PlatformDataState>;
       const initial = getInitialDataState();
       const removedRoomIds = new Set(["room-dm-econ", "room-dm-psych", "room-dm-cs"]);
-      const loadedRooms = (parsed.communityRooms || initial.communityRooms).filter(
-        (r) => !removedRoomIds.has(r.id)
-      );
+      const loadedRooms = (parsed.communityRooms || initial.communityRooms)
+        .filter((r) => !removedRoomIds.has(r.id))
+        .map((r): CommunityRoom => ({
+          ...r,
+          name: (r.name || "").replace(/공유방/g, "게시판"),
+          description: (r.description || "").replace(/공유방/g, "게시판"),
+          memberIds: [],
+        }));
       for (const initRoom of initial.communityRooms) {
         if (!loadedRooms.some((r) => r.id === initRoom.id)) {
           loadedRooms.push(initRoom);
         }
       }
-      const loadedPosts = (parsed.communityPosts || initial.communityPosts).filter(
-        (p) => !removedRoomIds.has(p.roomId)
-      );
+      const loadedPosts = (parsed.communityPosts || initial.communityPosts)
+        .filter((p) => !removedRoomIds.has(p.roomId))
+        .map((p) => ({
+          ...p,
+          roomName: (p.roomName || "").replace(/공유방/g, "게시판"),
+        }));
       for (const initPost of initial.communityPosts) {
         if (!loadedPosts.some((p) => p.id === initPost.id)) {
           loadedPosts.push(initPost);
