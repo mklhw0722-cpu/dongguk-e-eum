@@ -445,7 +445,7 @@ export default function GraduationPage() {
               href="/rooms"
               className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 :bg-slate-700 text-ink-2 font-bold text-sm transition inline-flex items-center justify-center gap-2"
             >
-              진로·복전 공유방 둘러보기
+              진로·복전 게시판 둘러보기
             </Link>
           </div>
         </div>

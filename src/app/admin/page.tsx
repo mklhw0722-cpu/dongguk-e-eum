@@ -297,7 +297,7 @@ export default function AdminPage() {
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-ink-3 mt-1">
-            Firebase Firestore 실제 가입 신청자 승인·거절, 사용자 권한 관리, 공유방 및 신고 내역을 관리합니다.
+            Firebase Firestore 실제 가입 신청자 승인·거절, 사용자 권한 관리, 게시판 및 신고 내역을 관리합니다.
           </p>
         </div>
       </div>
@@ -1040,7 +1040,7 @@ export default function AdminPage() {
         </div>
       )}
 
-      {/* 탭 3: 공유방 및 게시글 관리 */}
+      {/* 탭 3: 게시판 및 게시글 관리 */}
       {activeTab === "rooms_posts" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-surface rounded-3xl border border-line p-5 sm:p-6 space-y-4 shadow-xs">
