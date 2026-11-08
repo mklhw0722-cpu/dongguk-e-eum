@@ -167,3 +167,34 @@ test("4. alumni/page.tsx 및 Cards.tsx UI에서 불필요한 문구 및 버튼 �
     "답변 등록 버튼이 포함되어 있어야 함"
   );
 });
+
+test("5. 관리자는 멘토링 요청 현황을 열람할 수 있지만 답변 등록 및 수정 권한은 차단된다", () => {
+  const pageCode = fs.readFileSync(
+    path.join(rootDir, "src/app/alumni/page.tsx"),
+    "utf8"
+  );
+
+  // 1) 관리자 모니터링 뱃지 존재 확인
+  assert.ok(
+    pageCode.includes("관리자 모니터링 (열람 전용)"),
+    "관리자에게는 열람 전용 모니터링 뱃지가 노출되어야 함"
+  );
+
+  // 2) canManage 권한이 isMentor(해당 멘토 동문 본인)로만 제한되는지 확인
+  assert.ok(
+    pageCode.includes("const canManage = isMentor;"),
+    "멘토링 관리 권한은 관리자가 아닌 오직 멘토 본인(isMentor)에게만 부여되어야 함"
+  );
+
+  // 3) showReplyForm 및 isEditing 권한이 isMentor로만 제한되는지 확인
+  assert.ok(
+    pageCode.includes('const showReplyForm = isMentor && (req.status === "수락됨" || isEditing);'),
+    "답변 등록 폼은 오직 멘토 본인에게만 표시되어야 함"
+  );
+
+  // 4) 답변 등록 클릭 시 멘토 여부 검증 방어 로직 확인
+  assert.ok(
+    pageCode.includes("멘토링 답변 등록 및 수정은 해당 멘토 동문 본인만 가능합니다."),
+    "관리자가 답변 등록을 시도하더라도 멘토가 아니면 차단되어야 함"
+  );
+});

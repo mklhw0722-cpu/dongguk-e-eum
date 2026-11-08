@@ -376,7 +376,9 @@ export default function AlumniPage() {
             <EmptyStateBox
               title="참여 중인 멘토링 요청 내역이 없습니다"
               description={
-                isAlumni
+                isAdmin
+                  ? "현재 학우들이 신청한 멘토링 요청 내역이 없습니다."
+                  : isAlumni
                   ? "후배들이 신청한 멘토링 요청이 도착하면 이곳에서 확인하고 답변을 작성할 수 있습니다."
                   : "관심 있는 진로 분야의 선배님 프로필에서 [멘토링 신청]을 해보세요!"
               }
@@ -393,9 +395,10 @@ export default function AlumniPage() {
                   (myAlumniProfile && req.toAlumniProfileId === myAlumniProfile.id) ||
                   req.toAlumniProfileId === currentUserId ||
                   (Boolean(currentUserName) && req.toAlumniName.includes(currentUserName));
-                const canManage = isMentor || isAdmin;
-                const isEditing = editingReplyId === req.id;
-                const showReplyForm = canManage && (req.status === "수락됨" || isEditing);
+                // 관리자는 현황을 모니터링/열람할 수 있되, 답변 등록 및 수정, 수락은 해당 멘토 동문만 가능
+                const canManage = isMentor;
+                const isEditing = editingReplyId === req.id && isMentor;
+                const showReplyForm = isMentor && (req.status === "수락됨" || isEditing);
 
                 return (
                   <div
@@ -428,6 +431,11 @@ export default function AlumniPage() {
                             나에게 온 요청
                           </span>
                         )}
+                        {isAdmin && !isMentor && !isMentee && (
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                            관리자 모니터링 (열람 전용)
+                          </span>
+                        )}
                       </div>
                       <span className="text-xs text-slate-400">{req.createdAt}</span>
                     </div>
@@ -455,17 +463,23 @@ export default function AlumniPage() {
                           </button>
                         ) : (
                           <span className="text-xs text-amber-700 dark:text-amber-400 font-medium">
-                            멘토 선배님의 수락을 기다리고 있습니다.
+                            {isAdmin
+                              ? "멘토 동문 선배님의 수락 대기 중입니다. (관리자는 열람만 가능합니다)"
+                              : "멘토 선배님의 수락을 기다리고 있습니다."}
                           </span>
                         )}
                       </div>
                     )}
 
-                    {/* 수락됨 상태 안내 (멘티에게 표시) */}
+                    {/* 수락됨 상태 안내 (멘티 또는 관리자에게 표시) */}
                     {req.status === "수락됨" && !canManage && (
                       <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 rounded-xl p-3 text-xs text-emerald-800 dark:text-emerald-200 flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                        <span>선배님이 멘토링 요청을 수락했습니다! 답변이 작성되는 대로 이곳에 표시됩니다.</span>
+                        <span>
+                          {isAdmin
+                            ? "멘토 동문이 요청을 수락했습니다. 멘토의 답변 등록을 기다리고 있습니다. (관리자 열람 전용)"
+                            : "선배님이 멘토링 요청을 수락했습니다! 답변이 작성되는 대로 이곳에 표시됩니다."}
+                        </span>
                       </div>
                     )}
 
@@ -504,6 +518,10 @@ export default function AlumniPage() {
                           <button
                             type="button"
                             onClick={() => {
+                              if (!isMentor) {
+                                alert("멘토링 답변 등록 및 수정은 해당 멘토 동문 본인만 가능합니다.");
+                                return;
+                              }
                               const draft = (
                                 replyDrafts[req.id] !== undefined
                                   ? replyDrafts[req.id]
