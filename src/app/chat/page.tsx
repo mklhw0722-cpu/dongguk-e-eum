@@ -766,31 +766,8 @@ export default function ChatPage() {
         </div>
       </div>
 
-      {/* 상태 배너: 실제 Firestore 동기화 연결 상태 안내 */}
-      {isRealAuthActive && authUserProfile?.approvalStatus === "approved" ? (
-        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm">
-          <div className="flex items-center gap-2">
-            <span className="flex h-2.5 w-2.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
-            <span className="font-bold">
-              Firestore 실시간 채팅 연동 활성화
-            </span>
-            <span className="text-emerald-600 text-xs hidden sm:inline">
-              · 승인된 회원 목록과 주고받는 메시지가 실시간으로 자동 동기화됩니다.
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => refreshApprovedMembers()}
-            title="회원 목록 새로고침"
-            className="p-1 rounded-lg hover:bg-emerald-100 :bg-emerald-900/50 text-emerald-700 transition"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      ) : (
+      {/* 상태 배너: 데모 모드일 때만 안내하고, 실제 로그인 시에는 깔끔한 화면을 위해 안내창 숨김 */}
+      {!isRealAuthActive && (
         <DemoInfoBanner
           title="로컬 데모 메신저 모드"
           description="현재 데모 계정으로 체험 중입니다. 우측 상단 로그인 메뉴에서 실제 Firebase 계정으로 로그인하시면 실제 학과 구성원과 실시간 대화를 나누실 수 있습니다."
