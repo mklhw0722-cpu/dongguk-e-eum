@@ -466,46 +466,22 @@ export default function RoomsPage() {
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            선배들의 복수전공 이수 후기와 진로 준비 경험을 열람하고, 모든 승인된 학우가 자유롭게 글을 읽고 작성할 수 있는 게시판입니다.
+            선배들의 복수전공 후기와 진로 준비 경험을 열람하고, 모든 학우들이 자유롭게 글을 읽고 작성할 수 있는 게시판입니다.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <div
-            className={`px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 ${
-              isFirestoreConnected
-                ? "bg-emerald-600/15 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700"
-                : "bg-slate-100 text-slate-600"
-            }`}
-          >
-            <Database className="w-4 h-4 text-emerald-600" />
-            <span>실시간 게시판 동기화 활성</span>
-          </div>
-
-          {isAdmin && (
+        {isAdmin && (
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={() => setIsCreateRoomOpen(true)}
-              className="h-9 px-3.5 rounded-lg bg-ink text-white hover:bg-ink/85 text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition"
+              className="h-9 px-3.5 rounded-lg bg-ink text-white hover:bg-ink/85 text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition cursor-pointer"
             >
               <Plus className="w-4 h-4" /> 게시판 추가 (관리자)
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
-
-      <DemoInfoBanner
-        title={
-          isFirestoreConnected
-            ? `🟢 진로·복수전공 게시판 실시간 연동 (${firebaseProjectId}) 활성화됨`
-            : "⚪ 학우들이 작성한 게시글을 다른 기기에서도 함께 보려면 Firestore 설정을 확인해 주세요."
-        }
-        description={
-          isFirestoreConnected
-            ? "별도의 참여 절차 없이 원하는 게시판에 들어가 새 글을 작성하거나 댓글·공감을 남기면 모든 학우에게 실시간으로 반영됩니다."
-            : "Firebase 프로젝트 설정이 연결되면 모든 학우의 기기에서 게시글과 댓글이 실시간으로 동기화됩니다."
-        }
-      />
 
       <SearchAndFilterBar
         searchQuery={searchQuery}
