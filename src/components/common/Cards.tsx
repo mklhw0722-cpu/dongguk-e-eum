@@ -70,10 +70,10 @@ export function DemoInfoBanner({
 }) {
   const styles = {
     orange:
-      "bg-orange-50/90 border-orange-200 text-orange-950 dark:bg-orange-950/30 dark:border-orange-800/60 dark:text-orange-200",
-    blue: "bg-slate-100 border-slate-200 text-slate-800 dark:bg-slate-800/60 dark:border-slate-700 dark:text-slate-200",
+      "bg-orange-50/90 border-orange-200 text-orange-950",
+    blue: "bg-slate-100 border-slate-200 text-slate-800",
     amber:
-      "bg-amber-50 border-amber-200 text-amber-950 dark:bg-amber-950/30 dark:border-amber-800/60 dark:text-amber-200",
+      "bg-amber-50 border-amber-200 text-amber-950",
   }[variant];
 
   return (
@@ -160,7 +160,7 @@ export function SearchAndFilterBar({
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
                 active
                   ? "bg-orange-600 text-white shadow-xs"
-                  : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
               {cat}
@@ -180,11 +180,11 @@ export function NoticeCard({
   onSelect?: (notice: Notice) => void;
 }) {
   const categoryStyles: Record<string, string> = {
-    "교육학과 공지": "bg-orange-50 text-orange-800 dark:bg-orange-950/60 dark:text-orange-200 border border-orange-200 dark:border-orange-800",
-    "학교 공지": "bg-blue-50 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200 border border-blue-200 dark:border-blue-800",
-    "학사 일정": "bg-sky-50 text-sky-800 dark:bg-sky-950/60 dark:text-sky-200 border border-sky-200 dark:border-sky-800",
-    "장학 및 지원": "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800",
-    "교직 관련 안내": "bg-purple-50 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200 border border-purple-200 dark:border-purple-800",
+    "교육학과 공지": "bg-orange-50 text-orange-800 border border-orange-200",
+    "학교 공지": "bg-blue-50 text-blue-800 border border-blue-200",
+    "학사 일정": "bg-sky-50 text-sky-800 border border-sky-200",
+    "장학 및 지원": "bg-emerald-50 text-emerald-800 border border-emerald-200",
+    "교직 관련 안내": "bg-purple-50 text-purple-800 border border-purple-200",
   };
 
   const displayCategory = notice.category === "학사 일정" ? "학사공지" : notice.category;
@@ -195,8 +195,8 @@ export function NoticeCard({
       onClick={() => onSelect && onSelect(notice)}
       className={`group relative rounded-2xl border p-4 sm:p-4.5 transition-all duration-150 cursor-pointer shadow-xs hover:shadow-md ${
         notice.isPinned
-          ? "bg-amber-50/40 dark:bg-amber-950/15 border-amber-300 dark:border-amber-800/80 hover:border-amber-400"
-          : "bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-orange-300 dark:hover:border-orange-700 hover:-translate-y-0.5"
+          ? "bg-amber-50/40 border-amber-300 hover:border-amber-400"
+          : "bg-white border-slate-200/90 hover:border-orange-300 hover:-translate-y-0.5"
       }`}
     >
       {/* 상단 태그 및 작성일 */}
@@ -209,7 +209,7 @@ export function NoticeCard({
           )}
           <span
             className={`px-2.5 py-0.5 rounded-md text-xs font-bold ${
-              categoryStyles[notice.category] || "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200"
+              categoryStyles[notice.category] || "bg-slate-100 text-slate-800"
             }`}
           >
             {displayCategory}
@@ -225,20 +225,20 @@ export function NoticeCard({
             </span>
           )}
           {notice.subCategoryTag && (
-            <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[11px]">
+            <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[11px]">
               #{notice.subCategoryTag}
             </span>
           )}
         </div>
 
-        <div className="flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500 font-medium ml-auto">
+        <div className="flex items-center gap-1 text-xs text-slate-400 font-medium ml-auto">
           <Calendar className="w-3.5 h-3.5 text-slate-400" />
           <span>{notice.createdAt}</span>
         </div>
       </div>
 
       {/* 공지 제목 */}
-      <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-snug group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
+      <h3 className="text-sm sm:text-base font-bold text-slate-900 leading-snug group-hover:text-orange-600 transition-colors">
         {notice.title}
       </h3>
 
@@ -255,13 +255,13 @@ export function NoticeCard({
 
       {/* 요약 내용: 기계적 매크로가 아닌 실제 수동 작성 요약문만 깔끔하게 노출 */}
       {!isBoilerplateSummary && notice.summary && (
-        <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed mt-1.5">
+        <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed mt-1.5">
           {notice.summary}
         </p>
       )}
 
       {/* 하단 푸터 바 */}
-      <div className="flex items-center justify-between gap-2 pt-2.5 mt-2.5 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400">
+      <div className="flex items-center justify-between gap-2 pt-2.5 mt-2.5 border-t border-slate-100 text-xs text-slate-400">
         <div className="flex items-center gap-2">
           {notice.hasAttachment && (
             <span className="inline-flex items-center gap-1 font-medium text-slate-500 text-xs">
@@ -298,44 +298,44 @@ export function AlumniCard({
   onRequestMentoring: (alumni: AlumniProfile) => void;
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-between shadow-xs hover:border-orange-300 transition">
+    <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between shadow-xs hover:border-orange-300 transition">
       <div>
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl bg-orange-100 dark:bg-orange-950/80 text-orange-700 dark:text-orange-300 font-bold flex items-center justify-center text-sm shrink-0">
+            <div className="w-11 h-11 rounded-xl bg-orange-100 text-orange-700 font-bold flex items-center justify-center text-sm shrink-0">
               {alumni.displayName.slice(0, 2)}
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-bold text-slate-900 dark:text-slate-100 text-base">
+                <h3 className="font-bold text-slate-900 text-base">
                   {alumni.displayName}
                 </h3>
-                <span className="px-2 py-0.5 rounded-md bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 text-xs font-semibold border border-orange-200 dark:border-orange-800/50">
+                <span className="px-2 py-0.5 rounded-md bg-orange-50 text-orange-700 text-xs font-semibold border border-orange-200">
                   {alumni.careerTrack}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-500 mt-0.5">
                 {alumni.graduationYear}년 졸업 · 복수전공: {alumni.doubleMajor}
               </p>
             </div>
           </div>
           {alumni.mentoringAvailable ? (
-            <span className="px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold shrink-0">
+            <span className="px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 text-[11px] font-semibold shrink-0">
               멘토링 가능
             </span>
           ) : (
-            <span className="px-2.5 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 text-[11px] font-medium shrink-0">
+            <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-[11px] font-medium shrink-0">
               일정 조율중
             </span>
           )}
         </div>
 
         <div className="space-y-1.5 mb-3 text-xs sm:text-sm">
-          <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200 font-medium">
+          <div className="flex items-center gap-2 text-slate-700 font-medium">
             <Briefcase className="w-4 h-4 text-orange-600 shrink-0" />
             <span>{alumni.currentRoleTitle}</span>
           </div>
-          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs">
+          <div className="flex items-center gap-2 text-slate-500 text-xs">
             <Award className="w-4 h-4 text-slate-400 shrink-0" />
             {alumni.privacy.showOrganization ? (
               <span>소속: {alumni.organization}</span>
@@ -347,7 +347,7 @@ export function AlumniCard({
           </div>
         </div>
 
-        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 line-clamp-2 mb-3">
+        <p className="text-xs sm:text-sm text-slate-600 line-clamp-2 mb-3">
           {alumni.bio}
         </p>
 
@@ -355,7 +355,7 @@ export function AlumniCard({
           {alumni.interests.map((tag) => (
             <span
               key={tag}
-              className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px]"
+              className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px]"
             >
               #{tag}
             </span>
@@ -363,7 +363,7 @@ export function AlumniCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+      <div className="grid grid-cols-2 gap-2 pt-3 border-t border-slate-100">
         <button
           type="button"
           onClick={() => onSelectProfile(alumni)}
@@ -397,15 +397,15 @@ export function CommunityRoomCard({
   return (
     <div
       onClick={() => onSelectRoom(room.id)}
-      className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-between shadow-xs hover:border-orange-300 transition cursor-pointer"
+      className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between shadow-xs hover:border-orange-300 transition cursor-pointer"
     >
       <div>
         <div className="flex items-center justify-between gap-2 mb-2.5">
           <span
             className={`px-2.5 py-0.5 rounded-md text-xs font-semibold ${
               room.type === "career"
-                ? "bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-300"
-                : "bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300"
+                ? "bg-orange-100 text-orange-800"
+                : "bg-indigo-100 text-indigo-800"
             }`}
           >
             {room.type === "career" ? "진로 트랙 게시판" : "복수전공 게시판"} ·{" "}
@@ -417,17 +417,17 @@ export function CommunityRoomCard({
           </span>
         </div>
 
-        <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mb-1.5">
+        <h3 className="text-base font-bold text-slate-900 mb-1.5">
           {room.name}
         </h3>
-        <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mb-4 leading-relaxed">
+        <p className="text-xs sm:text-sm text-slate-600 mb-4 leading-relaxed">
           {room.description}
         </p>
       </div>
 
-      <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100">
         <span className="text-xs text-slate-500">
-          게시글 <strong className="text-slate-800 dark:text-slate-200">{postCount}건</strong>
+          게시글 <strong className="text-slate-800">{postCount}건</strong>
         </span>
         <div className="flex items-center gap-2">
           <button
@@ -471,27 +471,27 @@ export function RequirementProgressCard({
     : null;
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 flex flex-col justify-between shadow-xs">
+    <div className="bg-white rounded-2xl border border-slate-200 p-5 flex flex-col justify-between shadow-xs">
       <div>
         <div className="flex items-start justify-between gap-2 mb-2">
-          <span className="px-2.5 py-0.5 rounded-md bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 text-xs font-semibold">
+          <span className="px-2.5 py-0.5 rounded-md bg-orange-50 text-orange-700 text-xs font-semibold">
             {requirement.category}
           </span>
-          <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[11px] font-medium">
+          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-medium">
             자가점검 기록
           </span>
         </div>
 
-        <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-slate-100 mb-1">
+        <h3 className="text-sm sm:text-base font-bold text-slate-900 mb-1">
           {requirement.title}
         </h3>
-        <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+        <p className="text-xs text-slate-500 mb-3">
           {requirement.applicableCondition}
         </p>
 
         {requirement.unit === "여부" ? (
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-700 mb-3 flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-300">
+          <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 mb-3 flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-600">
               자가점검 상태
             </span>
             {isCompletedBoolean ? (
@@ -505,26 +505,26 @@ export function RequirementProgressCard({
             )}
           </div>
         ) : (
-          <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/70 border border-slate-200/70 dark:border-slate-700 mb-3 space-y-2">
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/70 mb-3 space-y-2">
             <div className="flex items-baseline justify-between">
-              <span className="text-xs text-slate-500 dark:text-slate-400">
+              <span className="text-xs text-slate-500">
                 내가 입력한 이수량
               </span>
-              <span className="text-base font-extrabold text-slate-900 dark:text-slate-100">
+              <span className="text-base font-extrabold text-slate-900">
                 {completedValue} {requirement.unit}
               </span>
             </div>
 
             <div className="flex items-baseline justify-between">
-              <span className="text-xs text-slate-500 dark:text-slate-400">
+              <span className="text-xs text-slate-500">
                 기준 목표치
               </span>
               {hasValidTarget ? (
-                <span className="text-xs font-semibold text-orange-700 dark:text-orange-300">
+                <span className="text-xs font-semibold text-orange-700">
                   {effectiveTarget} {requirement.unit} (사용자 직접 설정)
                 </span>
               ) : (
-                <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">
+                <span className="text-xs font-semibold text-amber-700">
                   기준 미설정 (요람 확인 후 직접 입력)
                 </span>
               )}
@@ -536,7 +536,7 @@ export function RequirementProgressCard({
                   <span>자가점검 달성률</span>
                   <span>{calculatedPercent}%</span>
                 </div>
-                <div className="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
                   <div
                     className="h-full bg-orange-600 rounded-full transition-all"
                     style={{ width: `${calculatedPercent}%` }}
@@ -544,7 +544,7 @@ export function RequirementProgressCard({
                 </div>
               </div>
             ) : (
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-200/60 dark:border-slate-700">
+              <p className="text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
                 ※ 공식 기준값이 설정되지 않아 임의 진행률(%)을 표시하지 않습니다.
               </p>
             )}
@@ -552,7 +552,7 @@ export function RequirementProgressCard({
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
         <a
           href={requirement.officialGuideUrl}
           target="_blank"
@@ -564,7 +564,7 @@ export function RequirementProgressCard({
         <button
           type="button"
           onClick={onEdit}
-          className="px-3 py-1.5 rounded-lg bg-orange-50 dark:bg-orange-950/60 hover:bg-orange-100 text-orange-700 dark:text-orange-300 text-xs font-semibold transition"
+          className="px-3 py-1.5 rounded-lg bg-orange-50 hover:bg-orange-100 text-orange-700 text-xs font-semibold transition"
         >
           수치·목표 수정
         </button>

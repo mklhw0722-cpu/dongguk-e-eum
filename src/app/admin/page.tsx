@@ -302,10 +302,7 @@ export default function AdminPage() {
         </div>
       </div>
 
-            <DemoInfoBanner
-        title="관리자 권한 및 승인 통제 원칙"
-        description="관리자 승인(approved)을 받은 계정만 내부 커뮤니티 데이터에 접근할 수 있으며, 일반 사용자는 자신의 권한이나 승인 상태를 스스로 변경할 수 없습니다."
-      />
+
 
       {/* 접속 중인 관리자 프로필 및 이름 변경 섹션 */}
       <div className="bg-surface rounded-3xl border border-line p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs">
@@ -371,7 +368,7 @@ export default function AdminPage() {
                   setAdminNameInput(authUserProfile.name || "이혜원");
                   setIsEditingAdminName(true);
                 }}
-                className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 :bg-slate-700 text-ink-2 text-xs font-bold transition"
+                className="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-ink-2 text-xs font-bold transition"
               >
                 직접 수정
               </button>
@@ -388,7 +385,7 @@ export default function AdminPage() {
           className={`p-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition ${
             activeTab === "approvals"
               ? "bg-brand-600 text-white"
-              : "text-ink-2  hover:bg-slate-100 :bg-slate-800"
+              : "text-ink-2  hover:bg-slate-100"
           }`}
         >
           <UserCheck className="w-4 h-4" /> 가입 승인 관리 (
@@ -400,7 +397,7 @@ export default function AdminPage() {
           className={`p-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition ${
             activeTab === "users"
               ? "bg-brand-600 text-white"
-              : "text-ink-2  hover:bg-slate-100 :bg-slate-800"
+              : "text-ink-2  hover:bg-slate-100"
           }`}
         >
           <Users className="w-4 h-4" /> 전체 회원 관리 (
@@ -412,7 +409,7 @@ export default function AdminPage() {
           className={`p-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition ${
             activeTab === "graduation_rules"
               ? "bg-brand-600 text-white"
-              : "text-ink-2  hover:bg-slate-100 :bg-slate-800"
+              : "text-ink-2  hover:bg-slate-100"
           }`}
         >
           <GraduationCap className="w-4 h-4" /> 공통 졸업요건 관리
@@ -423,7 +420,7 @@ export default function AdminPage() {
           className={`p-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition ${
             activeTab === "rooms_posts"
               ? "bg-brand-600 text-white"
-              : "text-ink-2  hover:bg-slate-100 :bg-slate-800"
+              : "text-ink-2  hover:bg-slate-100"
           }`}
         >
           <Compass className="w-4 h-4" /> 게시판·게시글 관리
@@ -434,7 +431,7 @@ export default function AdminPage() {
           className={`p-2.5 rounded-xl text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition ${
             activeTab === "reports"
               ? "bg-brand-600 text-white"
-              : "text-ink-2  hover:bg-slate-100 :bg-slate-800"
+              : "text-ink-2  hover:bg-slate-100"
           }`}
         >
           <Flag className="w-4 h-4" /> 신고 내역 관리 ({reports.length})
@@ -572,7 +569,7 @@ export default function AdminPage() {
                             disabled={deletingUserId === userDoc.id}
                             onClick={() => handleDeleteUser(userDoc)}
                             title="가입 신청 회원 완전 삭제"
-                            className="px-2.5 py-2 rounded-xl border border-rose-200 bg-rose-50/70 text-rose-600 hover:bg-rose-100 :bg-rose-900/50 text-xs font-bold inline-flex items-center gap-1 transition disabled:opacity-50"
+                            className="px-2.5 py-2 rounded-xl border border-rose-200 bg-rose-50/70 text-rose-600 hover:bg-rose-100 text-xs font-bold inline-flex items-center gap-1 transition disabled:opacity-50"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>{deletingUserId === userDoc.id ? "삭제 중" : "삭제"}</span>
@@ -733,7 +730,7 @@ export default function AdminPage() {
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
                     userRoleFilter === tab.key
                       ? "bg-brand-600 text-white shadow-xs"
-                      : "bg-surface  border border-line  text-ink-2  hover:bg-surface-2 :bg-slate-800"
+                      : "bg-surface  border border-line  text-ink-2  hover:bg-surface-2"
                   }`}
                 >
                   <span>{tab.label}</span>
@@ -792,7 +789,7 @@ export default function AdminPage() {
                   return (
                     <div
                       key={u.id}
-                      className="p-4 flex flex-col gap-3 hover:bg-surface-2 :bg-slate-800/40 transition"
+                      className="p-4 flex flex-col gap-3 hover:bg-surface-2 transition"
                     >
                       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                         <div className="space-y-1">
@@ -844,7 +841,7 @@ export default function AdminPage() {
                                 className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition disabled:opacity-50 ${
                                   u.role === roleOption
                                     ? "bg-brand-600 text-white shadow-xs"
-                                    : "bg-slate-100  text-ink-2  hover:bg-slate-200 :bg-slate-700"
+                                    : "bg-slate-100  text-ink-2  hover:bg-slate-200"
                                 }`}
                               >
                                 {ROLE_LABELS[roleOption]}
@@ -858,7 +855,7 @@ export default function AdminPage() {
                             disabled={deletingUserId === u.id || isUpdating}
                             onClick={() => handleDeleteUser(u)}
                             title="회원 영구 삭제"
-                            className="ml-1 px-2.5 py-1.5 rounded-xl border border-rose-200 bg-rose-50/70 text-rose-600 hover:bg-rose-100 :bg-rose-900/50 text-xs font-bold transition flex items-center gap-1 disabled:opacity-50"
+                            className="ml-1 px-2.5 py-1.5 rounded-xl border border-rose-200 bg-rose-50/70 text-rose-600 hover:bg-rose-100 text-xs font-bold transition flex items-center gap-1 disabled:opacity-50"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>{deletingUserId === u.id ? "삭제 중..." : "회원 삭제"}</span>
@@ -1020,7 +1017,7 @@ export default function AdminPage() {
                                       disabled={updatingAdvisorStudentId === st.id}
                                       onClick={() => handleAssignAdvisor(st.id, null)}
                                       title="지도학생 배정 해제"
-                                      className="ml-1 p-0.5 rounded hover:bg-rose-50 :bg-rose-950/50 text-ink-3 hover:text-rose-600 transition"
+                                      className="ml-1 p-0.5 rounded hover:bg-rose-50 text-ink-3 hover:text-rose-600 transition"
                                     >
                                       ✕
                                     </button>
@@ -1152,7 +1149,7 @@ export default function AdminPage() {
                         <button
                           type="button"
                           onClick={() => startEditRoom(room)}
-                          className="px-2.5 py-1 rounded-lg border border-line font-semibold shrink-0 hover:bg-surface-2 :bg-slate-800"
+                          className="px-2.5 py-1 rounded-lg border border-line font-semibold shrink-0 hover:bg-surface-2"
                         >
                           수정
                         </button>
@@ -1325,7 +1322,7 @@ export default function AdminPage() {
                   type="button"
                   disabled={catalogSaving}
                   onClick={handleResetToOfficialPage619}
-                  className="px-3.5 py-2 rounded-xl border border-line hover:bg-surface-2 :bg-slate-800 text-xs font-bold inline-flex items-center gap-1.5 self-start"
+                  className="px-3.5 py-2 rounded-xl border border-line hover:bg-surface-2 text-xs font-bold inline-flex items-center gap-1.5 self-start"
                 >
                   <RotateCcw className="w-3.5 h-3.5" /> 공식 기준(page/619) 초기값 복원
                 </button>

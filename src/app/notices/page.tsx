@@ -330,11 +330,11 @@ export default function NoticesPage() {
         <div className="space-y-5">
           {/* 주요 필독 공지 영역 (상위 3개 콤팩트 노출 및 더보기/접기) */}
           {pinnedNotices.length > 0 && (
-            <section className="p-4 sm:p-5 rounded-3xl bg-amber-50/50 dark:bg-amber-950/15 border border-amber-200/90 dark:border-amber-900/60 space-y-3">
+            <section className="p-4 sm:p-5 rounded-3xl bg-amber-50/50 border border-amber-200/90 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                  <h2 className="text-sm font-black text-amber-950 dark:text-amber-100 flex items-center gap-1.5">
+                  <h2 className="text-sm font-black text-amber-950 flex items-center gap-1.5">
                     <Pin className="w-4 h-4 text-amber-600" />
                     주요 필독 공지 ({pinnedNotices.length}건)
                   </h2>
@@ -343,7 +343,7 @@ export default function NoticesPage() {
                   <button
                     type="button"
                     onClick={() => setShowAllPinned(!showAllPinned)}
-                    className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 dark:text-amber-300 hover:underline cursor-pointer"
+                    className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 hover:underline cursor-pointer"
                   >
                     {showAllPinned ? (
                       <>

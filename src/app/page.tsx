@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useApp } from "@/context/AppContext";
 import { calculateGraduationAudit } from "@/lib/graduationCurriculum";
 import { ROLE_LABELS } from "@/components/common/Cards";
-import { formatUnreadBadge } from "@/lib/chatReadReceipts";
+import { formatUnreadBadge, formatChatMemberHakbun } from "@/lib/chatReadReceipts";
 import { getAvatarInitials } from "@/lib/firebase";
 import EditableCalendar from "@/components/calendar/EditableCalendar";
 import {
@@ -172,7 +172,7 @@ export default function HomePage() {
             return (
               <Link
                 key={room.id}
-                href="/rooms"
+                href={`/rooms?roomId=${encodeURIComponent(room.id)}`}
                 className="group p-4 rounded-2xl border border-line hover:border-line-strong hover:bg-surface-2 transition flex flex-col justify-between gap-2"
               >
                 <div>
@@ -211,7 +211,7 @@ export default function HomePage() {
         {doubleMajorReviews.map((post) => (
           <Link
             key={post.id}
-            href="/rooms"
+            href={`/rooms?roomId=${encodeURIComponent(post.roomId)}&postId=${encodeURIComponent(post.id)}`}
             className="group block py-3 px-1 hover:bg-surface-2 rounded-xl transition"
           >
             <div className="flex items-center justify-between text-xs text-ink-3 mb-1">
@@ -273,7 +273,7 @@ export default function HomePage() {
                         {student.name}
                       </span>
                       <Badge tone="brand">
-                        {student.studentIdOrYear ? student.studentIdOrYear : "재학생"}
+                        {formatChatMemberHakbun(student) || student.studentIdOrYear || "재학생"}
                       </Badge>
                     </div>
                     <p className="text-xs font-semibold text-ink-2 truncate">
@@ -444,7 +444,7 @@ export default function HomePage() {
                   return (
                     <Link
                       key={conv.id}
-                      href="/chat"
+                      href={`/chat?convId=${encodeURIComponent(conv.id)}`}
                       className="group flex items-center justify-between gap-3 p-3.5 rounded-2xl bg-surface-2 hover:bg-surface-3 transition border border-transparent hover:border-line"
                     >
                       <div className="min-w-0">
@@ -549,7 +549,7 @@ export default function HomePage() {
             {recommendedAlumni.map((alumni) => (
               <Link
                 key={alumni.id}
-                href="/alumni"
+                href={`/alumni?alumniId=${encodeURIComponent(alumni.id)}`}
                 className="group p-4 rounded-2xl border border-line bg-surface-2 hover:bg-surface-3 transition flex items-start gap-3.5"
               >
                 <Avatar name={alumni.displayName} role="alumni" size="md" />

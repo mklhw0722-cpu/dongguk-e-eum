@@ -56,6 +56,7 @@ import {
   clearFirebaseConfigFromLocal,
   subscribeToCommunityPosts,
   createPostInFirestore,
+  updatePostInFirestore,
   deletePostInFirestore,
   addCommentInFirestore,
   incrementLikeInFirestore,
@@ -330,8 +331,17 @@ interface AppContextValue extends PlatformDataState {
     title: string;
     content: string;
   }) => void;
+  updateCommunityPost: (
+    postId: string,
+    payload: {
+      category: PostCategory;
+      title: string;
+      content: string;
+    }
+  ) => void;
   deleteCommunityPost: (postId: string) => void;
   addCommunityComment: (postId: string, content: string) => void;
+  deleteCommunityComment: (postId: string, commentId: string) => void;
   likeCommunityPost: (postId: string) => void;
 
   // 기능 7 & 관리자 액션
@@ -3311,6 +3321,40 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateCommunityPost = (
+    postId: string,
+    payload: {
+      category: PostCategory;
+      title: string;
+      content: string;
+    }
+  ) => {
+    const targetPost = state.communityPosts.find((p) => p.id === postId);
+    if (!targetPost) return;
+
+    const updatedPost: CommunityPost = {
+      ...targetPost,
+      category: payload.category,
+      title: payload.title.trim(),
+      content: payload.content.trim(),
+    };
+
+    setState((prev) => ({
+      ...prev,
+      communityPosts: prev.communityPosts.map((p) =>
+        p.id === postId ? updatedPost : p
+      ),
+    }));
+
+    if (isFirestoreConnected) {
+      updatePostInFirestore(postId, updatedPost).catch((err) => {
+        setFirestoreError(
+          `글 수정 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
+        );
+      });
+    }
+  };
+
   const deleteCommunityPost = (postId: string) => {
     setState((prev) => ({
       ...prev,
@@ -3355,6 +3399,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addCommentInFirestore(postId, updatedComments).catch((err) => {
         setFirestoreError(
           `댓글 등록 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
+        );
+      });
+    }
+  };
+
+  const deleteCommunityComment = (postId: string, commentId: string) => {
+    const targetPost = state.communityPosts.find((p) => p.id === postId);
+    if (!targetPost) return;
+    const updatedComments = targetPost.comments.filter((c) => c.id !== commentId);
+
+    setState((prev) => ({
+      ...prev,
+      communityPosts: prev.communityPosts.map((p) =>
+        p.id === postId ? { ...p, comments: updatedComments } : p
+      ),
+    }));
+
+    if (isFirestoreConnected) {
+      addCommentInFirestore(postId, updatedComments).catch((err) => {
+        setFirestoreError(
+          `댓글 삭제 중 Firestore 오류: ${err instanceof Error ? err.message : String(err)}`
         );
       });
     }
@@ -3555,8 +3620,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         createCommunityRoom,
         updateCommunityRoomName,
         createCommunityPost,
+        updateCommunityPost,
         deleteCommunityPost,
         addCommunityComment,
+        deleteCommunityComment,
         likeCommunityPost,
         submitApprovalRequest,
         updateApprovalStatus,
