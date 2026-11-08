@@ -944,6 +944,7 @@ export function detectDuplicateCourses(
     const exTitle = normalizeCourseText(existing.courseTitle);
     const exSub = matchTeachingSubstitution(existing);
 
+    // 1) 동일 학수번호 (예: EDU2013 중복 등록) -> 확실한 동일 강좌 중복
     if (candCode && exCode && candCode === exCode) {
       hasExactDuplicate = true;
       matched.push(existing);
@@ -951,6 +952,12 @@ export function detectDuplicateCourses(
       continue;
     }
 
+    // 학수번호가 둘 다 존재하고 서로 다르면 완전히 다른 과목이므로 중복/유사 판정하지 않음 (예: ERC0019 특수교육학개론 vs EDU2013 교육학개론)
+    if (candCode && exCode && candCode !== exCode) {
+      continue;
+    }
+
+    // 2) 동일 강좌명 (예: '교육학개론'과 '교육학개론(재)', '교육 심리'와 '교육심리') -> 확실한 동일 강좌 중복
     if (candTitle && exTitle && candTitle === exTitle) {
       hasExactDuplicate = true;
       matched.push(existing);
@@ -958,26 +965,14 @@ export function detectDuplicateCourses(
       continue;
     }
 
-    // 교육학과 전공 대체과목(예: EDU2010 교육사회학)과 일반 교직이론 과목(예: ERC0005 교육사회)을 둘 다 넣으려는 경우 안내
+    // 3) 교육학과 전공 대체과목(예: EDU2010 교육사회학)과 일반 교직이론 과목(예: ERC0005 교육사회)처럼 동일한 교직이론 대체 영역인 경우
     if (candSub && exSub && candSub.substitutedTheoryKey === exSub.substitutedTheoryKey) {
       hasSimilarWarning = true;
       matched.push(existing);
       reasons.push(
-        `이미 동일한 교직이론 대체 영역('${existing.courseTitle}')이 등록되어 있습니다. 재수강 또는 중복 입력인지 확인해 주세요.`
+        `이미 동일한 교직이론 대체 영역('${existing.courseTitle}')이 등록되어 있습니다.`
       );
       continue;
-    }
-
-    if (
-      candTitle.length >= 3 &&
-      exTitle.length >= 3 &&
-      (candTitle.includes(exTitle) || exTitle.includes(candTitle))
-    ) {
-      hasSimilarWarning = true;
-      matched.push(existing);
-      reasons.push(
-        `유사한 이름의 강좌('${existing.courseTitle}', ${existing.yearTaken}년 ${existing.semesterTaken})가 이미 등록되어 있습니다.`
-      );
     }
   }
 
