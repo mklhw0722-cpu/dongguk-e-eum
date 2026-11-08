@@ -36,7 +36,6 @@ export default function NoticesPage() {
     noticeSyncMeta,
     createNotice,
     syncOfficialNoticesToCloud,
-    updateNoticeSchedule,
     currentRole,
     isRealAuthActive,
     authUserProfile,
@@ -47,12 +46,6 @@ export default function NoticesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedNotice, setSelectedNotice] = useState<Notice | null>(null);
   const [isWriteModalOpen, setIsWriteModalOpen] = useState(false);
-
-  // 캘린더 탭 상태 ("confirmed" | "needs_review")
-  const [calendarTab, setCalendarTab] = useState<"confirmed" | "needs_review">("confirmed");
-  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
-  const [editStartDate, setEditStartDate] = useState<string>("");
-  const [editEndDate, setEditEndDate] = useState<string>("");
 
   // Firestore 동기화 버튼 상태
   const [syncingToCloud, setSyncingToCloud] = useState(false);
@@ -78,25 +71,6 @@ export default function NoticesPage() {
     () => notices.filter((n) => n.isOfficialSynced).length,
     [notices]
   );
-
-  // 확정 일정 공지 목록 (마감일이 지난 공지는 자동 제외하여 현재 진행/예정 중인 일정만 노출)
-  const confirmedScheduleNotices = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return notices
-      .filter((n) => {
-        if (n.scheduleStatus !== "confirmed" || !n.eventStartDate) return false;
-        const deadline = n.eventEndDate || n.eventStartDate;
-        return deadline >= today;
-      })
-      .sort((a, b) => (a.eventStartDate || "").localeCompare(b.eventStartDate || ""));
-  }, [notices]);
-
-  // 날짜 불확실 · 관리자 검토 필요 공지 목록 (scheduleStatus === "needs_review")
-  const reviewNeededNotices = useMemo(() => {
-    return notices
-      .filter((n) => n.scheduleStatus === "needs_review")
-      .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-  }, [notices]);
 
   const filteredNotices = useMemo(() => {
     return notices
@@ -164,18 +138,6 @@ export default function NoticesPage() {
     } catch (err: any) {
       setWriteError(err?.message || "공지 등록 중 오류가 발생했습니다.");
     }
-  };
-
-  const handleConfirmSchedule = async (noticeId: string) => {
-    if (!editStartDate) return;
-    await updateNoticeSchedule(noticeId, {
-      scheduleStatus: "confirmed",
-      eventStartDate: editStartDate,
-      eventEndDate: editEndDate || editStartDate,
-    });
-    setEditingScheduleId(null);
-    setEditStartDate("");
-    setEditEndDate("");
   };
 
   const formattedLastSync = useMemo(() => {
@@ -298,233 +260,50 @@ export default function NoticesPage() {
         </div>
       </section>
 
-      {/* 📅 공식 공지 기반 학사·학과·교직 일정 캘린더 */}
-      <section className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4 shadow-xs">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-3.5">
-          <div>
-            <div className="flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-orange-600" />
-              <h2 className="text-base sm:text-lg font-extrabold text-slate-900">
-                공식 공지 연동 학사·신청 일정 캘린더
-              </h2>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              신청 기간·행사 일시가 명확하고 마감일이 지나지 않은 일정만 자동으로 표시합니다.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-1.5 self-start sm:self-auto">
-            <button
-              type="button"
-              onClick={() => setCalendarTab("confirmed")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                calendarTab === "confirmed"
-                  ? "bg-orange-600 text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              확정 일정 ({confirmedScheduleNotices.length})
-            </button>
-            <button
-              type="button"
-              onClick={() => setCalendarTab("needs_review")}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
-                calendarTab === "needs_review"
-                  ? "bg-amber-600 text-white"
-                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-              }`}
-            >
-              일정 검토 필요 ({reviewNeededNotices.length})
-            </button>
-          </div>
-        </div>
-
-        {calendarTab === "confirmed" ? (
-          confirmedScheduleNotices.length === 0 ? (
-            <div className="p-6 rounded-xl bg-slate-50 text-center text-xs text-slate-500">
-              현재 진행 중이거나 예정된 일정이 없습니다. (마감된 일정은 자동으로 내려갔습니다)
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {confirmedScheduleNotices.map((item) => (
-                <div
-                  key={`cal-${item.id}`}
-                  className="p-3.5 rounded-xl border border-orange-200 bg-orange-50/40 flex flex-col justify-between gap-2.5"
-                >
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md bg-orange-600 text-white text-xs font-extrabold">
-                        <Calendar className="w-3 h-3" />
-                        {item.eventStartDate}
-                        {item.eventEndDate && item.eventEndDate !== item.eventStartDate
-                          ? ` ~ ${item.eventEndDate}`
-                          : ""}
-                      </span>
-                      <span className="text-[11px] font-bold text-slate-600">
-                        {item.organization || item.authorName}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedNotice(item)}
-                      className="text-left text-xs sm:text-sm font-bold text-slate-900 hover:text-orange-600 line-clamp-2"
-                    >
-                      {item.title}
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between pt-2 border-t border-orange-200/60 text-[11px]">
-                    <span className="text-slate-500">
-                      분류: <strong className="text-slate-700">{item.category}</strong> (작성일: {item.createdAt})
-                    </span>
-                    <a
-                      href={item.officialUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-bold text-orange-700 hover:underline inline-flex items-center gap-1"
-                    >
-                      원문 확인 <ExternalLink className="w-3 h-3" />
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        ) : (
-          <div className="space-y-3">
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold">날짜 자동 등록 보류 안내 (게시글 작성일 오인 방지)</p>
-                <p className="text-amber-800 mt-0.5">
-                  아래 공지는 제목에 &lsquo;신청·모집·접수·특강·설문·시행&rsquo; 키워드가 포함되어 있으나 제목만으로 정확한 기간을 단정할 수 없어 자동 캘린더 등록을 보류한 항목입니다.
-                  {isAdmin && " 관리자는 원문 확인 후 아래에서 일정을 확정하여 캘린더에 등록할 수 있습니다."}
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-              {reviewNeededNotices.map((item) => (
-                <div
-                  key={`rev-${item.id}`}
-                  className="p-3 rounded-xl border border-slate-200 bg-slate-50/70 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-xs"
-                >
-                  <div className="min-w-0 space-y-1">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-bold text-[11px]">
-                        일정 검토 필요
-                      </span>
-                      <span className="font-semibold text-orange-700">[{item.category}]</span>
-                      <span className="text-slate-500">
-                        {item.organization || item.authorName} · 게시일 {item.createdAt}
-                      </span>
-                    </div>
-                    <p className="font-bold text-slate-900 truncate">{item.title}</p>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                    <a
-                      href={item.officialUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 hover:border-orange-400 font-semibold inline-flex items-center gap-1"
-                    >
-                      원문에서 기간 확인 <ExternalLink className="w-3 h-3" />
-                    </a>
-                    {isAdmin && (
-                      editingScheduleId === item.id ? (
-                        <div className="flex items-center gap-1.5 flex-wrap bg-white p-1.5 rounded-lg border border-orange-300">
-                          <input
-                            type="date"
-                            value={editStartDate}
-                            onChange={(e) => setEditStartDate(e.target.value)}
-                            className="px-2 py-1 rounded border border-slate-200 text-xs"
-                          />
-                          <span>~</span>
-                          <input
-                            type="date"
-                            value={editEndDate}
-                            onChange={(e) => setEditEndDate(e.target.value)}
-                            className="px-2 py-1 rounded border border-slate-200 text-xs"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleConfirmSchedule(item.id)}
-                            className="px-2.5 py-1 rounded bg-orange-600 text-white font-bold"
-                          >
-                            확정
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingScheduleId(null)}
-                            className="px-2 py-1 rounded bg-slate-100 text-slate-600"
-                          >
-                            취소
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingScheduleId(item.id);
-                            setEditStartDate(item.createdAt);
-                            setEditEndDate(item.createdAt);
-                          }}
-                          className="px-2.5 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-bold"
-                        >
-                          일정 입력·확정
-                        </button>
-                      )
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* 검색 및 카테고리·출처 필터 */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 shadow-xs">
+      {/* 검색 및 카테고리·출처 필터 바 */}
+      <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200/90 dark:border-slate-800 p-5 space-y-4 shadow-xs">
         <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="공지 제목, 출처(교육학과, 사범대학, 학사공지), 키워드(교직, 다전공, 수강신청, 학사일정) 검색..."
-            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+            placeholder="공지 제목, 작성기관, 키워드(수강신청, 졸업, 장학금, 교직실습 등) 검색..."
+            className="w-full pl-11 pr-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50/70 dark:bg-slate-800/60 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 dark:text-white transition"
           />
         </div>
 
         {/* 카테고리 필터 탭 */}
-        <div className="flex flex-wrap gap-1.5">
-          {NOTICE_FILTER_TABS.map((tab) => {
-            const active = selectedCategory === tab.value;
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => setSelectedCategory(tab.value)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                  active
-                    ? "bg-orange-600 text-white shadow-xs"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+        <div className="space-y-1.5">
+          <div className="text-xs font-bold text-slate-400">분야별 공지</div>
+          <div className="flex flex-wrap gap-2">
+            {NOTICE_FILTER_TABS.map((tab) => {
+              const active = selectedCategory === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setSelectedCategory(tab.value)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                    active
+                      ? "bg-orange-600 text-white shadow-xs scale-102"
+                      : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        {/* 출처 세부 필터 & 예시 데이터 숨김 옵션 */}
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
+        {/* 출처 세부 필터 */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-bold text-slate-500 mr-1">출처 구분:</span>
+            <span className="font-bold text-slate-500 dark:text-slate-400 mr-1">출처:</span>
             {[
               { label: "전체 출처", value: "전체" },
-              { label: "공식 홈페이지 연동만", value: "official_only" },
-              { label: "교육학과 학부공지", value: "edu_dept_news2" },
+              { label: "교육학과 공지", value: "edu_dept_news2" },
               { label: "사범대학 공지", value: "edu_college_notice" },
               { label: "학교 학사공지", value: "dgu_haksa" },
             ].map((src) => (
@@ -532,10 +311,10 @@ export default function NoticesPage() {
                 key={src.value}
                 type="button"
                 onClick={() => setSelectedSourceFilter(src.value)}
-                className={`px-2.5 py-1 rounded-md font-semibold transition ${
+                className={`px-3 py-1 rounded-lg font-semibold transition ${
                   selectedSourceFilter === src.value
-                    ? "bg-slate-900 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    ? "bg-slate-900 dark:bg-slate-700 text-white shadow-2xs"
+                    : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                 }`}
               >
                 {src.label}
@@ -543,7 +322,9 @@ export default function NoticesPage() {
             ))}
           </div>
 
-          
+          <div className="text-xs text-slate-500 font-medium">
+            총 <strong className="text-orange-600 font-bold">{filteredNotices.length}</strong>건의 공지사항
+          </div>
         </div>
       </div>
 

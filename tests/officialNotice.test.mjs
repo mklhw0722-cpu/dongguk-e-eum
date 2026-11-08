@@ -219,3 +219,31 @@ test("6. Firestore 보안 규칙에서 공지(notices) 조회는 승인된 회�
     /match \/system\/notice_sync_status[\s\S]*?allow read:\s*if isApprovedUser\(\);[\s\S]*?allow write:\s*if isApprovedAdmin\(\);/
   );
 });
+
+test("7. notices/page.tsx에서 '공식 공지 연동 학사·신청 일정 캘린더' 섹션이 제거되고 가독성 높은 공지 목록이 제공된다", () => {
+  const pageCode = fs.readFileSync(new URL("../src/app/notices/page.tsx", import.meta.url), "utf8");
+  const cardsCode = fs.readFileSync(new URL("../src/components/common/Cards.tsx", import.meta.url), "utf8");
+
+  assert.ok(
+    !pageCode.includes("공식 공지 연동 학사·신청 일정 캘린더"),
+    "공식 공지 연동 학사·신청 일정 캘린더 제목이 제거되어야 함"
+  );
+  assert.ok(
+    !pageCode.includes("신청 기간·행사 일시가 명확하고 마감일이 지나지 않은 일정만 자동으로 표시합니다"),
+    "캘린더 설명 문구가 제거되어야 함"
+  );
+  assert.ok(
+    !pageCode.includes("일정 검토 필요"),
+    "일정 검토 필요 탭이 제거되어야 함"
+  );
+
+  // 공지 카드 가독성 개선 검증
+  assert.ok(
+    cardsCode.includes("displayCategory"),
+    "NoticeCard에 가독성 높은 카테고리 표시가 적용되어 있어야 함"
+  );
+  assert.ok(
+    cardsCode.includes("공식 원문 바로가기"),
+    "공식 원문 바로가기 버튼이 제공되어야 함"
+  );
+});
