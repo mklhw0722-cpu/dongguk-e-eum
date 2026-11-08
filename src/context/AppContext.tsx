@@ -570,7 +570,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       (cloudPosts) => {
         setState((prev) => ({
           ...prev,
-          communityPosts: cloudPosts,
+          communityPosts: cloudPosts.map((p) => ({
+            ...p,
+            roomName: (p.roomName || "").replace(/공유방/g, "게시판"),
+          })),
         }));
       },
       (errMessage) => {
@@ -2973,21 +2976,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
-  // --- 진로 및 복수전공 공유방 액션 (Firestore 실시간 연동) ---
-  const toggleJoinRoom = (roomId: string) => {
-    setState((prev) => ({
-      ...prev,
-      communityRooms: prev.communityRooms.map((room) => {
-        if (room.id !== roomId) return room;
-        const isMember = room.memberIds.includes(currentUser.id);
-        return {
-          ...room,
-          memberIds: isMember
-            ? room.memberIds.filter((id) => id !== currentUser.id)
-            : [...room.memberIds, currentUser.id],
-        };
-      }),
-    }));
+  // --- 진로 및 복수전공 게시판 액션 (Firestore 실시간 연동, 참여자 개념 비활성화) ---
+  const toggleJoinRoom = (_roomId: string) => {
+    // 게시판 전환에 따라 참여 여부 저장 기능 비활성화
   };
 
   const createCommunityRoom = (payload: {
@@ -2998,11 +2989,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }) => {
     const newRoom: CommunityRoom = {
       id: `room-${Date.now()}`,
-      name: payload.name,
+      name: payload.name.replace(/공유방/g, "게시판"),
       type: payload.type,
       categoryName: payload.categoryName,
-      description: payload.description,
-      memberIds: [currentUser.id],
+      description: payload.description.replace(/공유방/g, "게시판"),
+      memberIds: [],
       relatedAlumniIds: [],
       createdAt: new Date().toISOString().slice(0, 10),
       isOfficial: true,
@@ -3046,7 +3037,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const newPost: CommunityPost = {
       id: `post-${Date.now()}`,
       roomId: payload.roomId,
-      roomName: room?.name || "공유방",
+      roomName: (room?.name || "게시판").replace(/공유방/g, "게시판"),
       category: payload.category,
       title: payload.title,
       content: payload.content,

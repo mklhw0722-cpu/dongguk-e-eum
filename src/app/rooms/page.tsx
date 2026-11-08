@@ -14,7 +14,6 @@ import {
 import { FirebaseSetupModal } from "@/components/common/FirebaseSetupModal";
 import {
   Compass,
-  Users,
   MessageCircle,
   ThumbsUp,
   Plus,
@@ -27,11 +26,10 @@ import {
   Trash2,
 } from "lucide-react";
 
-const ROOM_FILTER_TABS = [
-  "전체 공유방",
-  "진로 트랙별 공유방",
-  "복수전공별 공유방",
-  "내가 참여한 공유방",
+const BOARD_FILTER_TABS = [
+  "전체 게시판",
+  "진로 트랙별 게시판",
+  "복수전공별 게시판",
 ];
 
 const POST_CATEGORIES: ("전체" | PostCategory)[] = [
@@ -46,11 +44,9 @@ export default function RoomsPage() {
   const {
     currentUser,
     currentRole,
-    users,
     communityRooms,
     communityPosts,
     alumniProfiles,
-    toggleJoinRoom,
     createCommunityRoom,
     createCommunityPost,
     deleteCommunityPost,
@@ -60,8 +56,10 @@ export default function RoomsPage() {
     firebaseProjectId,
   } = useApp();
 
-  const [selectedRoomFilter, setSelectedRoomFilter] =
-    useState<string>("전체 공유방");
+  const isAdmin = currentUser.role === "admin" || currentRole === "admin";
+
+  const [selectedBoardFilter, setSelectedBoardFilter] =
+    useState<string>("전체 게시판");
   const [searchQuery, setSearchQuery] = useState("");
   const [activeRoomId, setActiveRoomId] = useState<string | null>(null);
   const [selectedPostCat, setSelectedPostCat] = useState<string>("전체");
@@ -74,7 +72,7 @@ export default function RoomsPage() {
   const [newPostTitle, setNewPostTitle] = useState("");
   const [newPostContent, setNewPostContent] = useState("");
 
-  // 새 복수전공/진로 공유방 추가 모달 (확장 구조)
+  // 관리자 전용 새 게시판 추가 모달 상태
   const [isCreateRoomOpen, setIsCreateRoomOpen] = useState(false);
   const [newRoomType, setNewRoomType] = useState<"career" | "double_major">(
     "double_major"
@@ -91,16 +89,11 @@ export default function RoomsPage() {
   const activeRoom = communityRooms.find((r) => r.id === activeRoomId) || null;
 
   const filteredRooms = communityRooms.filter((room) => {
-    if (selectedRoomFilter === "진로 트랙별 공유방" && room.type !== "career")
+    if (selectedBoardFilter === "진로 트랙별 게시판" && room.type !== "career")
       return false;
     if (
-      selectedRoomFilter === "복수전공별 공유방" &&
+      selectedBoardFilter === "복수전공별 게시판" &&
       room.type !== "double_major"
-    )
-      return false;
-    if (
-      selectedRoomFilter === "내가 참여한 공유방" &&
-      !room.memberIds.includes(currentUser.id)
     )
       return false;
 
@@ -137,14 +130,14 @@ export default function RoomsPage() {
 
   const handleCreateRoom = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newRoomName.trim() || !newRoomCategoryName.trim()) return;
+    if (!isAdmin || !newRoomName.trim() || !newRoomCategoryName.trim()) return;
     createCommunityRoom({
       name: newRoomName.trim(),
       type: newRoomType,
       categoryName: newRoomCategoryName.trim(),
       description:
         newRoomDesc.trim() ||
-        `${newRoomCategoryName} 관련 학업·진로 정보를 축적하는 공유방입니다.`,
+        `${newRoomCategoryName} 관련 학업·진로 정보를 나누는 게시판입니다.`,
     });
     setNewRoomName("");
     setNewRoomCategoryName("");
@@ -159,22 +152,19 @@ export default function RoomsPage() {
     setCommentInputs((prev) => ({ ...prev, [postId]: "" }));
   };
 
-  // 공유방 상세 화면일 때
+  // 게시판 상세 화면일 때
   if (activeRoom) {
-    const isJoined = activeRoom.memberIds.includes(currentUser.id);
-    const roomMembers = activeRoom.memberIds
-      .map((uid) => users.find((u) => u.id === uid))
-      .filter(Boolean);
     const relatedAlumni = alumniProfiles.filter(
       (a) =>
         activeRoom.relatedAlumniIds.includes(a.id) ||
         a.careerTrack === activeRoom.categoryName ||
         a.doubleMajor === activeRoom.categoryName
     );
+    const boardDisplayName = activeRoom.name.replace(/공유방/g, "게시판");
 
     return (
       <div className="space-y-6">
-        {/* 상단 돌아가기 & 공유방 헤더 */}
+        {/* 상단 돌아가기 & 게시판 헤더 */}
         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 space-y-4 shadow-xs">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <button
@@ -182,41 +172,16 @@ export default function RoomsPage() {
               onClick={() => setActiveRoomId(null)}
               className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-600 dark:text-slate-300 hover:text-orange-600"
             >
-              <ArrowLeft className="w-4 h-4" /> 전체 공유방 목록으로 돌아가기
+              <ArrowLeft className="w-4 h-4" /> 전체 게시판 목록으로 돌아가기
             </button>
 
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
-                onClick={() => setIsFirebaseModalOpen(true)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 ${
-                  isFirestoreConnected
-                    ? "bg-emerald-100 text-emerald-800"
-                    : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
-                }`}
-              >
-                <Database className="w-3.5 h-3.5" />
-                {isFirestoreConnected
-                  ? `실시간 공유 켜짐 (${firebaseProjectId})`
-                  : "Firestore 연결 설정"}
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleJoinRoom(activeRoom.id)}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
-                  isJoined
-                    ? "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
-                    : "bg-orange-100 text-orange-800"
-                }`}
-              >
-                {isJoined ? "참여중 (나가기)" : "+ 공유방 참여하기"}
-              </button>
-              <button
-                type="button"
                 onClick={() => setIsPostModalOpen(true)}
                 className="px-4 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold inline-flex items-center gap-1"
               >
-                <Plus className="w-3.5 h-3.5" /> 경험·질문 글쓰기
+                <Plus className="w-3.5 h-3.5" /> 새 게시글 작성
               </button>
             </div>
           </div>
@@ -224,20 +189,20 @@ export default function RoomsPage() {
           <div>
             <span className="px-2.5 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-xs font-bold">
               {activeRoom.type === "career"
-                ? "진로 트랙별 공유방"
-                : "복수전공별 공유방"}{" "}
+                ? "진로 트랙별 게시판"
+                : "복수전공별 게시판"}{" "}
               · {activeRoom.categoryName}
             </span>
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white mt-1.5">
-              {activeRoom.name}
+              {boardDisplayName}
             </h1>
             <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1">
-              {activeRoom.description}
+              {activeRoom.description.replace(/공유방/g, "게시판")}
             </p>
           </div>
 
-          {/* 관련 졸업생 프로필 연결 & 구성원 목록 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+          {/* 관련 분야 졸업생 멘토 연결 */}
+          <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
             <div className="p-3.5 rounded-2xl bg-orange-50/50 dark:bg-slate-800/60 border border-orange-200/60 dark:border-slate-700">
               <p className="text-xs font-bold text-slate-800 dark:text-slate-100 mb-2 flex items-center gap-1.5">
                 <Sparkles className="w-4 h-4 text-orange-600" /> 연결된 관련 분야 졸업생 멘토
@@ -259,24 +224,6 @@ export default function RoomsPage() {
                   ))}
                 </div>
               )}
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/60 dark:border-slate-700">
-              <p className="text-xs font-bold text-slate-800 dark:text-slate-100 mb-2 flex items-center gap-1.5">
-                <Users className="w-4 h-4 text-orange-600" /> 공유방 참여 구성원 ({roomMembers.length}명)
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {roomMembers.map((m) =>
-                  m ? (
-                    <span
-                      key={m.id}
-                      className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-medium"
-                    >
-                      {m.name} ({ROLE_LABELS[m.role]})
-                    </span>
-                  ) : null
-                )}
-              </div>
             </div>
           </div>
         </div>
@@ -301,11 +248,11 @@ export default function RoomsPage() {
           </div>
         </div>
 
-        {/* 공유방 내 게시글 및 댓글 목록 */}
+        {/* 게시판 내 게시글 및 댓글 목록 */}
         {roomPosts.length === 0 ? (
           <EmptyStateBox
             title="아직 등록된 게시글이 없습니다"
-            description="첫 번째 질문이나 복수전공 후기, 진로 경험을 남겨 후배들과 지식을 나눠보세요!"
+            description="첫 번째 질문이나 복수전공 후기, 진로 경험을 남겨 학우들과 지식을 나눠보세요!"
             actionLabel="첫 게시글 작성하기"
             onAction={() => setIsPostModalOpen(true)}
           />
@@ -427,7 +374,7 @@ export default function RoomsPage() {
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 space-y-4 shadow-xl">
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                  [{activeRoom.name}] 새 게시글 작성
+                  [{boardDisplayName}] 새 게시글 작성
                 </h2>
                 <button
                   type="button"
@@ -507,7 +454,7 @@ export default function RoomsPage() {
     );
   }
 
-  // 전체 공유방 목록 화면
+  // 전체 게시판 목록 화면
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -515,11 +462,11 @@ export default function RoomsPage() {
           <div className="flex items-center gap-2">
             <Compass className="w-6 h-6 text-orange-600" />
             <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-              진로 트랙 & 복수전공 공유방 (학우들이 쓴 글)
+              진로·복수전공 게시판
             </h1>
           </div>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
-            선배들의 복수전공 이수 후기와 진로 준비 경험을 축적하고, Firebase Firestore로 모든 학우가 실시간으로 함께 볼 수 있는 공간입니다.
+            선배들의 복수전공 이수 후기와 진로 준비 경험을 열람하고, 모든 승인된 학우가 자유롭게 글을 읽고 작성할 수 있는 게시판입니다.
           </p>
         </div>
 
@@ -532,64 +479,76 @@ export default function RoomsPage() {
             }`}
           >
             <Database className="w-4 h-4 text-emerald-600" />
-            <span>실시간 클라우드 공유 동기화 활성</span>
+            <span>실시간 게시판 동기화 활성</span>
           </div>
 
-          <button
-            type="button"
-            onClick={() => setIsCreateRoomOpen(true)}
-            className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5"
-          >
-            <Plus className="w-4 h-4" /> 새 공유방 개설
-          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={() => setIsCreateRoomOpen(true)}
+              className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5"
+            >
+              <Plus className="w-4 h-4" /> 게시판 추가 (관리자)
+            </button>
+          )}
         </div>
       </div>
 
       <DemoInfoBanner
         title={
           isFirestoreConnected
-            ? `🟢 현재 Firebase Firestore (${firebaseProjectId}) 실시간 공유 모드가 켜져 있습니다!`
-            : "⚪ 학우들이 쓴 글을 다른 컴퓨터에서도 함께 보려면 [Firestore 클라우드 공유 연결하기]를 눌러주세요."
+            ? `🟢 진로·복수전공 게시판 실시간 연동 (${firebaseProjectId}) 활성화됨`
+            : "⚪ 학우들이 작성한 게시글을 다른 기기에서도 함께 보려면 Firestore 설정을 확인해 주세요."
         }
         description={
           isFirestoreConnected
-            ? "지금 공유방에 새 글을 쓰거나 댓글·공감을 누르면 다른 컴퓨터나 팀원 스마트폰에서도 새로고침 없이 즉시 똑같이 보입니다."
-            : "Firebase 무료 Spark 요금제(결제 수단 등록 불필요)로 만든 프로젝트의 설정값만 붙여넣으면 모든 컴퓨터가 실시간으로 연결됩니다."
+            ? "별도의 참여 절차 없이 원하는 게시판에 들어가 새 글을 작성하거나 댓글·공감을 남기면 모든 학우에게 실시간으로 반영됩니다."
+            : "Firebase 프로젝트 설정이 연결되면 모든 학우의 기기에서 게시글과 댓글이 실시간으로 동기화됩니다."
         }
       />
 
       <SearchAndFilterBar
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        placeholder="공유방 이름(예: 기업 HRD, 교직, 국어교육, 경영학, 법학) 검색..."
-        categories={ROOM_FILTER_TABS}
-        selectedCategory={selectedRoomFilter}
-        onSelectCategory={setSelectedRoomFilter}
+        placeholder="진로/복수전공 게시판 검색 (예: 기업 HRD, 교직, 국어교육, 경영학, 법학)..."
+        categories={BOARD_FILTER_TABS}
+        selectedCategory={selectedBoardFilter}
+        onSelectCategory={setSelectedBoardFilter}
       />
 
       {filteredRooms.length === 0 ? (
         <EmptyStateBox
-          title="검색 조건에 맞는 공유방이 없습니다"
-          description="다른 카테고리를 선택하거나 새 복수전공 공유방을 개설해 보세요."
-          actionLabel="전체 공유방 보기"
+          title="검색 조건에 맞는 게시판이 없습니다"
+          description="다른 카테고리를 선택하거나 검색어를 변경해 보세요."
+          actionLabel="전체 게시판 보기"
           onAction={() => {
-            setSelectedRoomFilter("전체 공유방");
+            setSelectedBoardFilter("전체 게시판");
             setSearchQuery("");
           }}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {filteredRooms.map((room) => {
-            const count = communityPosts.filter(
+            const postsForBoard = communityPosts.filter(
               (p) => p.roomId === room.id
-            ).length;
+            );
+            const count = postsForBoard.length;
+            const latestPostDate =
+              postsForBoard.length > 0
+                ? postsForBoard
+                    .map((p) => p.createdAt)
+                    .sort((a, b) => b.localeCompare(a))[0]
+                : null;
             return (
               <CommunityRoomCard
                 key={room.id}
-                room={room}
-                isJoined={room.memberIds.includes(currentUser.id)}
+                room={{
+                  ...room,
+                  name: room.name.replace(/공유방/g, "게시판"),
+                  description: room.description.replace(/공유방/g, "게시판"),
+                }}
                 postCount={count}
-                onToggleJoin={toggleJoinRoom}
+                latestPostDate={latestPostDate}
                 onSelectRoom={(id) => setActiveRoomId(id)}
               />
             );
@@ -597,13 +556,13 @@ export default function RoomsPage() {
         </div>
       )}
 
-      {/* 최근 올라온 전체 공유방 인기 후기/질문 미리보기 */}
+      {/* 최근 올라온 전체 게시판 인기 후기/질문 미리보기 */}
       <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5 space-y-3 shadow-xs">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <BookOpen className="w-5 h-5 text-orange-600" />
             <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-              공유방 전체 최신 게시글 · 학우들이 쓴 글 ({communityPosts.length}건)
+              전체 게시판 최신 게시글 · 학우들이 쓴 글 ({communityPosts.length}건)
             </h2>
           </div>
           {isFirestoreConnected && (
@@ -623,7 +582,7 @@ export default function RoomsPage() {
               <div className="flex items-center justify-between text-xs mb-1">
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 font-bold text-[11px]">
-                    {post.roomName}
+                    {(post.roomName || "").replace(/공유방/g, "게시판")}
                   </span>
                   <span className="font-bold text-indigo-600 dark:text-indigo-400">
                     [{post.category}]
@@ -645,13 +604,13 @@ export default function RoomsPage() {
         </div>
       </section>
 
-      {/* 새 공유방 추가 모달 */}
-      {isCreateRoomOpen && (
+      {/* 관리자 전용 새 게시판 추가 모달 */}
+      {isAdmin && isCreateRoomOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-md w-full p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-black text-slate-900 dark:text-white">
-                새 복수전공·진로 공유방 추가
+                새 복수전공·진로 게시판 추가 (관리자)
               </h2>
               <button
                 type="button"
@@ -664,7 +623,7 @@ export default function RoomsPage() {
 
             <form onSubmit={handleCreateRoom} className="space-y-3 text-xs sm:text-sm">
               <div>
-                <label className="block font-bold mb-1">공유방 유형</label>
+                <label className="block font-bold mb-1">게시판 유형</label>
                 <select
                   value={newRoomType}
                   onChange={(e) =>
@@ -672,8 +631,8 @@ export default function RoomsPage() {
                   }
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                 >
-                  <option value="double_major">복수전공별 공유방</option>
-                  <option value="career">진로 트랙별 공유방</option>
+                  <option value="double_major">복수전공별 게시판</option>
+                  <option value="career">진로 트랙별 게시판</option>
                 </select>
               </div>
 
@@ -692,24 +651,24 @@ export default function RoomsPage() {
               </div>
 
               <div>
-                <label className="block font-bold mb-1">공유방 표시 이름</label>
+                <label className="block font-bold mb-1">게시판 표시 이름</label>
                 <input
                   type="text"
                   required
                   value={newRoomName}
                   onChange={(e) => setNewRoomName(e.target.value)}
-                  placeholder="예: 통계학·데이터사이언스 복수전공 공유방"
+                  placeholder="예: 통계학·데이터사이언스 복수전공 게시판"
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                 />
               </div>
 
               <div>
-                <label className="block font-bold mb-1">공유방 소개</label>
+                <label className="block font-bold mb-1">게시판 소개</label>
                 <textarea
                   rows={3}
                   value={newRoomDesc}
                   onChange={(e) => setNewRoomDesc(e.target.value)}
-                  placeholder="공유방의 목적과 다루는 주제를 적어주세요."
+                  placeholder="게시판의 목적과 다루는 주제를 적어주세요."
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                 />
               </div>
@@ -726,7 +685,7 @@ export default function RoomsPage() {
                   type="submit"
                   className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold"
                 >
-                  공유방 개설
+                  게시판 추가
                 </button>
               </div>
             </form>
