@@ -4,15 +4,17 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { AccessGateScreen } from "@/components/layout/AccessGateScreen";
-import { canAccessAdmin, canAccessGraduation, classifyRoute, resolveRouteView } from "@/lib/accessGate";
+import {
+  canAccessAdmin,
+  canAccessGraduation,
+  classifyRoute,
+  resolveRouteView,
+} from "@/lib/accessGate";
 import { useApp } from "@/context/AppContext";
-import { UserRole } from "@/types";
-import { ROLE_LABELS } from "@/components/common/Cards";
+import { ROLE_LABELS, RoleBadge } from "@/components/common/Cards";
 import { FirebaseSetupModal } from "@/components/common/FirebaseSetupModal";
-import { DONGGUK_SYMBOL_DATA_URL } from "@/lib/donggukSymbol";
-import { ADMIN_PROFILE_LOGO_DATA_URL } from "@/lib/adminSymbol";
-import { formatUnreadBadge } from "@/lib/chatReadReceipts";
 import { getAvatarInitials } from "@/lib/firebase";
+import { Avatar, CountBadge, cn } from "@/components/ui";
 import {
   Home,
   Megaphone,
@@ -22,39 +24,70 @@ import {
   CheckSquare,
   ShieldCheck,
   UserCheck,
-  RotateCcw,
-  Sparkles,
   LogOut,
-  Clock,
   ShieldAlert,
   Loader2,
-  Lock,
-  XCircle,
-  FileWarning,
+  type LucideIcon,
 } from "lucide-react";
 
-const NAV_ITEMS = [
+/** 브랜드 로고 심볼: 'e'와 작은 점(사람·잇다 의미) */
+function BrandMark({ size = "md" }: { size?: "sm" | "md" }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "relative grid shrink-0 place-items-center rounded-[10px] bg-brand-600 font-black text-white",
+        size === "sm" ? "size-8 text-[17px]" : "size-10 text-xl"
+      )}
+    >
+      <span className="-mt-0.5 leading-none">e</span>
+      <span className="absolute -right-0.5 -bottom-0.5 size-2.5 rounded-full border-2 border-surface bg-brand-300" />
+    </span>
+  );
+}
+
+/** 브랜드 워드마크: '동국e음' */
+function BrandWordmark({ className }: { className?: string }) {
+  return (
+    <span className={cn("font-black tracking-tight text-ink", className)}>
+      동국<span className="text-brand-600">e</span>음
+    </span>
+  );
+}
+
+type NavItem = {
+  href: string;
+  label: string;
+  shortLabel: string;
+  icon: LucideIcon;
+};
+
+const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "홈 대시보드", shortLabel: "홈", icon: Home },
   { href: "/notices", label: "학교·학과 공지", shortLabel: "공지", icon: Megaphone },
   { href: "/chat", label: "대화창 (메신저)", shortLabel: "대화창", icon: MessageSquare },
-  { href: "/rooms", label: "진로·복전 게시판", shortLabel: "게시판", icon: Compass },
+  { href: "/rooms", label: "진로·복전 공유방", shortLabel: "공유방", icon: Compass },
   { href: "/alumni", label: "졸업생 동문 연결", shortLabel: "졸업생", icon: Users },
   { href: "/graduation", label: "졸업요건 관리", shortLabel: "졸업요건", icon: CheckSquare },
   { href: "/auth", label: "가입·인증 안내", shortLabel: "가입/인증", icon: UserCheck },
   { href: "/admin", label: "관리자 센터", shortLabel: "관리자", icon: ShieldCheck },
 ];
 
+// 사이드바에서 목적별로 묶어 보여 준다
+const NAV_GROUPS: { label?: string; hrefs: string[] }[] = [
+  { hrefs: ["/"] },
+  { label: "소통", hrefs: ["/notices", "/chat", "/rooms", "/alumni"] },
+  { label: "학업", hrefs: ["/graduation"] },
+  { label: "가입·운영", hrefs: ["/auth", "/admin"] },
+];
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const {
     currentUser,
-    resetDemoData,
     conversations,
     approvalRequests,
-    isFirestoreConnected,
-    firebaseProjectId,
     rawFirebaseUser,
-    isRealAuthActive,
     authUserProfile,
     isAuthLoading,
     isAccessAllowed,
@@ -79,24 +112,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       : approvalRequests.filter((r) => r.status !== "approved")
   ).length;
 
+  const badgeFor = (href: string) => {
+    if (href === "/chat" && totalUnreadMessages > 0) {
+      return { count: totalUnreadMessages, tone: "brand" as const };
+    }
+    if (href === "/admin" && pendingApprovalsCount > 0) {
+      return { count: pendingApprovalsCount, tone: "warning" as const };
+    }
+    return null;
+  };
+
   // 관리자 권한 검증: 승인 완료(approved)이고 역할이 admin인 경우만 관리자 인정
-  const isApprovedAdminUser = Boolean(rawFirebaseUser) && canAccessAdmin(accessGate, authUserProfile);
+  const isApprovedAdminUser =
+    Boolean(rawFirebaseUser) && canAccessAdmin(accessGate, authUserProfile);
   const isGraduationAllowed = canAccessGraduation(authUserProfile || currentUser);
 
-  // 메뉴 노출: 비로그인은 로그인·가입 메뉴만, 미승인은 메뉴 없음, 승인 회원은 내부 메뉴(관리자 메뉴는 관리자만)
-  const visibleNavItems = NAV_ITEMS.filter((item) => {
-    if (accessGate === "signed_out") return item.href === "/auth";
-    if (!isAccessAllowed) return false;
-    if (item.href === "/auth") return false;
-    if (item.href === "/admin") return isApprovedAdminUser;
-    if (item.href === "/graduation") return isGraduationAllowed;
-    return true;
-  });
-
-  // 경로 정규화: GitHub Pages의 basePath(/dongguk-e-eum), 후행 슬래시(/) 등 완벽 대응
-  const normalizedPath = (pathname || "")
-    .replace(/^\/dongguk-e-eum/, "")
-    .replace(/\/+$/, "") || "/";
+  // 경로 정규화: GitHub Pages의 basePath(/dongguk-e-eum), 후행 슬래시(/) 등 대응
+  const normalizedPath =
+    (pathname || "")
+      .replace(/^\/dongguk-e-eum/, "")
+      .replace(/\/+$/, "") || "/";
 
   // 현재 주소 종류(로그인 화면 / 관리자 화면 / 내부 화면)와 사용자 상태로 표시할 화면 결정
   const routeKind = classifyRoute(pathname);
@@ -120,241 +155,133 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[var(--bg-main)] text-[var(--text-main)]">
-      {/* 상단 바 */}
-      <div className="bg-slate-900 text-white px-3 sm:px-6 py-2 text-xs border-b border-slate-800 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-
-
-            {rawFirebaseUser && authUserProfile ? (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-800 border border-slate-700 text-slate-200">
-                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                <strong>{authUserProfile.name}</strong> ({authUserProfile.email})
-                <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-slate-700 text-slate-200">
-                  {ROLE_LABELS[authUserProfile.role]}
-                </span>
-                <span
-                  className={`px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                    authUserProfile.approvalStatus === "approved"
-                      ? "bg-emerald-500 text-white"
-                      : authUserProfile.approvalStatus === "rejected"
-                      ? "bg-rose-500 text-white"
-                      : "bg-amber-500 text-white"
-                  }`}
-                >
-                  {authUserProfile.approvalStatus === "approved"
-                    ? "승인완료"
-                    : authUserProfile.approvalStatus === "rejected"
-                    ? "가입반려"
-                    : authUserProfile.approvalStatus === "supplement_requested"
-                    ? "보완요청"
-                    : authUserProfile.approvalStatus === "suspended"
-                    ? "이용정지"
-                    : authUserProfile.approvalStatus === "pending"
-                    ? "승인대기중"
-                    : "상태확인필요"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleLogout()}
-                  className="ml-1 text-slate-400 hover:text-white underline text-[11px] inline-flex items-center gap-0.5 cursor-pointer"
-                >
-                  <LogOut className="w-3 h-3" /> 로그아웃
-                </button>
-              </span>
-            ) : rawFirebaseUser ? (
-              <button
-                type="button"
-                onClick={() => handleLogout()}
-                className="text-slate-300 hover:text-white underline text-[11px] inline-flex items-center gap-1 cursor-pointer"
-              >
-                <LogOut className="w-3 h-3" /> {rawFirebaseUser.email} 로그아웃
-              </button>
-            ) : null}
-          </div>
-
-          <div className="flex items-center gap-1.5 flex-wrap">
-          </div>
-        </div>
-      </div>
-
+    <div className="min-h-screen flex flex-col bg-canvas text-ink">
       {/* 본문 레이아웃 */}
       <div className="flex-1 flex max-w-7xl w-full mx-auto">
-        {/* PC 사이드바 */}
-        <aside className="hidden md:flex md:w-64 lg:w-72 flex-col shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 sticky top-10 h-[calc(100vh-2.5rem)] justify-between">
-          <div className="space-y-6">
-            <Link href="/" className="block group">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200/80 p-1 flex items-center justify-center shadow-xs group-hover:border-orange-400 group-hover:shadow-sm transition shrink-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={DONGGUK_SYMBOL_DATA_URL}
-                    alt="동국대학교 심볼"
-                    className="w-full h-full object-contain"
-                  />
-                </div>
-                <div>
+        {/* PC 좌측 사이드바 */}
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface md:flex lg:w-72 justify-between">
+          <div className="flex flex-col min-h-0 flex-1">
+            {/* 상단 텍스트 기반 브랜드 로고 */}
+            <div className="px-5 pt-5 pb-4">
+              <Link href="/" className="group flex items-center gap-2.5 rounded-lg">
+                <BrandMark />
+                <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xl font-black tracking-tight text-slate-900 dark:text-white">
-                      동국<span className="text-orange-600">e</span>음
-                    </span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 font-bold border border-orange-200 dark:border-orange-800">
+                    <BrandWordmark className="text-lg" />
+                    <span className="rounded bg-accent-soft px-1.5 py-px text-xs font-semibold text-accent">
                       교육학과
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  <p className="truncate text-xs text-ink-3">
                     교육(e)과 사람을 잇는 학과 플랫폼
                   </p>
                 </div>
-              </div>
-            </Link>
-
-            {/* 현재 접속 프로필 카드 (승인 회원만 표시, 그 외에는 데모 사용자 정보가 보이지 않도록 안내만 표시) */}
-            {!isAccessAllowed ? (
-              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs text-slate-600 dark:text-slate-300 space-y-1">
-                <p className="font-bold flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-orange-600" />
-                  {accessGate === "signed_out"
-                    ? "로그인이 필요합니다"
-                    : isAuthLoading
-                    ? "계정 확인 중..."
-                    : "승인 완료 후 이용 가능"}
-                </p>
-                {rawFirebaseUser && (
-                  <p className="truncate text-[11px] text-slate-500">{rawFirebaseUser.email}</p>
-                )}
-              </div>
-            ) : (
-            <div className="p-3.5 rounded-2xl bg-orange-50/70 dark:bg-slate-800/80 border border-orange-200/70 dark:border-slate-700">
-              <div className="flex items-center gap-3">
-                {currentUser.role === "admin" ? (
-                  <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 border border-orange-200 dark:border-slate-700 flex items-center justify-center shrink-0 overflow-hidden shadow-xs">
-                    <img
-                      src={ADMIN_PROFILE_LOGO_DATA_URL}
-                      alt="동국대학교 관리자 로고"
-                      className="w-full h-full object-contain p-0.5"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-10 h-10 rounded-xl bg-orange-600 text-white font-bold text-sm flex items-center justify-center shrink-0">
-                    {getAvatarInitials(currentUser.name, currentUser.role) || currentUser.avatarInitials}
-                  </div>
-                )}
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <p className="font-bold text-sm text-slate-900 dark:text-slate-100 truncate">
-                      {currentUser.name}
-                    </p>
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-orange-600 text-white">
-                      {ROLE_LABELS[currentUser.role]}
-                    </span>
-                  </div>
-                  {currentUser.role !== "admin" && currentUser.studentIdOrYear ? (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                      {currentUser.studentIdOrYear}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-
-              {isRealAuthActive && (
-                <div className="mt-2 pt-2 border-t border-orange-200/60 dark:border-slate-700 flex items-center justify-between text-[11px]">
-                  <span className="text-slate-500">
-                    {authUserProfile?.approvalStatus === "approved"
-                      ? "🟢 승인된 정회원"
-                      : "🟡 관리자 승인 대기중"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => handleLogout()}
-                    className="text-rose-600 hover:underline font-semibold"
-                  >
-                    로그아웃
-                  </button>
-                </div>
-              )}
+              </Link>
             </div>
-            )}
 
-            {/* 내비게이션 메뉴 */}
-            <nav className="space-y-1">
-              {visibleNavItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = isItemActive(item.href);
+            {/* 내비게이션 메뉴 (소통 / 학업 / 가입·운영 그룹화) */}
+            <nav aria-label="메인 메뉴" className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
+              {NAV_GROUPS.map((group, gi) => (
+                <div key={gi} className={cn(gi > 0 && "mt-5")}>
+                  {group.label && (
+                    <p className="mb-1 px-3 text-xs font-semibold text-ink-3">
+                      {group.label}
+                    </p>
+                  )}
+                  <ul className="space-y-0.5">
+                    {group.hrefs.map((href) => {
+                      const item = NAV_ITEMS.find((n) => n.href === href);
+                      if (!item) return null;
+                      const Icon = item.icon;
+                      const active = isItemActive(item.href);
+                      const badge = badgeFor(item.href);
 
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-                      isActive
-                        ? "bg-orange-600 text-white shadow-xs"
-                        : "text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                    }`}
-                  >
-                    <span className="flex items-center gap-3">
-                      <Icon className="w-4 h-4" />
-                      {item.label}
-                    </span>
-
-                    {item.href === "/chat" && totalUnreadMessages > 0 && (
-                      <span
-                        className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold ${
-                          isActive
-                            ? "bg-white text-orange-600"
-                            : "bg-orange-600 text-white"
-                        }`}
-                      >
-                        {formatUnreadBadge(totalUnreadMessages)}
-                      </span>
-                    )}
-
-                    {item.href === "/admin" && pendingApprovalsCount > 0 && (
-                      <span
-                        className={`px-1.5 py-0.5 rounded-full text-[11px] font-bold ${
-                          isActive
-                            ? "bg-white text-orange-600"
-                            : "bg-amber-500 text-white"
-                        }`}
-                      >
-                        {pendingApprovalsCount}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
+                      return (
+                        <li key={item.href}>
+                          <Link
+                            href={item.href}
+                            aria-current={active ? "page" : undefined}
+                            className={cn(
+                              "flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors",
+                              active
+                                ? "bg-accent-soft font-semibold text-accent"
+                                : "font-medium text-ink-2 hover:bg-surface-2 hover:text-ink"
+                            )}
+                          >
+                            <Icon
+                              aria-hidden="true"
+                              className={cn(
+                                "size-[18px] shrink-0",
+                                active ? "text-accent" : "text-ink-3"
+                              )}
+                            />
+                            <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                            {badge && <CountBadge count={badge.count} tone={badge.tone} />}
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
             </nav>
           </div>
 
-          <div className="pt-4 border-t border-slate-200 dark:border-slate-800 text-[11px] text-slate-400 space-y-1">
-            <p className="font-semibold text-slate-500 dark:text-slate-300 flex items-center gap-1">
-              <Sparkles className="w-3.5 h-3.5 text-orange-500" /> 동국e음 (Dongguk e-eum)
+          {/* 하단 현재 접속 프로필 카드 */}
+          <div className="border-t border-line p-4 bg-surface shrink-0">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <Avatar
+                  name={currentUser.name}
+                  initials={
+                    getAvatarInitials(currentUser.name, currentUser.role) ||
+                    currentUser.avatarInitials
+                  }
+                  role={currentUser.role}
+                  size="md"
+                />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="truncate text-sm font-semibold text-ink">
+                      {currentUser.name}
+                    </p>
+                    <RoleBadge role={currentUser.role} />
+                  </div>
+                  <p className="truncate text-xs text-ink-3">
+                    {currentUser.studentIdOrYear ||
+                      (currentUser.role === "admin"
+                        ? "학과 관리자"
+                        : currentUser.email || "")}
+                  </p>
+                </div>
+              </div>
+              {rawFirebaseUser && (
+                <button
+                  type="button"
+                  onClick={() => handleLogout()}
+                  title="로그아웃"
+                  className="shrink-0 p-1.5 rounded-lg text-ink-3 hover:text-danger hover:bg-surface-2 transition-colors cursor-pointer"
+                >
+                  <LogOut className="size-4" aria-hidden="true" />
+                  <span className="sr-only">로그아웃</span>
+                </button>
+              )}
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-ink-3">
+              동국대학교 교육학과 폐쇄형 커뮤니티 프로토타입 · ※ 모든 데이터는 개발용 가상
+              데이터입니다.
             </p>
-            <p>동국대학교 교육학과 전용 플랫폼</p>
-
           </div>
         </aside>
 
         {/* 메인 컨텐츠 영역 */}
         <div className="flex-1 flex flex-col min-w-0 pb-20 md:pb-8">
           {/* 모바일 상단 브랜드 헤더 */}
-          <header className="md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between">
+          <header className="md:hidden bg-surface border-b border-line px-4 py-3 flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-orange-50 border border-orange-200/80 p-0.5 flex items-center justify-center shrink-0">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={DONGGUK_SYMBOL_DATA_URL}
-                  alt="동국대학교 심볼"
-                  className="w-full h-full object-contain"
-                />
-              </div>
-              <div>
-                <span className="font-black text-base text-slate-900 dark:text-white">
-                  동국<span className="text-orange-600">e</span>음
-                </span>
-                <span className="ml-1.5 text-[11px] text-slate-500">교육학과</span>
-              </div>
+              <BrandMark size="sm" />
+              <BrandWordmark className="text-base" />
+              <span className="text-xs text-ink-3">교육학과</span>
             </Link>
 
             <div className="flex items-center gap-2">
@@ -362,15 +289,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => setIsFirebaseModalOpen(true)}
-                  className="px-2.5 py-1 rounded-lg bg-orange-600 text-white text-xs font-bold"
+                  className="px-2.5 py-1 rounded-lg bg-brand-600 text-white text-xs font-bold shadow-xs hover:bg-brand-700 transition"
                 >
-                  DB연결
+                  DB설정
                 </button>
               )}
               {!rawFirebaseUser ? (
                 <Link
                   href="/auth"
-                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold"
+                  className="px-2.5 py-1 rounded-lg bg-surface-2 text-xs font-semibold text-ink hover:bg-surface-3 transition"
                 >
                   로그인
                 </Link>
@@ -378,7 +305,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => handleLogout()}
-                  className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-semibold"
+                  className="px-2.5 py-1 rounded-lg bg-surface-2 text-xs font-semibold text-ink hover:bg-surface-3 transition cursor-pointer"
                 >
                   로그아웃
                 </button>
@@ -390,47 +317,51 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {routeView === "content" || routeView === "show_auth_page" ? (
               // 승인 완료 회원의 내부 화면, 또는 비로그인 사용자의 로그인·회원가입 화면
               children
-            ) : routeView === "loading" || routeView === "redirect_auth" || routeView === "redirect_home" ? (
-              // 로그인·회원 문서 확인 중이거나 다른 화면으로 이동 중: 내부 콘텐츠를 절대 노출하지 않음
-              <div className="max-w-md mx-auto my-20 p-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 text-center space-y-4 shadow-sm">
-                <div className="w-14 h-14 rounded-2xl bg-orange-100 dark:bg-orange-950/60 text-orange-600 flex items-center justify-center mx-auto">
-                  <Loader2 className="w-7 h-7 animate-spin" />
+            ) : routeView === "loading" ||
+              routeView === "redirect_auth" ||
+              routeView === "redirect_home" ? (
+              // 로그인·회원 문서 확인 중이거나 다른 화면으로 이동 중
+              <div className="max-w-md mx-auto my-20 p-8 bg-surface rounded-3xl border border-line text-center space-y-4 shadow-xs">
+                <div className="size-14 rounded-2xl bg-accent-soft text-accent flex items-center justify-center mx-auto">
+                  <Loader2 className="size-7 animate-spin" />
                 </div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white">
+                <h2 className="text-lg font-black text-ink">
                   {routeView === "redirect_auth"
                     ? "로그인 화면으로 이동 중..."
                     : routeView === "redirect_home"
                     ? "홈 화면으로 이동 중..."
                     : "동국e음 보안 인증 확인 중..."}
                 </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                <p className="text-xs text-ink-3 leading-relaxed">
                   학과 전용 플랫폼 보안 정책에 따라 로그인 여부와 소속 승인 상태를 순서대로 확인하고 있습니다.
                 </p>
               </div>
             ) : routeView === "forbidden" ? (
               // 일반 승인 회원이 URL로 /admin 직접 접근 시 403 차단
-              <div className="max-w-xl mx-auto my-14 bg-white dark:bg-slate-900 rounded-3xl border border-rose-300 dark:border-rose-900/60 p-8 text-center space-y-4 shadow-lg">
-                <div className="w-16 h-16 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 flex items-center justify-center mx-auto">
-                  <ShieldAlert className="w-8 h-8" />
+              <div className="max-w-xl mx-auto my-14 bg-surface rounded-3xl border border-danger/40 p-8 text-center space-y-4 shadow-md">
+                <div className="size-16 rounded-2xl bg-danger-soft text-danger flex items-center justify-center mx-auto">
+                  <ShieldAlert className="size-8" />
                 </div>
-                <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                <h2 className="text-xl font-black text-ink">
                   관리자 전용 구역 접근 제한 (403 Forbidden)
                 </h2>
-                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed max-w-md mx-auto">
-                  <strong>{authUserProfile?.name}</strong>님은 현재 <strong>{ROLE_LABELS[authUserProfile?.role || "student"]}</strong> 신분으로 승인되어 있습니다.<br />
+                <p className="text-xs sm:text-sm text-ink-2 leading-relaxed max-w-md mx-auto">
+                  <strong>{authUserProfile?.name}</strong>님은 현재{" "}
+                  <strong>{ROLE_LABELS[authUserProfile?.role || "student"]}</strong> 신분으로 승인되어 있습니다.
+                  <br />
                   관리자 센터는 시스템 최고 관리자(Admin) 권한을 부여받은 계정만 접근할 수 있습니다.
                 </p>
                 <div className="pt-2 flex flex-wrap justify-center gap-2.5">
                   <Link
                     href="/"
-                    className="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition shadow-xs"
+                    className="px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold transition shadow-xs"
                   >
                     메인 홈 대시보드로 돌아가기 →
                   </Link>
                 </div>
               </div>
             ) : (
-              // 로그인했지만 승인되지 않은 모든 상태: 어떤 주소로 들어와도 상태별 안내 화면만 표시
+              // 로그인했지만 승인되지 않은 모든 상태 안내 화면
               <AccessGateScreen
                 state={accessGate}
                 name={authUserProfile?.name || rawFirebaseUser?.email || "회원"}
@@ -448,52 +379,53 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* 모바일 하단 내비게이션 바 */}
       {(isAccessAllowed || accessGate === "signed_out") && (
-      <nav
-        className={`md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 px-2 py-1.5 grid gap-1 ${
-          !isAccessAllowed ? "grid-cols-1" : isGraduationAllowed ? "grid-cols-6" : "grid-cols-5"
-        }`}
-      >
-        {(!isAccessAllowed
-          ? [
-              { href: "/auth", shortLabel: "로그인/가입", icon: UserCheck },
-            ]
-          : [
-              { href: "/", shortLabel: "홈", icon: Home },
-              { href: "/notices", shortLabel: "공지", icon: Megaphone },
-              { href: "/chat", shortLabel: "대화창", icon: MessageSquare },
-              { href: "/rooms", shortLabel: "게시판", icon: Compass },
-              ...(isGraduationAllowed
-                ? [{ href: "/graduation", shortLabel: "졸업요건", icon: CheckSquare }]
-                : []),
-              isApprovedAdminUser
-                ? { href: "/admin", shortLabel: "관리자", icon: ShieldCheck }
-                : { href: "/alumni", shortLabel: "졸업생", icon: Users },
-            ]
-        ).map((item) => {
-          const Icon = item.icon;
-          const isActive = isItemActive(item.href);
+        <nav
+          className={`md:hidden fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-line px-2 py-1.5 grid gap-1 ${
+            !isAccessAllowed
+              ? "grid-cols-1"
+              : isGraduationAllowed
+              ? "grid-cols-6"
+              : "grid-cols-5"
+          }`}
+        >
+          {(!isAccessAllowed
+            ? [{ href: "/auth", shortLabel: "로그인/가입", icon: UserCheck }]
+            : [
+                { href: "/", shortLabel: "홈", icon: Home },
+                { href: "/notices", shortLabel: "공지", icon: Megaphone },
+                { href: "/chat", shortLabel: "대화창", icon: MessageSquare },
+                { href: "/rooms", shortLabel: "공유방", icon: Compass },
+                ...(isGraduationAllowed
+                  ? [{ href: "/graduation", shortLabel: "졸업요건", icon: CheckSquare }]
+                  : []),
+                isApprovedAdminUser
+                  ? { href: "/admin", shortLabel: "관리자", icon: ShieldCheck }
+                  : { href: "/alumni", shortLabel: "졸업생", icon: Users },
+              ]
+          ).map((item) => {
+            const Icon = item.icon;
+            const isActive = isItemActive(item.href);
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={`flex flex-col items-center justify-center py-1 rounded-xl text-[11px] font-semibold transition relative ${
-                isActive
-                  ? "text-orange-600 font-bold"
-                  : "text-slate-500 dark:text-slate-400"
-              }`}
-            >
-              <Icon className="w-5 h-5 mb-0.5" />
-              <span className="truncate">{item.shortLabel}</span>
-              {item.href === "/chat" && totalUnreadMessages > 0 && (
-                <span className="absolute top-0.5 right-1 min-w-4 h-4 px-1 rounded-full bg-orange-600 text-white text-[10px] flex items-center justify-center">
-                  {formatUnreadBadge(totalUnreadMessages)}
-                </span>
-              )}
-            </Link>
-          );
-        })}
-      </nav>
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={cn(
+                  "flex flex-col items-center justify-center py-1 rounded-xl text-[11px] font-semibold transition relative",
+                  isActive ? "text-accent font-bold" : "text-ink-3 hover:text-ink"
+                )}
+              >
+                <Icon className="w-5 h-5 mb-0.5" />
+                <span className="truncate">{item.shortLabel}</span>
+                {item.href === "/chat" && totalUnreadMessages > 0 && (
+                  <span className="absolute top-0.5 right-1 min-w-4 h-4 px-1 rounded-full bg-brand-600 text-white text-[10px] flex items-center justify-center">
+                    {totalUnreadMessages > 99 ? "99+" : totalUnreadMessages}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
+        </nav>
       )}
 
       {/* Firebase 설정 및 보안규칙 모달 */}

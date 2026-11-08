@@ -1,5 +1,7 @@
 "use client";
 
+import { Badge } from "@/components/ui";
+
 import React from "react";
 import Link from "next/link";
 import {
@@ -34,11 +36,28 @@ export const ROLE_LABELS: Record<UserRole, string> = {
 };
 
 export const ROLE_BADGE_STYLES: Record<UserRole, string> = {
-  student: "bg-orange-100 text-orange-800 border-orange-200",
-  alumni: "bg-emerald-100 text-emerald-800 border-emerald-200",
-  professor: "bg-blue-100 text-blue-800 border-blue-200",
-  admin: "bg-purple-100 text-purple-800 border-purple-200",
+  student: "bg-role-student-soft text-role-student",
+  alumni: "bg-role-alumni-soft text-role-alumni",
+  professor: "bg-role-professor-soft text-role-professor",
+  admin: "bg-role-admin-soft text-role-admin",
 };
+
+/** 역할 이름 배지 (재학생·졸업생·교수·관리자) */
+export function RoleBadge({
+  role,
+  className,
+  size,
+}: {
+  role: UserRole;
+  className?: string;
+  size?: "sm" | "md";
+}) {
+  return (
+    <Badge tone={role} size={size} className={className}>
+      {ROLE_LABELS[role]}
+    </Badge>
+  );
+}
 
 export function DemoInfoBanner({
   title,
