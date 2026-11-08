@@ -1959,20 +1959,18 @@ export function calculateGraduationAudit(
     isFulfilled: isVolunteeringFulfilled,
   };
 
-  // 총 졸업학점(130): 강좌 기반 합산과 기존 수동 입력값 중 유효값 사용 (단, 강좌 합산 시 대체인정 과목은 절대 이중 합산하지 않음)
-  const totalEarnedCredits = hasCourses
-    ? Math.max(courseTotalCredits, legacyTotal)
-    : legacyTotal;
-
-  // 교직 총 인정학점 (교직이론 12 + 교직소양 6 + 교육실습(현장실습+교육봉사) 4~6 = 22학점 기준)
-  const volunteeringRecognizedCredits =
-    (course1Completed ? 1 : 0) + (course2Completed ? 1 : 0) || courseVolunteeringCredits;
+  // 교직 총 인정학점 (교직소양 6 + 교육실습(현장실습+교육봉사) 4 = 10학점 기준)
+  // 전공 필수/선택 과목은 전공학점으로만 계산되며, 교직이론 대체인정 여부(teachingTheoryAudit)로만 관리되고,
+  // 교직과목 이수 현황(10학점 기준)에는 포함되지 않음 (전공 필수 과목 이중 가산 원천 차단)
+  const volunteeringRecognizedCredits = Math.max(
+    (course1Completed ? 1 : 0) + (course2Completed ? 1 : 0),
+    courseVolunteeringCredits
+  );
   const practicumRecognizedCredits = Math.max(
     practicumEvaluation.earnedPracticumCredits,
     coursePracticumCredits
   );
   const computedTeachingCredits =
-    recognizedEquivalentCredits +
     courseTeachingLiteracyCredits +
     practicumRecognizedCredits +
     Math.min(2, volunteeringRecognizedCredits);
@@ -1980,6 +1978,25 @@ export function calculateGraduationAudit(
   const effectiveTeachingCredits = hasCourses
     ? Math.max(computedTeachingCredits, legacyTeaching)
     : legacyTeaching;
+
+  // 체크박스/버튼으로 이수 처리된 교육봉사 학점(최대 2학점) 및 현장실습 학점이 강좌 목록에 직접 추가되지 않았더라도
+  // 총 졸업 이수 학점(130학점)에 정상 반영되도록 합산
+  const additionalVolunteeringCredits = Math.max(
+    0,
+    Math.min(2, volunteeringRecognizedCredits) - courseVolunteeringCredits
+  );
+  const additionalPracticumCredits = Math.max(
+    0,
+    practicumRecognizedCredits - coursePracticumCredits
+  );
+
+  const effectiveCourseTotalCredits =
+    courseTotalCredits + additionalVolunteeringCredits + additionalPracticumCredits;
+
+  // 총 졸업학점(130): 강좌 기반 합산과 기존 수동 입력값 중 유효값 사용 (단, 강좌 합산 시 대체인정 과목은 절대 이중 합산하지 않음)
+  const totalEarnedCredits = hasCourses
+    ? Math.max(effectiveCourseTotalCredits, legacyTotal)
+    : Math.max(legacyTotal, additionalVolunteeringCredits + additionalPracticumCredits);
 
   // 교직 검사/교육/평점 체크리스트 평가
   const tc = progress.teachingChecklist!;
