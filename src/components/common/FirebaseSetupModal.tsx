@@ -330,7 +330,7 @@ export function FirebaseSetupModal({
               </button>
             </div>
             <p className="text-emerald-800 dark:text-emerald-300">
-              이제 [진로·복전 공유방]에서 글을 쓰거나 댓글·공감을 누르면 다른 컴퓨터에서도 똑같이 보입니다.
+              이제 [진로·복전 게시판]에서 글을 쓰거나 댓글·공감을 누르면 다른 컴퓨터에서도 똑같이 보입니다.
             </p>
             <div className="pt-1">
               <button
