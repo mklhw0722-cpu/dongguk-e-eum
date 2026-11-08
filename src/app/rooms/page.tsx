@@ -179,7 +179,7 @@ export default function RoomsPage() {
               <button
                 type="button"
                 onClick={() => setIsPostModalOpen(true)}
-                className="px-4 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold inline-flex items-center gap-1"
+                className="h-9 px-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-raise transition"
               >
                 <Plus className="w-3.5 h-3.5" /> 새 게시글 작성
               </button>
@@ -436,7 +436,7 @@ export default function RoomsPage() {
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold"
+                    className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold shadow-raise transition cursor-pointer"
                   >
                     게시글 등록
                   </button>
@@ -486,7 +486,7 @@ export default function RoomsPage() {
             <button
               type="button"
               onClick={() => setIsCreateRoomOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5"
+              className="h-9 px-3.5 rounded-lg bg-ink text-white hover:bg-ink/85 text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition"
             >
               <Plus className="w-4 h-4" /> 게시판 추가 (관리자)
             </button>
@@ -683,7 +683,7 @@ export default function RoomsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold"
+                  className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold shadow-raise transition cursor-pointer"
                 >
                   게시판 추가
                 </button>

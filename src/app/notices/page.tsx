@@ -187,7 +187,7 @@ export default function NoticesPage() {
             <button
               type="button"
               onClick={() => setIsWriteModalOpen(true)}
-              className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 shadow-xs transition"
+              className="h-9 px-3.5 rounded-lg bg-ink text-white hover:bg-ink/85 text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition cursor-pointer"
             >
               <Plus className="w-4 h-4" />
               학과 관리자 공지 등록
@@ -438,7 +438,7 @@ export default function NoticesPage() {
                 href={selectedNotice.officialUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold inline-flex items-center gap-1.5 shrink-0"
+                className="h-9 px-3.5 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold inline-flex items-center gap-1.5 shadow-raise transition cursor-pointer shrink-0"
               >
                 공식 홈페이지 원문 이동 <ExternalLink className="w-3.5 h-3.5" />
               </a>
@@ -584,7 +584,7 @@ export default function NoticesPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold inline-flex items-center gap-1"
+                  className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold shadow-raise transition inline-flex items-center gap-1 cursor-pointer"
                 >
                   <CheckCircle2 className="w-4 h-4" /> 공지 등록
                 </button>

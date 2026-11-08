@@ -735,7 +735,7 @@ export default function AlumniPage() {
               <button
                 type="submit"
                 disabled={isSaving}
-                className="px-5 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-bold text-xs sm:text-sm flex items-center gap-2 transition"
+                className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-raise transition cursor-pointer"
               >
                 {isSaving ? "데이터베이스 저장 중..." : "프로필 및 공개 설정 저장"}
               </button>
@@ -818,7 +818,7 @@ export default function AlumniPage() {
                   setDetailAlumni(null);
                   setMentoringTarget(target);
                 }}
-                className="px-4 py-2 rounded-xl bg-orange-600 text-white text-xs font-bold inline-flex items-center gap-1.5 hover:bg-orange-700 transition"
+                className="px-4 py-2 rounded-lg bg-brand-600 text-white text-xs font-semibold inline-flex items-center gap-1.5 hover:bg-brand-700 shadow-raise transition cursor-pointer"
               >
                 <Sparkles className="w-3.5 h-3.5" /> 멘토링 신청하기
               </button>
@@ -884,7 +884,7 @@ export default function AlumniPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold"
+                  className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-semibold shadow-raise transition cursor-pointer"
                 >
                   멘토링 요청 등록
                 </button>

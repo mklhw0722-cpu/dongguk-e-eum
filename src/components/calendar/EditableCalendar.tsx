@@ -895,7 +895,7 @@ export default function EditableCalendar({
                   </button>
                   <button
                     type="submit"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shadow-xs transition"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs font-semibold shadow-raise transition cursor-pointer"
                   >
                     <Check className="w-3.5 h-3.5" />
                     {editingEventId ? "수정 완료" : "일정 등록"}

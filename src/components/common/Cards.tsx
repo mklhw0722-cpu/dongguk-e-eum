@@ -78,10 +78,10 @@ export function DemoInfoBanner({
 
   return (
     <div className={`rounded-xl border p-3.5 text-xs sm:text-sm flex items-start gap-3 ${styles}`}>
-      <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-orange-600 dark:text-orange-400" />
+      <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-accent" />
       <div className="space-y-0.5">
-        <p className="font-semibold">{title}</p>
-        <p className="opacity-90 leading-relaxed">{description}</p>
+        <p className="font-semibold text-ink">{title}</p>
+        <p className="text-ink-2 leading-relaxed">{description}</p>
       </div>
     </div>
   );
@@ -99,21 +99,21 @@ export function EmptyStateBox({
   onAction?: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white/60 dark:bg-slate-900/40 p-8 text-center">
-      <div className="mx-auto w-11 h-11 rounded-full bg-orange-50 dark:bg-orange-950/50 flex items-center justify-center text-orange-600 mb-3">
+    <div className="rounded-2xl border border-dashed border-line bg-surface p-8 text-center">
+      <div className="mx-auto w-11 h-11 rounded-full bg-accent-soft flex items-center justify-center text-accent mb-3">
         <HelpCircle className="w-6 h-6" />
       </div>
-      <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 mb-1">
+      <h3 className="text-base font-bold text-ink mb-1">
         {title}
       </h3>
-      <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+      <p className="text-xs sm:text-sm text-ink-3 max-w-md mx-auto">
         {description}
       </p>
       {actionLabel && onAction && (
         <button
           type="button"
           onClick={onAction}
-          className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs sm:text-sm font-semibold transition"
+          className="mt-4 inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-xs sm:text-sm font-semibold transition shadow-raise"
         >
           {actionLabel}
         </button>
@@ -138,7 +138,7 @@ export function SearchAndFilterBar({
   onSelectCategory: (cat: string) => void;
 }) {
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 space-y-3 shadow-xs">
+    <div className="bg-surface rounded-2xl border border-line p-4 space-y-3 shadow-xs">
       <div className="relative">
         <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
         <input
@@ -146,7 +146,7 @@ export function SearchAndFilterBar({
           value={searchQuery}
           onChange={(e) => onSearchChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+          className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-line bg-surface-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition"
         />
       </div>
       <div className="flex flex-wrap gap-1.5">
@@ -266,7 +266,7 @@ export function NoticeCard({
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-300 font-bold transition shadow-2xs"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-surface-2 hover:bg-surface-3 text-ink-2 hover:text-ink border border-line text-xs font-semibold transition shadow-2xs"
           >
             공식 원문 바로가기 <ExternalLink className="w-3.5 h-3.5" />
           </a>
@@ -357,14 +357,14 @@ export function AlumniCard({
         <button
           type="button"
           onClick={() => onSelectProfile(alumni)}
-          className="px-2.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+          className="px-2.5 py-2 rounded-lg border border-line text-xs font-semibold text-ink hover:bg-surface-2 transition"
         >
           상세 프로필
         </button>
         <button
           type="button"
           onClick={() => onRequestMentoring(alumni)}
-          className="px-2.5 py-2 rounded-xl bg-orange-600 text-white text-xs font-semibold hover:bg-orange-700 transition flex items-center justify-center gap-1"
+          className="px-2.5 py-2 rounded-lg bg-accent-soft text-accent hover:bg-brand-100 border border-brand-200/80 text-xs font-semibold transition flex items-center justify-center gap-1.5"
         >
           <Sparkles className="w-3.5 h-3.5" /> 멘토링 신청
         </button>
@@ -426,7 +426,7 @@ export function CommunityRoomCard({
               e.stopPropagation();
               onSelectRoom(room.id);
             }}
-            className="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-semibold transition"
+            className="px-3.5 py-1.5 rounded-lg border border-line bg-surface text-ink hover:bg-surface-2 hover:border-line-strong text-xs font-semibold transition shadow-2xs"
           >
             게시판 보기
           </button>
