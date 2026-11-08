@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useApp } from "@/context/AppContext";
 import { ROLE_LABELS, DemoInfoBanner } from "@/components/common/Cards";
+import { cn, Avatar, AvatarStack, Badge, CountBadge } from "@/components/ui";
 import {
   MessageSquare,
   Send,
@@ -49,27 +50,27 @@ const CONSULTATION_STATUS_BADGES: Record<
 > = {
   pending: {
     label: "신청 대기",
-    style: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-200 dark:border-amber-800",
+    style: "bg-amber-100 text-amber-800   border border-amber-200 ",
   },
   accepted: {
     label: "상담 수락됨",
-    style: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800",
+    style: "bg-emerald-100 text-emerald-800   border border-emerald-200 ",
   },
   reschedule_requested: {
     label: "일정 조정 요청",
-    style: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border border-blue-200 dark:border-blue-800",
+    style: "bg-blue-100 text-blue-800   border border-blue-200 ",
   },
   rejected: {
     label: "상담 거절됨",
-    style: "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800",
+    style: "bg-rose-100 text-rose-800   border border-rose-200 ",
   },
   completed: {
     label: "상담 완료",
-    style: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700",
+    style: "bg-slate-100 text-slate-700   border border-slate-200 ",
   },
   cancelled: {
     label: "신청 취소됨",
-    style: "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700",
+    style: "bg-slate-100 text-slate-500   border border-slate-200 ",
   },
 };
 
@@ -198,6 +199,7 @@ export default function ChatPage() {
     conversations[0]?.id || ""
   );
   const [messageInput, setMessageInput] = useState("");
+  const [mobileView, setMobileView] = useState<"list" | "thread">("list");
   const [convSearch, setConvSearch] = useState("");
   const [showMemberPanel, setShowMemberPanel] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -722,11 +724,11 @@ export default function ChatPage() {
         <div>
           <div className="flex items-center gap-2">
             <MessageSquare className="w-6 h-6 text-orange-600" />
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900">
               동국e음 학과 전용 대화창
             </h1>
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
             교수님의 재학생 면담 요청, 선후배 1:1 멘토링 대화, 학술제·스터디 단체 채팅방을 지원합니다.
           </p>
         </div>
@@ -740,7 +742,7 @@ export default function ChatPage() {
               setModalMode("direct");
               refreshApprovedMembers();
             }}
-            className="px-3.5 py-2 rounded-xl bg-slate-900 dark:bg-slate-700 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 transition shadow-xs"
+            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 transition shadow-xs"
           >
             <UserPlus className="w-4 h-4" /> 사용자 검색 · 1:1 대화 시작
           </button>
@@ -762,7 +764,7 @@ export default function ChatPage() {
 
       {/* 상태 배너: 실제 Firestore 동기화 연결 상태 안내 */}
       {isRealAuthActive && authUserProfile?.approvalStatus === "approved" ? (
-        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs sm:text-sm">
+        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs sm:text-sm">
           <div className="flex items-center gap-2">
             <span className="flex h-2.5 w-2.5 relative">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
@@ -771,7 +773,7 @@ export default function ChatPage() {
             <span className="font-bold">
               Firestore 실시간 채팅 연동 활성화
             </span>
-            <span className="text-emerald-600 dark:text-emerald-400 text-xs hidden sm:inline">
+            <span className="text-emerald-600 text-xs hidden sm:inline">
               · 승인된 회원 목록과 주고받는 메시지가 실시간으로 자동 동기화됩니다.
             </span>
           </div>
@@ -779,7 +781,7 @@ export default function ChatPage() {
             type="button"
             onClick={() => refreshApprovedMembers()}
             title="회원 목록 새로고침"
-            className="p-1 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 transition"
+            className="p-1 rounded-lg hover:bg-emerald-100 :bg-emerald-900/50 text-emerald-700 transition"
           >
             <RefreshCw className="w-3.5 h-3.5" />
           </button>
@@ -793,12 +795,12 @@ export default function ChatPage() {
 
       {/* 통신 에러 배너 */}
       {(chatError || approvedMembersError) && (
-        <div className="flex items-start gap-2 p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-200 text-xs">
+        <div className="flex items-start gap-2 p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs">
           <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
           <div className="space-y-0.5">
             <p className="font-bold">{chatError || approvedMembersError}</p>
             {approvedMembersError && (
-              <p className="text-[11px] text-rose-600 dark:text-rose-400">
+              <p className="text-[11px] text-rose-600">
                 Firebase Console의 Firestore Database ➔ Rules(규칙) 탭에서 최신 보안 규칙이 정상 배포되었는지 확인해 주세요.
               </p>
             )}
@@ -811,14 +813,14 @@ export default function ChatPage() {
         (consultations || []).filter(
           (c) => c.professorId === currentUser.id && c.status === "pending"
         ).length > 0 && (
-          <section className="bg-white dark:bg-slate-900 rounded-3xl border border-orange-200 dark:border-orange-900/60 p-5 space-y-4 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <section className="bg-white rounded-3xl border border-orange-200 p-5 space-y-4 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <GraduationCap className="w-5 h-5 text-orange-600" />
-                <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
+                <h2 className="text-base font-extrabold text-slate-900">
                   접수된 학생 상담 신청
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-xs font-bold">
+                <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-800 text-xs font-bold">
                   {(consultations || []).filter(
                     (c) => c.professorId === currentUser.id && c.status === "pending"
                   ).length}건 대기 중
@@ -840,12 +842,12 @@ export default function ChatPage() {
                   return (
                     <div
                       key={c.id}
-                      className="p-4 rounded-2xl bg-orange-50/40 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-900/40 space-y-3.5"
+                      className="p-4 rounded-2xl bg-orange-50/40 border border-orange-200 space-y-3.5"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
+                            <span className="font-extrabold text-sm sm:text-base text-slate-900">
                               {c.studentName} 학생
                             </span>
                             {c.studentIdOrYear && (
@@ -853,7 +855,7 @@ export default function ChatPage() {
                                 ({c.studentIdOrYear})
                               </span>
                             )}
-                            <span className="px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 font-bold text-xs">
+                            <span className="px-2 py-0.5 rounded-md bg-orange-100 text-orange-800 font-bold text-xs">
                               {c.consultationType}
                             </span>
                           </div>
@@ -864,14 +866,14 @@ export default function ChatPage() {
                         </div>
                       </div>
 
-                      <div className="p-3 rounded-xl bg-white dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 leading-relaxed border border-orange-100 dark:border-orange-900/30">
-                        <span className="font-bold text-slate-900 dark:text-slate-100">상담 목적: </span>
+                      <div className="p-3 rounded-xl bg-white text-xs text-slate-700 leading-relaxed border border-orange-100">
+                        <span className="font-bold text-slate-900">상담 목적: </span>
                         {c.purpose}
                       </div>
 
                       {/* 상담 유형(진행 방식) 선택: 대면 vs 채팅 */}
                       <div className="space-y-1.5">
-                        <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                        <label className="block text-xs font-bold text-slate-700">
                           상담 진행 방식 선택 *
                         </label>
                         <div className="grid grid-cols-2 gap-2">
@@ -886,7 +888,7 @@ export default function ChatPage() {
                             className={`py-2 px-3 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
                               selectedMethod === "대면"
                                 ? "bg-orange-600 text-white border-orange-600 shadow-2xs"
-                                : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300"
+                                : "bg-white  text-slate-600  border-slate-200  hover:border-slate-300"
                             }`}
                           >
                             🏫 대면 상담
@@ -902,7 +904,7 @@ export default function ChatPage() {
                             className={`py-2 px-3 rounded-xl text-xs font-bold border transition flex items-center justify-center gap-1.5 ${
                               selectedMethod === "채팅"
                                 ? "bg-orange-600 text-white border-orange-600 shadow-2xs"
-                                : "bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300"
+                                : "bg-white  text-slate-600  border-slate-200  hover:border-slate-300"
                             }`}
                           >
                             💬 채팅 상담
@@ -911,12 +913,12 @@ export default function ChatPage() {
                       </div>
 
                       {/* 승인 / 미승인 버튼 */}
-                      <div className="pt-2 flex items-center justify-end gap-2 border-t border-orange-200/60 dark:border-orange-900/40">
+                      <div className="pt-2 flex items-center justify-end gap-2 border-t border-orange-200/60">
                         <button
                           type="button"
                           disabled={isUpdatingConsultation}
                           onClick={() => handleProfessorReject(c)}
-                          className="px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-white dark:hover:bg-slate-800 transition disabled:opacity-50"
+                          className="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold text-xs hover:bg-white :bg-slate-800 transition disabled:opacity-50"
                         >
                           미승인 (거절)
                         </button>
@@ -939,11 +941,11 @@ export default function ChatPage() {
       {/* 학생 전용: 나의 상담 신청 현황 */}
       {(currentUser.role === "student" || currentRole === "student") &&
         myActiveConsultations.length > 0 && (
-          <section className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 space-y-3 shadow-xs">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+          <section className="bg-white rounded-3xl border border-slate-200 p-4 sm:p-5 space-y-3 shadow-xs">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-orange-600" />
-                <h2 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white">
+                <h2 className="text-sm sm:text-base font-extrabold text-slate-900">
                   나의 교수 상담 신청 현황
                 </h2>
               </div>
@@ -958,14 +960,14 @@ export default function ChatPage() {
                   return (
                     <div
                       key={c.id}
-                      className="p-3.5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 space-y-2.5"
+                      className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2.5"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-extrabold text-sm text-slate-900 dark:text-white">
+                          <span className="font-extrabold text-sm text-slate-900">
                             {c.professorName} 교수님
                           </span>
-                          <span className="px-2 py-0.5 rounded-md bg-orange-50 dark:bg-orange-950 text-orange-700 dark:text-orange-300 font-bold text-xs">
+                          <span className="px-2 py-0.5 rounded-md bg-orange-50 text-orange-700 font-bold text-xs">
                             {c.consultationType}
                           </span>
                           {st && (
@@ -977,7 +979,7 @@ export default function ChatPage() {
                           )}
                         </div>
                         {c.consultationMethod && (
-                          <span className="px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-bold text-xs">
+                          <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 font-bold text-xs">
                             {c.consultationMethod} 상담
                           </span>
                         )}
@@ -987,14 +989,14 @@ export default function ChatPage() {
                         희망 제안 일정: {c.preferredDate} · {c.preferredTime}
                       </p>
 
-                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
                         {c.status === "pending" && (
                           <button
                             type="button"
                             onClick={() =>
                               handleCancelStudentConsultation(c.id)
                             }
-                            className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 font-bold text-xs transition"
+                            className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-100 :bg-slate-800 font-bold text-xs transition"
                           >
                             신청 취소
                           </button>
@@ -1022,10 +1024,13 @@ export default function ChatPage() {
         )}
 
       {/* 메인 메신저 그리드 */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-xs min-h-[580px]">
+      <div className="grid grid-cols-1 lg:grid-cols-12 bg-surface rounded-3xl border border-line overflow-hidden shadow-xs min-h-[580px]">
         {/* 좌측: 대화방 목록 */}
-        <div className="lg:col-span-4 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800 flex flex-col">
-          <div className="p-3.5 border-b border-slate-200 dark:border-slate-800">
+        <div className={cn(
+          "lg:col-span-4 border-b lg:border-b-0 lg:border-r border-line flex flex-col min-h-0",
+          mobileView === "list" ? "flex" : "hidden lg:flex"
+        )}>
+          <div className="p-3.5 border-b border-slate-200">
             <div className="relative">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -1033,12 +1038,12 @@ export default function ChatPage() {
                 value={convSearch}
                 onChange={(e) => setConvSearch(e.target.value)}
                 placeholder="대화방 이름 또는 메시지 검색..."
-                className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs focus:outline-none focus:ring-2 focus:ring-orange-500"
+                className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/60 max-h-[260px] lg:max-h-[520px]">
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-100 max-h-[260px] lg:max-h-[520px]">
             {filteredConversations.length === 0 ? (
               <div className="p-8 text-center text-xs text-slate-400">
                 참여 중인 대화방이 없습니다. 상단에서 새로운 대화를 시작해 보세요.
@@ -1058,8 +1063,8 @@ export default function ChatPage() {
                     onClick={() => handleSelectConversation(conv.id)}
                     className={`w-full text-left p-3.5 flex items-start gap-3 transition ${
                       isSelected
-                        ? "bg-orange-50/80 dark:bg-orange-950/30 border-l-4 border-orange-600"
-                        : "hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                        ? "bg-orange-50/80  border-l-4 border-orange-600"
+                        : "hover:bg-slate-50 :bg-slate-800/50"
                     }`}
                   >
                     <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-orange-500 to-amber-600 text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-2xs">
@@ -1068,16 +1073,16 @@ export default function ChatPage() {
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-1 mb-0.5">
-                        <h2 className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white truncate">
+                        <h2 className="font-bold text-xs sm:text-sm text-slate-900 truncate">
                           {conv.title}
                         </h2>
                         {conv.categoryTag && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 shrink-0">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-500 shrink-0">
                             {conv.categoryTag}
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                      <p className="text-xs text-slate-500 truncate">
                         {conv.lastMessageText || "대화를 시작해 보세요."}
                       </p>
                     </div>
@@ -1103,21 +1108,24 @@ export default function ChatPage() {
         </div>
 
         {/* 우측: 활성 대화 화면 */}
-        <div className="lg:col-span-8 flex flex-col justify-between bg-slate-50/50 dark:bg-slate-950/30">
+        <div className={cn(
+          "lg:col-span-8 flex flex-col justify-between bg-surface-2 min-h-0",
+          mobileView === "thread" ? "flex" : "hidden lg:flex"
+        )}>
           {activeConversation ? (
             <>
               {/* 대화방 상단 헤더 */}
-              <div className="bg-white dark:bg-slate-900 p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+              <div className="bg-white p-4 border-b border-slate-200 flex items-center justify-between gap-2">
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="font-extrabold text-sm sm:text-base text-slate-900 dark:text-white">
+                    <h2 className="font-extrabold text-sm sm:text-base text-slate-900">
                       {activeConversation.title}
                     </h2>
-                    <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold">
+                    <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-xs font-semibold">
                       참여자 {activeConversation.memberIds.length}명
                     </span>
                     {activeConversation.isGroup && (
-                      <span className="px-2 py-0.5 rounded-md bg-orange-100 dark:bg-orange-950 text-orange-700 dark:text-orange-300 text-xs font-bold">
+                      <span className="px-2 py-0.5 rounded-md bg-orange-100 text-orange-700 text-xs font-bold">
                         단체방
                       </span>
                     )}
@@ -1134,7 +1142,7 @@ export default function ChatPage() {
                   <button
                     type="button"
                     onClick={() => setShowMemberPanel((prev) => !prev)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 inline-flex items-center gap-1 transition"
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 :bg-slate-800 inline-flex items-center gap-1 transition"
                   >
                     <Info className="w-3.5 h-3.5 text-orange-600" />
                     참여자 {showMemberPanel ? "닫기" : "관리"}
@@ -1144,9 +1152,9 @@ export default function ChatPage() {
 
               {/* 참여자 상세 정보 접이식 패널 */}
               {showMemberPanel && (
-                <div className="bg-orange-50/70 dark:bg-slate-900 border-b border-orange-200 dark:border-slate-800 p-3.5 space-y-3">
+                <div className="bg-orange-50/70 border-b border-orange-200 p-3.5 space-y-3">
                   <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                    <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                       <Users className="w-4 h-4 text-orange-600" /> 채팅방 참여 구성원 ({activeMembers.length}명)
                     </p>
                     <div className="flex items-center gap-2">
@@ -1160,7 +1168,7 @@ export default function ChatPage() {
                       <button
                         type="button"
                         onClick={handleLeaveCurrentChat}
-                        className="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-700 dark:hover:bg-rose-950 text-slate-700 dark:text-slate-300 text-xs font-semibold inline-flex items-center gap-1 transition"
+                        className="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-rose-100 hover:text-rose-700 :bg-rose-950 text-slate-700 text-xs font-semibold inline-flex items-center gap-1 transition"
                       >
                         <LogOut className="w-3.5 h-3.5" /> 방 나가기
                       </button>
@@ -1174,10 +1182,10 @@ export default function ChatPage() {
                       return (
                         <div
                           key={member.id}
-                          className="p-2.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 flex items-center justify-between text-xs shadow-2xs"
+                          className="p-2.5 rounded-xl bg-white border border-slate-200/80 flex items-center justify-between text-xs shadow-2xs"
                         >
                           <div>
-                            <p className="font-bold text-slate-900 dark:text-white">
+                            <p className="font-bold text-slate-900">
                               {member.name}{" "}
                               <span className="text-orange-600 font-semibold">
                                 ({ROLE_LABELS[member.role] || "구성원"})
@@ -1190,7 +1198,7 @@ export default function ChatPage() {
                             ) : null}
                           </div>
                           {member.role !== "admin" && member.role !== "professor" && member.careerTrack && (
-                            <span className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-semibold">
+                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-semibold">
                               {member.careerTrack}
                             </span>
                           )}
@@ -1211,7 +1219,7 @@ export default function ChatPage() {
                   if (msg.isSystemMessage) {
                     return (
                       <div key={msg.id} className="text-center my-2">
-                        <span className="inline-block px-3 py-1 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px]">
+                        <span className="inline-block px-3 py-1 rounded-full bg-slate-200/80 text-slate-600 text-[11px]">
                           {msg.content}
                         </span>
                       </div>
@@ -1240,7 +1248,7 @@ export default function ChatPage() {
                       }`}
                     >
                       {!isMe && (
-                        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1 ml-1">
+                        <span className="text-[11px] font-semibold text-slate-500 mb-1 ml-1">
                           {senderDisplayName}
                           {senderDisplayRole ? ` · ${senderDisplayRole}` : ""}
                         </span>
@@ -1252,7 +1260,7 @@ export default function ChatPage() {
                               <span
                                 data-testid={`msg-unread-count-${msg.id}`}
                                 title={`아직 읽지 않은 참여자 ${msgUnreadCount}명`}
-                                className="text-[11px] font-bold text-amber-600 dark:text-amber-400 tabular-nums"
+                                className="text-[11px] font-bold text-amber-600 tabular-nums"
                               >
                                 {msgUnreadCount}
                               </span>
@@ -1266,7 +1274,7 @@ export default function ChatPage() {
                           className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-2xs break-words ${
                             isMe
                               ? "bg-orange-600 text-white rounded-br-xs"
-                              : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-bl-xs"
+                              : "bg-white  text-slate-800  border border-slate-200  rounded-bl-xs"
                           }`}
                         >
                           {msg.content}
@@ -1277,7 +1285,7 @@ export default function ChatPage() {
                               <span
                                 data-testid={`msg-unread-count-${msg.id}`}
                                 title={`아직 읽지 않은 참여자 ${msgUnreadCount}명`}
-                                className="text-[11px] font-bold text-amber-600 dark:text-amber-400 tabular-nums"
+                                className="text-[11px] font-bold text-amber-600 tabular-nums"
                               >
                                 {msgUnreadCount}
                               </span>
@@ -1297,14 +1305,14 @@ export default function ChatPage() {
               {/* 메시지 입력 폼 */}
               <form
                 onSubmit={handleSend}
-                className="p-3.5 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2"
+                className="p-3.5 bg-white border-t border-slate-200 flex items-center gap-2"
               >
                 <input
                   type="text"
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   placeholder={`${currentUser.name}(${ROLE_LABELS[currentUser.role]})님으로 메시지 입력...`}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
                 />
                 <button
                   type="submit"
@@ -1326,10 +1334,10 @@ export default function ChatPage() {
       {/* 모달 1: 사용자 검색 및 1:1 대화 시작 */}
       {modalMode === "direct" && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 space-y-4 shadow-xl">
+          <div className="bg-white rounded-3xl border border-slate-200 max-w-lg w-full p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white">
+                <h2 className="text-lg font-black text-slate-900">
                   학과 구성원 검색 및 1:1 대화 요청
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -1343,14 +1351,14 @@ export default function ChatPage() {
                   type="button"
                   onClick={() => refreshApprovedMembers()}
                   title="회원 목록 새로고침"
-                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-orange-600 transition"
+                  className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:text-orange-600 transition"
                 >
                   <RefreshCw className={`w-4 h-4 ${approvedMembersLoading ? "animate-spin text-orange-600" : ""}`} />
                 </button>
                 <button
                   type="button"
                   onClick={() => setModalMode(null)}
-                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800"
+                  className="p-1.5 rounded-lg bg-slate-100"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1363,7 +1371,7 @@ export default function ChatPage() {
                 value={userSearchQuery}
                 onChange={(e) => setUserSearchQuery(e.target.value)}
                 placeholder="이름, 복수전공, 진로 분야 검색..."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs sm:text-sm"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs sm:text-sm"
               />
               <div className="flex gap-1.5 flex-wrap">
                 {[
@@ -1379,7 +1387,7 @@ export default function ChatPage() {
                     className={`px-3 py-1 rounded-lg text-xs font-semibold ${
                       roleFilter === tab.key
                         ? "bg-orange-600 text-white"
-                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"
+                        : "bg-slate-100  text-slate-600 "
                     }`}
                   >
                     {tab.label}
@@ -1388,7 +1396,7 @@ export default function ChatPage() {
               </div>
             </div>
 
-            <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl">
+            <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl">
               {approvedMembersError ? (
                 <div className="p-4 text-center text-xs text-rose-500 space-y-1">
                   <p className="font-bold">회원 목록 조회 오류</p>
@@ -1403,7 +1411,7 @@ export default function ChatPage() {
               ) : availableUsers.filter((u) => u.id !== currentUser.id).length === 0 ? (
                 <div className="p-8 text-center text-xs text-slate-400 space-y-2">
                   <Users className="w-6 h-6 mx-auto text-slate-300 mb-1" />
-                  <p className="font-semibold text-slate-600 dark:text-slate-300">대화 가능한 다른 승인 회원이 아직 없습니다.</p>
+                  <p className="font-semibold text-slate-600">대화 가능한 다른 승인 회원이 아직 없습니다.</p>
                   <p className="text-[11px] text-slate-500 leading-relaxed">
                     본인 계정({currentUser.name} 님)은 자기 자신에게 대화할 수 없어 목록에서 제외됩니다.<br />
                     관리자가 다른 회원의 가입을 승인하거나, 관리자 계정과 1:1 대화를 진행할 수 있습니다.
@@ -1411,7 +1419,7 @@ export default function ChatPage() {
                   <button
                     type="button"
                     onClick={() => refreshApprovedMembers()}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold transition mt-1"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 text-xs text-slate-700 hover:bg-slate-200 :bg-slate-700 font-bold transition mt-1"
                   >
                     <RefreshCw className="w-3.5 h-3.5" /> 목록 다시 불러오기
                   </button>
@@ -1424,14 +1432,14 @@ export default function ChatPage() {
                 searchableUsers.map((u) => (
                   <div
                     key={u.id}
-                    className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                    className="p-3.5 flex items-center justify-between gap-3 hover:bg-slate-50 :bg-slate-800/40"
                   >
                     <div>
                       <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-sm text-slate-900 dark:text-white">
+                        <span className="font-bold text-sm text-slate-900">
                           {u.name}
                         </span>
-                        <span className="px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 text-[10px] font-bold">
+                        <span className="px-2 py-0.5 rounded bg-orange-100 text-orange-800 text-[10px] font-bold">
                           {ROLE_LABELS[u.role] || "구성원"}
                         </span>
                       </div>
@@ -1473,10 +1481,10 @@ export default function ChatPage() {
       {/* 모달 2: 단체 채팅방 개설 */}
       {modalMode === "group" && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 space-y-4 shadow-xl">
+          <div className="bg-white rounded-3xl border border-slate-200 max-w-lg w-full p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white">
+                <h2 className="text-lg font-black text-slate-900">
                   단체 채팅방 개설
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -1488,14 +1496,14 @@ export default function ChatPage() {
                   type="button"
                   onClick={() => refreshApprovedMembers()}
                   title="회원 목록 새로고침"
-                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-orange-600 transition"
+                  className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:text-orange-600 transition"
                 >
                   <RefreshCw className={`w-4 h-4 ${approvedMembersLoading ? "animate-spin text-orange-600" : ""}`} />
                 </button>
                 <button
                   type="button"
                   onClick={() => setModalMode(null)}
-                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800"
+                  className="p-1.5 rounded-lg bg-slate-100"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1511,7 +1519,7 @@ export default function ChatPage() {
                   value={groupTitle}
                   onChange={(e) => setGroupTitle(e.target.value)}
                   placeholder="예: 교육공학 팀프로젝트 3조 / 임용 교육학 논술 스터디"
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50"
                 />
               </div>
 
@@ -1520,7 +1528,7 @@ export default function ChatPage() {
                 <select
                   value={groupCategory}
                   onChange={(e) => setGroupCategory(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                  className="w-full px-3.5 py-2 rounded-xl border border-slate-200 bg-slate-50"
                 >
                   <option value="수업/스터디 모임">수업/스터디 모임</option>
                   <option value="학술제/연구 분과">학술제/연구 분과</option>
@@ -1533,7 +1541,7 @@ export default function ChatPage() {
                 <label className="block font-bold mb-1">
                   초대할 구성원 선택 ({selectedUserIds.length}명 선택됨)
                 </label>
-                <div className="max-h-52 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                <div className="max-h-52 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl">
                   {approvedMembersError ? (
                     <div className="p-4 text-center text-xs text-rose-500">
                       회원 목록 조회 오류: {approvedMembersError}
@@ -1544,12 +1552,12 @@ export default function ChatPage() {
                     </div>
                   ) : availableUsers.filter((u) => u.id !== currentUser.id).length === 0 ? (
                     <div className="p-6 text-center text-xs text-slate-400 space-y-1.5">
-                      <p className="font-semibold text-slate-600 dark:text-slate-300">초대 가능한 다른 승인 회원이 아직 없습니다.</p>
+                      <p className="font-semibold text-slate-600">초대 가능한 다른 승인 회원이 아직 없습니다.</p>
                       <p className="text-[11px] text-slate-500">본인 계정을 제외한 다른 정회원이 승인되면 선택할 수 있습니다.</p>
                       <button
                         type="button"
                         onClick={() => refreshApprovedMembers()}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-[11px] text-slate-700 dark:text-slate-200 hover:bg-slate-200 font-semibold"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-[11px] text-slate-700 hover:bg-slate-200 font-semibold"
                       >
                         <RefreshCw className="w-3 h-3" /> 다시 조회
                       </button>
@@ -1566,12 +1574,12 @@ export default function ChatPage() {
                             onClick={() => toggleSelectGroupUser(u.id)}
                             className={`w-full text-left p-3 flex items-center justify-between transition ${
                               checked
-                                ? "bg-orange-50 dark:bg-orange-950/40"
-                                : "hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                                ? "bg-orange-50 "
+                                : "hover:bg-slate-50 :bg-slate-800/40"
                             }`}
                           >
                             <div>
-                              <span className="font-bold text-slate-900 dark:text-white">
+                              <span className="font-bold text-slate-900">
                                 {u.name}
                               </span>{" "}
                               <span className="text-xs text-slate-500">
@@ -1583,7 +1591,7 @@ export default function ChatPage() {
                               className={`w-5 h-5 rounded-md flex items-center justify-center border ${
                                 checked
                                   ? "bg-orange-600 border-orange-600 text-white"
-                                  : "border-slate-300 dark:border-slate-600"
+                                  : "border-slate-300 "
                               }`}
                             >
                               {checked && <Check className="w-3.5 h-3.5" />}
@@ -1599,7 +1607,7 @@ export default function ChatPage() {
                 <button
                   type="button"
                   onClick={() => setModalMode(null)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 font-semibold"
+                  className="px-4 py-2 rounded-xl border border-slate-200 font-semibold"
                 >
                   취소
                 </button>
@@ -1619,10 +1627,10 @@ export default function ChatPage() {
       {/* 모달 3: 기존 채팅방 새 참여자 초대 */}
       {modalMode === "invite" && activeConversation && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 max-w-lg w-full p-6 space-y-4 shadow-xl">
+          <div className="bg-white rounded-3xl border border-slate-200 max-w-lg w-full p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white">
+                <h2 className="text-lg font-black text-slate-900">
                   새 참여자 초대
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
@@ -1634,14 +1642,14 @@ export default function ChatPage() {
                   type="button"
                   onClick={() => refreshApprovedMembers()}
                   title="회원 목록 새로고침"
-                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-orange-600 transition"
+                  className="p-1.5 rounded-lg bg-slate-100 text-slate-600 hover:text-orange-600 transition"
                 >
                   <RefreshCw className={`w-4 h-4 ${approvedMembersLoading ? "animate-spin text-orange-600" : ""}`} />
                 </button>
                 <button
                   type="button"
                   onClick={() => setModalMode(null)}
-                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800"
+                  className="p-1.5 rounded-lg bg-slate-100"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1653,7 +1661,7 @@ export default function ChatPage() {
                 <label className="block font-bold mb-1">
                   초대할 구성원 선택 ({inviteSelectedIds.length}명 선택됨)
                 </label>
-                <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-2xl">
+                <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl">
                   {approvedMembersError ? (
                     <div className="p-4 text-center text-xs text-rose-500">
                       회원 목록 조회 오류: {approvedMembersError}
@@ -1684,12 +1692,12 @@ export default function ChatPage() {
                             }}
                             className={`w-full text-left p-3 flex items-center justify-between transition ${
                               checked
-                                ? "bg-orange-50 dark:bg-orange-950/40"
-                                : "hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                                ? "bg-orange-50 "
+                                : "hover:bg-slate-50 :bg-slate-800/40"
                             }`}
                           >
                             <div>
-                              <span className="font-bold text-slate-900 dark:text-white">
+                              <span className="font-bold text-slate-900">
                                 {u.name}
                               </span>{" "}
                               <span className="text-xs text-slate-500">
@@ -1701,7 +1709,7 @@ export default function ChatPage() {
                               className={`w-5 h-5 rounded-md flex items-center justify-center border ${
                                 checked
                                   ? "bg-orange-600 border-orange-600 text-white"
-                                  : "border-slate-300 dark:border-slate-600"
+                                  : "border-slate-300 "
                               }`}
                             >
                               {checked && <Check className="w-3.5 h-3.5" />}
@@ -1717,7 +1725,7 @@ export default function ChatPage() {
                 <button
                   type="button"
                   onClick={() => setModalMode(null)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 font-semibold"
+                  className="px-4 py-2 rounded-xl border border-slate-200 font-semibold"
                 >
                   취소
                 </button>
@@ -1737,40 +1745,40 @@ export default function ChatPage() {
       {/* 모달 4: 교수 상담 신청 (학생 -> 교수) */}
       {consultationModalOpen && selectedProfessorForConsultation && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <GraduationCap className="w-5 h-5 text-orange-600" />
-                <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                <h3 className="text-base font-extrabold text-slate-900">
                   교수 상담 신청
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setConsultationModalOpen(false)}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 :text-slate-200 hover:bg-slate-100 :bg-slate-800 transition"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* 교수 정보 요약 */}
-            <div className="p-3.5 rounded-2xl bg-orange-50/70 dark:bg-orange-950/30 border border-orange-100 dark:border-orange-900/40 flex items-center gap-3">
+            <div className="p-3.5 rounded-2xl bg-orange-50/70 border border-orange-100 flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-orange-600 text-white font-extrabold text-sm flex items-center justify-center shrink-0">
                 {getAvatarInitials(selectedProfessorForConsultation.name, selectedProfessorForConsultation.role) ||
                   selectedProfessorForConsultation.avatarInitials}
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="font-extrabold text-sm text-slate-900 dark:text-white">
+                  <span className="font-extrabold text-sm text-slate-900">
                     {selectedProfessorForConsultation.name} 교수님
                   </span>
-                  <span className="text-xs text-orange-700 dark:text-orange-300 font-bold">
+                  <span className="text-xs text-orange-700 font-bold">
                     {selectedProfessorForConsultation.specialty ||
                       "교육학과 전임교원"}
                   </span>
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
+                <p className="text-xs text-slate-600">
                   동국대학교 사범대학 교육학과
                   {selectedProfessorForConsultation.specialty
                     ? ` · ${selectedProfessorForConsultation.specialty}`
@@ -1782,7 +1790,7 @@ export default function ChatPage() {
             {/* 상담 신청 폼 */}
             <form onSubmit={handleSubmitConsultation} className="space-y-4 text-xs">
               <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block font-bold text-slate-700 mb-1">
                   상담 유형 선택 *
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -1801,8 +1809,8 @@ export default function ChatPage() {
                       onClick={() => setConsultationType(type)}
                       className={`p-2 rounded-xl font-bold border transition text-center ${
                         consultationType === type
-                          ? "border-orange-600 bg-orange-50 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 shadow-2xs"
-                          : "border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300"
+                          ? "border-orange-600 bg-orange-50  text-orange-700  shadow-2xs"
+                          : "border-slate-200  text-slate-600  hover:border-slate-300"
                       }`}
                     >
                       {type}
@@ -1813,7 +1821,7 @@ export default function ChatPage() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block font-bold text-slate-700 mb-1">
                     희망 날짜 (학생 제안) *
                   </label>
                   <input
@@ -1821,11 +1829,11 @@ export default function ChatPage() {
                     required
                     value={preferredDate}
                     onChange={(e) => setPreferredDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-orange-500 font-medium"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-orange-500 font-medium"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  <label className="block font-bold text-slate-700 mb-1">
                     희망 시간대 (학생 제안) *
                   </label>
                   <input
@@ -1834,13 +1842,13 @@ export default function ChatPage() {
                     placeholder="예: 14:00 또는 수요일 오후"
                     value={preferredTime}
                     onChange={(e) => setPreferredTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-orange-500 font-medium"
+                    className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-orange-500 font-medium"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                <label className="block font-bold text-slate-700 mb-1">
                   상담 목적 또는 질문 내용 *
                 </label>
                 <textarea
@@ -1849,20 +1857,20 @@ export default function ChatPage() {
                   placeholder="교수님께 여쭙고 싶은 내용이나 상담 목적을 구체적으로 적어주세요."
                   value={consultationPurpose}
                   onChange={(e) => setConsultationPurpose(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-hidden focus:ring-2 focus:ring-orange-500 font-medium resize-none"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-orange-500 font-medium resize-none"
                 />
               </div>
 
-              <div className="p-3 rounded-xl bg-orange-50/70 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-900/40 text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                <span className="font-bold text-orange-800 dark:text-orange-300">💡 안내: </span>
+              <div className="p-3 rounded-xl bg-orange-50/70 border border-orange-200 text-[11px] text-slate-600 leading-relaxed">
+                <span className="font-bold text-orange-800">💡 안내: </span>
                 교수님이 신청서를 확인하시고 상담 진행 방식(대면 또는 채팅)을 선택하여 승인하시면, 1:1 대화방이 즉시 개설됩니다.
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800">
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-slate-100">
                 <button
                   type="button"
                   onClick={() => setConsultationModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-bold text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 :bg-slate-800 transition"
                 >
                   취소
                 </button>
