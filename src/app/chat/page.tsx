@@ -742,7 +742,7 @@ export default function ChatPage() {
               setModalMode("direct");
               refreshApprovedMembers();
             }}
-            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 transition shadow-xs"
+            className="h-9 px-3.5 rounded-lg bg-ink text-white hover:bg-ink/85 text-xs font-semibold inline-flex items-center gap-1.5 shadow-xs transition cursor-pointer"
           >
             <UserPlus className="w-4 h-4" /> 사용자 검색 · 1:1 대화 시작
           </button>
@@ -755,7 +755,7 @@ export default function ChatPage() {
               setModalMode("group");
               refreshApprovedMembers();
             }}
-            className="px-3.5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 transition shadow-xs"
+            className="h-9 px-3.5 rounded-lg border border-line bg-surface text-ink hover:bg-surface-2 hover:border-line-strong text-xs font-semibold inline-flex items-center gap-1.5 shadow-2xs transition cursor-pointer"
           >
             <PlusCircle className="w-4 h-4" /> 단체 채팅방 개설
           </button>
@@ -1312,12 +1312,12 @@ export default function ChatPage() {
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   placeholder={`${currentUser.name}(${ROLE_LABELS[currentUser.role]})님으로 메시지 입력...`}
-                  className="flex-1 px-4 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-surface-2 border border-line text-xs sm:text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition"
                 />
                 <button
                   type="submit"
                   disabled={!messageInput.trim() || isSending}
-                  className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 shrink-0 transition"
+                  className="h-10 px-4 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs sm:text-sm font-semibold inline-flex items-center gap-1.5 shrink-0 shadow-raise transition cursor-pointer"
                 >
                   <Send className="w-4 h-4" /> {isSending ? "전송중..." : "전송"}
                 </button>
@@ -1456,7 +1456,7 @@ export default function ChatPage() {
                           setConsultationModalOpen(true);
                           setModalMode(null);
                         }}
-                        className="px-3.5 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shrink-0 transition shadow-xs flex items-center gap-1"
+                        className="px-3 py-1.5 rounded-lg bg-accent-soft text-accent hover:bg-brand-100 border border-brand-200/70 text-xs font-semibold shrink-0 transition flex items-center gap-1 cursor-pointer"
                       >
                         <GraduationCap className="w-3.5 h-3.5" />
                         상담신청
@@ -1465,7 +1465,7 @@ export default function ChatPage() {
                       <button
                         type="button"
                         onClick={() => handleStartDirect(u.id)}
-                        className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold shrink-0 transition"
+                        className="px-3 py-1.5 rounded-lg border border-line bg-surface text-ink hover:bg-surface-2 text-xs font-semibold shrink-0 transition shadow-2xs cursor-pointer"
                       >
                         대화 요청
                       </button>
@@ -1614,7 +1614,7 @@ export default function ChatPage() {
                 <button
                   type="submit"
                   disabled={selectedUserIds.length === 0}
-                  className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 disabled:opacity-50 text-white font-bold transition"
+                  className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs sm:text-sm font-semibold shadow-raise transition cursor-pointer"
                 >
                   채팅방 생성하기
                 </button>
@@ -1877,7 +1877,7 @@ export default function ChatPage() {
                 <button
                   type="submit"
                   disabled={isSubmittingConsultation}
-                  className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs shadow-xs transition disabled:opacity-50 flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs shadow-raise transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                 >
                   {isSubmittingConsultation ? (
                     <>
