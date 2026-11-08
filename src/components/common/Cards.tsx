@@ -180,41 +180,42 @@ export function NoticeCard({
   onSelect?: (notice: Notice) => void;
 }) {
   const categoryStyles: Record<string, string> = {
-    "교육학과 공지": "bg-orange-100 text-orange-900 dark:bg-orange-950/60 dark:text-orange-200 border border-orange-200 dark:border-orange-800",
-    "학교 공지": "bg-blue-100 text-blue-900 dark:bg-blue-950/60 dark:text-blue-200 border border-blue-200 dark:border-blue-800",
-    "학사 일정": "bg-sky-100 text-sky-900 dark:bg-sky-950/60 dark:text-sky-200 border border-sky-200 dark:border-sky-800",
-    "장학 및 지원": "bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800",
-    "교직 관련 안내": "bg-purple-100 text-purple-900 dark:bg-purple-950/60 dark:text-purple-200 border border-purple-200 dark:border-purple-800",
+    "교육학과 공지": "bg-orange-50 text-orange-800 dark:bg-orange-950/60 dark:text-orange-200 border border-orange-200 dark:border-orange-800",
+    "학교 공지": "bg-blue-50 text-blue-800 dark:bg-blue-950/60 dark:text-blue-200 border border-blue-200 dark:border-blue-800",
+    "학사 일정": "bg-sky-50 text-sky-800 dark:bg-sky-950/60 dark:text-sky-200 border border-sky-200 dark:border-sky-800",
+    "장학 및 지원": "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-800",
+    "교직 관련 안내": "bg-purple-50 text-purple-800 dark:bg-purple-950/60 dark:text-purple-200 border border-purple-200 dark:border-purple-800",
   };
 
   const displayCategory = notice.category === "학사 일정" ? "학사공지" : notice.category;
+  const isBoilerplateSummary = notice.summary && (notice.summary.includes("공식 공지") || notice.summary.includes("원문 이동"));
 
   return (
     <article
       onClick={() => onSelect && onSelect(notice)}
-      className={`group relative rounded-2xl border p-4 sm:p-5 transition-all duration-200 cursor-pointer shadow-xs hover:shadow-md ${
+      className={`group relative rounded-2xl border p-4 sm:p-4.5 transition-all duration-150 cursor-pointer shadow-xs hover:shadow-md ${
         notice.isPinned
-          ? "bg-gradient-to-r from-orange-50/70 via-white to-white dark:from-orange-950/20 dark:via-slate-900 dark:to-slate-900 border-orange-300 dark:border-orange-800/80 border-l-4 border-l-orange-500"
-          : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-orange-300 dark:hover:border-orange-700 hover:-translate-y-0.5"
+          ? "bg-amber-50/40 dark:bg-amber-950/15 border-amber-300 dark:border-amber-800/80 hover:border-amber-400"
+          : "bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 hover:border-orange-300 dark:hover:border-orange-700 hover:-translate-y-0.5"
       }`}
     >
       {/* 상단 태그 및 작성일 */}
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 flex-wrap">
           {notice.isPinned && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-orange-600 text-white text-xs font-black shadow-xs">
-              <Pin className="w-3.5 h-3.5" /> 중요 공지
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-orange-600 text-white text-xs font-bold shadow-2xs">
+              <Pin className="w-3 h-3" /> 중요
             </span>
           )}
           <span
-            className={`px-2.5 py-0.5 rounded-lg text-xs font-bold ${
+            className={`px-2.5 py-0.5 rounded-md text-xs font-bold ${
               categoryStyles[notice.category] || "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200"
             }`}
           >
             {displayCategory}
           </span>
           {notice.organization && (
-            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-xs font-semibold">
+            <span className="text-xs text-slate-500 font-medium">
               {notice.organization}
             </span>
           )}
@@ -224,7 +225,7 @@ export function NoticeCard({
             </span>
           )}
           {notice.subCategoryTag && (
-            <span className="px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-800/60 text-slate-500 text-xs">
+            <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[11px]">
               #{notice.subCategoryTag}
             </span>
           )}
@@ -237,25 +238,34 @@ export function NoticeCard({
       </div>
 
       {/* 공지 제목 */}
-      <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white leading-snug group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors mb-1.5">
+      <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white leading-snug group-hover:text-orange-600 dark:group-hover:text-orange-400 transition-colors">
         {notice.title}
       </h3>
 
-      {/* 요약 내용 */}
-      <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed mb-3.5">
-        {notice.summary}
-      </p>
+      {/* 일정 기간이 감지된 경우 깔끔하게 표시 */}
+      {notice.scheduleStatus === "confirmed" && notice.eventStartDate && (
+        <div className="inline-flex items-center gap-1.5 mt-2 px-2.5 py-0.5 rounded-md bg-orange-50 text-orange-800 border border-orange-200 text-xs font-semibold">
+          <Calendar className="w-3 h-3 text-orange-600 shrink-0" />
+          <span>
+            일정: {notice.eventStartDate}
+            {notice.eventEndDate && notice.eventEndDate !== notice.eventStartDate ? ` ~ ${notice.eventEndDate}` : ""}
+          </span>
+        </div>
+      )}
+
+      {/* 요약 내용: 기계적 매크로가 아닌 실제 수동 작성 요약문만 깔끔하게 노출 */}
+      {!isBoilerplateSummary && notice.summary && (
+        <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed mt-1.5">
+          {notice.summary}
+        </p>
+      )}
 
       {/* 하단 푸터 바 */}
-      <div className="flex flex-wrap items-center justify-between gap-2 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+      <div className="flex items-center justify-between gap-2 pt-2.5 mt-2.5 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400">
         <div className="flex items-center gap-2">
-          {notice.hasAttachment ? (
-            <span className="inline-flex items-center gap-1 font-semibold text-slate-600 dark:text-slate-300">
-              📎 첨부파일 포함
-            </span>
-          ) : (
-            <span className="text-[11px] text-slate-400">
-              {notice.authorName ? `작성자: ${notice.authorName}` : "공식 게시판 연동"}
+          {notice.hasAttachment && (
+            <span className="inline-flex items-center gap-1 font-medium text-slate-500 text-xs">
+              📎 첨부파일
             </span>
           )}
         </div>
@@ -266,9 +276,9 @@ export function NoticeCard({
             target="_blank"
             rel="noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-surface-2 hover:bg-surface-3 text-ink-2 hover:text-ink border border-line text-xs font-semibold transition shadow-2xs"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-slate-900 border border-slate-200 text-xs font-medium transition"
           >
-            공식 원문 바로가기 <ExternalLink className="w-3.5 h-3.5" />
+            공식 원문 바로가기 <ExternalLink className="w-3 h-3" />
           </a>
         </div>
       </div>
