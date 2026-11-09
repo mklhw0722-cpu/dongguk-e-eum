@@ -233,6 +233,7 @@ export interface NoticeSyncMetadata {
 }
 
 export interface PrivacySettings {
+  showProfileInDirectory?: boolean;
   showOrganization: boolean;
   showEmail: boolean;
   allowDirectChat: boolean;

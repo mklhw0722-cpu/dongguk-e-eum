@@ -218,9 +218,10 @@ export default function RoomsPage() {
   if (activeRoom) {
     const relatedAlumni = alumniProfiles.filter(
       (a) =>
-        activeRoom.relatedAlumniIds.includes(a.id) ||
-        a.careerTrack === activeRoom.categoryName ||
-        a.doubleMajor === activeRoom.categoryName
+        a.privacy?.showProfileInDirectory !== false &&
+        (activeRoom.relatedAlumniIds.includes(a.id) ||
+          a.careerTrack === activeRoom.categoryName ||
+          a.doubleMajor === activeRoom.categoryName)
     );
     const boardDisplayName = activeRoom.name.replace(/공유방/g, "게시판");
 
