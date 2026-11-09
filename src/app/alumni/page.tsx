@@ -91,6 +91,7 @@ export default function AlumniPage() {
   const [profExp, setProfExp] = useState(
     "학부 시절 활동 및 취업/진로 준비 경험을 공유합니다."
   );
+  const [profShowInDirectory, setProfShowInDirectory] = useState(true);
   const [profShowOrg, setProfShowOrg] = useState(true);
   const [profShowEmail, setProfShowEmail] = useState(false);
   const [profMentoringAvail, setProfMentoringAvail] = useState(true);
@@ -101,7 +102,9 @@ export default function AlumniPage() {
     const params = new URLSearchParams(window.location.search);
     const targetAlumniId = params.get("alumniId");
     if (targetAlumniId) {
-      const found = alumniProfiles.find((a) => a.id === targetAlumniId);
+      const found = alumniProfiles.find(
+        (a) => a.id === targetAlumniId && a.privacy?.showProfileInDirectory !== false
+      );
       if (found) {
         setActiveTab("directory");
         setDetailAlumni(found);
@@ -127,6 +130,7 @@ export default function AlumniPage() {
       setProfOrg(myAlumniProfile.organization || "");
       setProfBio(myAlumniProfile.bio || "");
       setProfExp(myAlumniProfile.experienceSummary || "");
+      setProfShowInDirectory(myAlumniProfile.privacy?.showProfileInDirectory !== false);
       setProfShowOrg(myAlumniProfile.privacy?.showOrganization !== false);
       setProfShowEmail(myAlumniProfile.privacy?.showEmail === true);
       setProfMentoringAvail(myAlumniProfile.mentoringAvailable !== false);
@@ -152,7 +156,11 @@ export default function AlumniPage() {
     ...STANDARD_DOUBLE_MAJORS,
   ];
 
-  const filteredAlumni = alumniProfiles.filter((a) => {
+  const publicAlumniProfiles = alumniProfiles.filter(
+    (a) => a.privacy?.showProfileInDirectory !== false
+  );
+
+  const filteredAlumni = publicAlumniProfiles.filter((a) => {
     const matchCareer =
       selectedCareer === "전체" || a.careerTrack === selectedCareer;
     const matchDM =
@@ -211,6 +219,7 @@ export default function AlumniPage() {
         mentoringAvailable: profMentoringAvail,
         interests: [profCareer, profDoubleMajor.trim() || "진로멘토링"].filter(Boolean),
         privacy: {
+          showProfileInDirectory: profShowInDirectory,
           showOrganization: profShowOrg,
           showEmail: profShowEmail,
           allowDirectChat: true,
@@ -253,7 +262,7 @@ export default function AlumniPage() {
                 : "text-slate-600"
             }`}
           >
-            동문 프로필 탐색 ({alumniProfiles.length})
+            동문 프로필 탐색 ({publicAlumniProfiles.length})
           </button>
           <button
             type="button"
@@ -737,6 +746,14 @@ export default function AlumniPage() {
               <p className="font-bold text-slate-900 flex items-center gap-1.5">
                 <Lock className="w-4 h-4 text-orange-600" /> 개인정보 및 멘토링 공개 범위 설정
               </p>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={profShowInDirectory}
+                  onChange={(e) => setProfShowInDirectory(e.target.checked)}
+                />
+                <span>졸업생 동문 연결에 프로필을 공개합니다 (해제 시 비공개)</span>
+              </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"

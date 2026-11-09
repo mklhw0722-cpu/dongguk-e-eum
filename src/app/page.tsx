@@ -67,8 +67,10 @@ export default function HomePage() {
     .filter((p) => p.category === "복수전공 후기")
     .slice(0, 3);
 
-  // 추천 졸업생 (상위 3명)
-  const recommendedAlumni = alumniProfiles.slice(0, 3);
+  // 추천 졸업생 (프로필 공개에 동의한 졸업생 중 상위 3명)
+  const recommendedAlumni = alumniProfiles
+    .filter((a) => a.privacy?.showProfileInDirectory !== false)
+    .slice(0, 3);
 
   // 재학생 모드 판별 (관리자, 교수진, 졸업생은 false)
   const isStudent =

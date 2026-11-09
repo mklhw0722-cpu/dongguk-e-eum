@@ -2363,6 +2363,7 @@ export function subscribeToAlumniProfilesInFirestore(
           mentoringAvailable: d.mentoringAvailable !== false,
           interests: Array.isArray(d.interests) ? d.interests : [],
           privacy: {
+            showProfileInDirectory: d.privacy?.showProfileInDirectory !== false,
             showOrganization: d.privacy?.showOrganization !== false,
             showEmail: !!d.privacy?.showEmail,
             allowDirectChat: d.privacy?.allowDirectChat !== false,
@@ -2408,6 +2409,7 @@ export async function saveAlumniProfileInFirestore(
     mentoringAvailable: profile.mentoringAvailable !== false,
     interests: profile.interests || [],
     privacy: {
+      showProfileInDirectory: profile.privacy?.showProfileInDirectory !== false,
       showOrganization: profile.privacy?.showOrganization !== false,
       showEmail: !!profile.privacy?.showEmail,
       allowDirectChat: profile.privacy?.allowDirectChat !== false,
