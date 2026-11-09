@@ -160,3 +160,21 @@ test("8. [동국이음 사용성 및 디자인 개선] 라이트 모드 통일, 
   assert.ok(homePage.includes("formatChatMemberHakbun(student)"), "지도학생 카드에 학번 포맷 함수가 적용되어야 함");
 });
 
+
+test("9. [게시글 권한 분리] 관리자는 게시글을 수정할 수 없고 삭제만 가능하며, 오직 작성자 본인만 수정 가능하다", () => {
+  const roomsPage = fs.readFileSync(new URL("../src/app/rooms/page.tsx", import.meta.url), "utf8");
+  const rules = fs.readFileSync(new URL("../firestore.rules", import.meta.url), "utf8");
+
+  // rooms/page.tsx UI 검증
+  assert.ok(roomsPage.includes("const isMyPost = post.authorId === currentUser.id;"));
+  assert.ok(roomsPage.includes("const canEdit = isMyPost;"));
+  assert.ok(roomsPage.includes("const canDelete = isMyPost || currentRole === \"admin\";"));
+  assert.ok(roomsPage.includes("{canEdit && ("));
+  assert.ok(roomsPage.includes("게시글 수정 (작성자 본인만 가능)"));
+
+  // firestore.rules 검증 (작성자 본인만 update 가능, 관리자 update 허용 안 함)
+  assert.match(
+    rules,
+    /resource\.data\.authorId == request\.auth\.uid[\s\S]*?request\.resource\.data\.authorId == resource\.data\.authorId/
+  );
+});

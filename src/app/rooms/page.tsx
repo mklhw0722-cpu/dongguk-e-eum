@@ -322,8 +322,9 @@ export default function RoomsPage() {
         ) : (
           <div className="space-y-4">
             {roomPosts.map((post) => {
-              const canDelete =
-                post.authorId === currentUser.id || currentRole === "admin";
+              const isMyPost = post.authorId === currentUser.id;
+              const canEdit = isMyPost; // 관리자는 글을 수정하지 못하고, 오직 작성자 본인만 수정 가능
+              const canDelete = isMyPost || currentRole === "admin"; // 삭제는 작성자 본인 또는 관리자 가능
 
               return (
                 <div
@@ -351,25 +352,25 @@ export default function RoomsPage() {
                       <span className="text-xs text-slate-400 mr-1">
                         {post.createdAt}
                       </span>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() => openEditPostModal(post)}
+                          title="게시글 수정 (작성자 본인만 가능)"
+                          className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-500 hover:text-orange-600 hover:bg-orange-50 inline-flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" /> 수정
+                        </button>
+                      )}
                       {canDelete && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => openEditPostModal(post)}
-                            title="게시글 수정 (작성자 본인 또는 관리자)"
-                            className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-500 hover:text-orange-600 hover:bg-orange-50 inline-flex items-center gap-1 transition cursor-pointer"
-                          >
-                            <Edit3 className="w-3.5 h-3.5" /> 수정
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteCommunityPost(post.id)}
-                            title="게시글 삭제 (작성자 본인 또는 관리자)"
-                            className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 inline-flex items-center gap-1 transition cursor-pointer"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" /> 삭제
-                          </button>
-                        </>
+                        <button
+                          type="button"
+                          onClick={() => deleteCommunityPost(post.id)}
+                          title="게시글 삭제 (작성자 본인 또는 관리자)"
+                          className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 inline-flex items-center gap-1 transition cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> 삭제
+                        </button>
                       )}
                     </div>
                   </div>
