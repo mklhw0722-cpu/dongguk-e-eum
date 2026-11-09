@@ -188,17 +188,32 @@ export default function HomePage() {
 
       if (method === "채팅") {
         // 비대면(채팅) 상담 수락: 1:1 대화방 생성/연결 후 대화창으로 즉시 이동
-        const convId = await handleConnectConsultationChat(c, "채팅");
-        await handleUpdateConsultationStatus(c.id, "accepted", undefined, convId, "채팅");
+        let convId = c.conversationId || "";
         try {
-          await sendMessage(
-            convId,
-            `[비대면 상담 수락 안내]\n안녕하세요 ${c.studentName} 학생, 신청하신 '${c.consultationType}' 비대면 상담이 수락되었습니다.\n• 희망 일시: ${c.preferredDate} · ${c.preferredTime}\n• 상담 내용: ${c.purpose}\n\n이 대화창에서 편하게 상담을 진행해 주세요.`
-          );
-        } catch {
-          // ignore initial message warning
+          convId = await handleConnectConsultationChat(c, "채팅");
+        } catch (chatErr) {
+          console.warn("대화방 생성 중 경고 (폴백 진행):", chatErr);
         }
-        router.push(`/chat?convId=${encodeURIComponent(convId)}`);
+
+        try {
+          await handleUpdateConsultationStatus(c.id, "accepted", undefined, convId || undefined, "채팅");
+        } catch (statusErr) {
+          console.warn("상담 상태 갱신 경고:", statusErr);
+        }
+
+        if (convId) {
+          try {
+            await sendMessage(
+              convId,
+              `[비대면 상담 수락 안내]\n안녕하세요 ${c.studentName} 학생, 신청하신 '${c.consultationType}' 비대면 상담이 수락되었습니다.\n• 희망 일시: ${c.preferredDate} · ${c.preferredTime}\n• 상담 내용: ${c.purpose}\n\n이 대화창에서 편하게 상담을 진행해 주세요.`
+            );
+          } catch {
+            // ignore initial message warning
+          }
+          router.push(`/chat?convId=${encodeURIComponent(convId)}`);
+        } else {
+          router.push(`/chat`);
+        }
         return;
       }
 

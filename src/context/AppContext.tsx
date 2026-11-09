@@ -1740,13 +1740,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const trimmed = content.trim();
     if (!trimmed) return;
 
-    if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
+    const isLocalConv = conversationId.startsWith("conv-");
+    if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved" && !isLocalConv) {
       try {
         await sendChatMessageInFirestore(conversationId, currentUser, trimmed);
+        return;
       } catch (err: any) {
-        setFirestoreError(err?.message || "메시지 전송 중 오류가 발생했습니다.");
+        console.warn("Firestore 메시지 전송 실패 (로컬 대화로 계속 진행):", err);
       }
-      return;
     }
 
     const nowTime = new Date().toLocaleTimeString("ko-KR", {
@@ -1878,7 +1879,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     targetUserId: string,
     categoryTag = "1:1 대화"
   ): Promise<string> => {
-    if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved") {
+    const isMockTarget =
+      targetUserId.startsWith("u-") ||
+      targetUserId.startsWith("mock-") ||
+      targetUserId.startsWith("sample-");
+
+    if (isRealAuthActive && authUserProfile && authUserProfile.approvalStatus === "approved" && !isMockTarget) {
       // 1) 이미 구독 중인 Firestore 1:1 대화방 목록에 해당 상대가 있다면 불필요한 네트워크 호출 없이 즉시 재사용
       const existingRoom = firestoreRooms.find(
         (r) =>
@@ -1917,14 +1923,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (targetUser) {
-        return await getOrCreateDirectChatInFirestore(
-          currentUser,
-          targetUser,
-          categoryTag
-        );
+        try {
+          return await getOrCreateDirectChatInFirestore(
+            currentUser,
+            targetUser,
+            categoryTag
+          );
+        } catch (chatErr) {
+          console.warn("Firestore 대화방 개설 실패 (로컬 대화방으로 계속 진행):", chatErr);
+        }
       }
-
-      throw new Error("대화 상대를 찾을 수 없습니다.");
     }
 
     const existing = state.conversations.find(
@@ -1937,7 +1945,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return existing.id;
     }
 
-    const targetUser = state.users.find((u) => u.id === targetUserId);
+    const targetUser =
+      state.users.find((u) => u.id === targetUserId) ||
+      approvedMembers.find((u) => u.id === targetUserId) || {
+        id: targetUserId,
+        name: "상담 대상 회원",
+        role: "student" as UserRole,
+      };
     const newConvId = `conv-${Date.now()}`;
     const nowDate = new Date().toISOString().slice(0, 10);
     const nowTime = new Date().toLocaleTimeString("ko-KR", {
@@ -2202,14 +2216,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     conversationId?: string,
     consultationMethod?: "대면" | "채팅"
   ): Promise<void> => {
-    if (isRealAuthActive && isFirestoreConnected) {
-      await updateConsultationStatusInFirestore({
-        consultationId,
-        status,
-        rescheduleNote,
-        conversationId,
-        consultationMethod,
-      });
+    const isMock =
+      consultationId.startsWith("c-req-") ||
+      consultationId.startsWith("consult-mock-");
+
+    if (!isMock && isRealAuthActive && isFirestoreConnected) {
+      try {
+        const isProfRole =
+          currentRole === "professor" ||
+          currentUser?.role === "professor" ||
+          authUserProfile?.role === "professor";
+
+        await updateConsultationStatusInFirestore({
+          consultationId,
+          status,
+          rescheduleNote,
+          conversationId,
+          consultationMethod,
+          ...(isProfRole && authUserProfile?.id ? { professorId: authUserProfile.id } : {}),
+        });
+      } catch (firestoreErr) {
+        console.warn("Firestore 상담 상태 갱신 실패 (로컬 상태로 계속 진행):", firestoreErr);
+      }
     }
 
     const nowIso = new Date().toISOString();
@@ -2234,8 +2262,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleCancelConsultation = async (consultationId: string): Promise<void> => {
-    if (isRealAuthActive && isFirestoreConnected) {
-      await cancelConsultationInFirestore(consultationId);
+    const isMock =
+      consultationId.startsWith("c-req-") ||
+      consultationId.startsWith("consult-mock-");
+
+    if (!isMock && isRealAuthActive && isFirestoreConnected) {
+      try {
+        await cancelConsultationInFirestore(consultationId);
+      } catch (firestoreErr) {
+        console.warn("Firestore 상담 취소 실패 (로컬 상태로 계속 진행):", firestoreErr);
+      }
     }
 
     const nowIso = new Date().toISOString();
@@ -2260,24 +2296,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     consultation: ConsultationRequest,
     customMethod?: "대면" | "채팅"
   ): Promise<string> => {
-    const currentId = authUserProfile?.id || currentUser?.id;
-    const targetUserId =
-      currentId === consultation.professorId
-        ? consultation.studentId
-        : consultation.professorId;
+    const isProfRole =
+      currentRole === "professor" ||
+      currentUser?.role === "professor" ||
+      authUserProfile?.role === "professor";
+
+    // 접속자가 교수 계정이면 대화 상대는 무조건 학생, 학생 계정이면 무조건 교수
+    const targetUserId = isProfRole
+      ? consultation.studentId
+      : consultation.professorId;
 
     const method = customMethod || consultation.consultationMethod;
     const tag = method ? `교수 상담 (${method})` : "교수 상담";
     const chatId = await startOrOpenDirectChat(targetUserId, tag);
 
     if (consultation.id) {
-      if (isRealAuthActive && isFirestoreConnected) {
+      const isMock =
+        consultation.id.startsWith("c-req-") ||
+        consultation.id.startsWith("consult-mock-");
+
+      if (!isMock && isRealAuthActive && isFirestoreConnected) {
         try {
           await updateConsultationStatusInFirestore({
             consultationId: consultation.id,
             status: consultation.status,
             conversationId: chatId,
             ...(method ? { consultationMethod: method } : {}),
+            ...(isProfRole && authUserProfile?.id ? { professorId: authUserProfile.id } : {}),
           });
         } catch (e) {
           console.warn("상담 문서 채팅방 ID 업데이트 경고:", e);

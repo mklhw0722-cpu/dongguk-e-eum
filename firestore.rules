@@ -247,7 +247,7 @@ service cloud.firestore {
           || isApprovedAdmin()
         );
         allow create: if isApprovedUser()
-                      && request.resource.data.senderId == request.auth.uid
+                      && (request.resource.data.senderId == request.auth.uid || request.resource.data.senderId == 'system')
                       && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
         allow update, delete: if isApprovedUser() && (
           resource.data.senderId == request.auth.uid
@@ -314,10 +314,23 @@ service cloud.firestore {
     // 7. 교수 상담 신청 시스템 (consultations 컬렉션)
     // ==============================================================
     match /consultations/{consultationId} {
-      // 신청 학생 본인, 접수된 담당 교수님, 승인된 관리자만 상담 내역을 열람할 수 있습니다.
+      // 신청 학생 본인, 접수된 담당 교수님, 학과 승인 교수님, 승인된 관리자가 상담 내역을 열람할 수 있습니다.
       allow read: if isApprovedUser() && (
         request.auth.uid == resource.data.studentId
         || request.auth.uid == resource.data.professorId
+        || (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'professor'
+          && (
+            resource.data.professorId.matches('^u-prof-.*')
+            || (
+              resource.data.professorName is string
+              && (
+                resource.data.professorName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name
+                || resource.data.professorName == (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name + ' 교수')
+              )
+            )
+          )
+        )
         || isApprovedAdmin()
       );
 
@@ -329,7 +342,7 @@ service cloud.firestore {
 
       // 상태 변경 및 일정 조율:
       // 1) 학생: 본인이 신청한 건에 대해 'cancelled(취소)' 처리 가능 (자가 승인은 불가능)
-      // 2) 교수: 본인에게 접수된 상담 건에 대해 'accepted(수락)', 'rejected(거절)', 'reschedule_requested(조정 요청)', 'completed(완료)' 처리
+      // 2) 교수: 본인에게 접수된 상담 건 또는 학과 교수가 접수된 상담에 대해 'accepted(수락)', 'rejected(거절)', 'reschedule_requested(조정 요청)', 'completed(완료)' 처리
       // 3) 관리자: 전체 수정 가능
       allow update: if isApprovedUser() && (
         isApprovedAdmin()
@@ -340,9 +353,24 @@ service cloud.firestore {
           && request.resource.data.status in ['pending', 'cancelled']
         )
         || (
-          request.auth.uid == resource.data.professorId
+          (
+            request.auth.uid == resource.data.professorId
+            || (
+              get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'professor'
+              && (
+                resource.data.professorId.matches('^u-prof-.*')
+                || (
+                  resource.data.professorName is string
+                  && (
+                    resource.data.professorName == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name
+                    || resource.data.professorName == (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.name + ' 교수')
+                  )
+                )
+              )
+            )
+          )
           && request.resource.data.studentId == resource.data.studentId
-          && request.resource.data.professorId == resource.data.professorId
+          && request.resource.data.professorId in [resource.data.professorId, request.auth.uid]
         )
       );
 
