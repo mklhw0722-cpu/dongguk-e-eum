@@ -197,7 +197,9 @@ export default function AdminPage() {
     }
   };
 
-  // 복수전공 공유방 추가 폼
+  // 게시판 관리 탭 및 추가 폼
+  const [adminBoardTypeFilter, setAdminBoardTypeFilter] = useState<"all" | "career" | "double_major">("all");
+  const [newRoomType, setNewRoomType] = useState<"career" | "double_major">("double_major");
   const [newMajorName, setNewMajorName] = useState("");
   const [newRoomTitle, setNewRoomTitle] = useState("");
   const [newRoomDesc, setNewRoomDesc] = useState("");
@@ -229,13 +231,16 @@ export default function AdminPage() {
   const handleAddDoubleMajorRoom = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMajorName.trim() || !newRoomTitle.trim()) return;
+    const defaultDesc =
+      newRoomType === "career"
+        ? `${newMajorName.trim()} 진로 트랙 학우와 졸업생 동문을 위한 정보 게시판입니다.`
+        : `${newMajorName.trim()} 복수전공 이수 학우와 졸업생을 위한 정보 게시판입니다.`;
+
     createCommunityRoom({
       name: newRoomTitle.trim(),
-      type: "double_major",
+      type: newRoomType,
       categoryName: newMajorName.trim(),
-      description:
-        newRoomDesc.trim() ||
-        `${newMajorName.trim()} 복수전공 이수 학우와 졸업생을 위한 정보 게시판입니다.`,
+      description: newRoomDesc.trim() || defaultDesc,
     });
     setNewMajorName("");
     setNewRoomTitle("");
@@ -1041,23 +1046,91 @@ export default function AdminPage() {
       {activeTab === "rooms_posts" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-surface rounded-3xl border border-line p-5 sm:p-6 space-y-4 shadow-xs">
-            <h2 className="text-base font-extrabold text-ink">
-              복수전공 게시판 확장·수정 관리
-            </h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h2 className="text-base font-extrabold text-ink">
+                진로 트랙 및 복수전공 게시판 관리
+              </h2>
+              {/* 구분 필터 (전체 / 진로 트랙 / 복수전공) */}
+              <div className="flex items-center gap-1 bg-surface-2 p-1 rounded-xl text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setAdminBoardTypeFilter("all")}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg transition",
+                    adminBoardTypeFilter === "all"
+                      ? "bg-brand-600 text-white shadow-2xs"
+                      : "text-ink-2 hover:text-ink"
+                  )}
+                >
+                  전체 ({communityRooms.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdminBoardTypeFilter("career")}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg transition",
+                    adminBoardTypeFilter === "career"
+                      ? "bg-brand-600 text-white shadow-2xs"
+                      : "text-ink-2 hover:text-ink"
+                  )}
+                >
+                  진로 트랙 ({communityRooms.filter((r) => r.type === "career").length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAdminBoardTypeFilter("double_major")}
+                  className={cn(
+                    "px-2.5 py-1 rounded-lg transition",
+                    adminBoardTypeFilter === "double_major"
+                      ? "bg-brand-600 text-white shadow-2xs"
+                      : "text-ink-2 hover:text-ink"
+                  )}
+                >
+                  복수전공 ({communityRooms.filter((r) => r.type === "double_major").length})
+                </button>
+              </div>
+            </div>
+
             <form
               onSubmit={handleAddDoubleMajorRoom}
               className="p-3.5 rounded-2xl bg-surface-2 border border-line space-y-2 text-xs"
             >
-              <p className="font-bold text-ink-2">
-                + 새 복수전공 게시판 추가
-              </p>
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-bold text-ink-2">
+                  + 새 게시판 추가
+                </p>
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1 cursor-pointer font-medium">
+                    <input
+                      type="radio"
+                      name="boardType"
+                      checked={newRoomType === "career"}
+                      onChange={() => setNewRoomType("career")}
+                    />
+                    <span>진로 트랙</span>
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer font-medium">
+                    <input
+                      type="radio"
+                      name="boardType"
+                      checked={newRoomType === "double_major"}
+                      onChange={() => setNewRoomType("double_major")}
+                    />
+                    <span>복수전공</span>
+                  </label>
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <input
                   type="text"
                   required
                   value={newMajorName}
                   onChange={(e) => setNewMajorName(e.target.value)}
-                  placeholder="전공명 (예: 사회학, 통계학)"
+                  placeholder={
+                    newRoomType === "career"
+                      ? "분야명 (예: 미디어/콘텐츠, 대학원)"
+                      : "전공명 (예: 사회학, 통계학)"
+                  }
                   className="px-3 py-2 rounded-xl border border-line bg-surface"
                 />
                 <input
@@ -1065,7 +1138,11 @@ export default function AdminPage() {
                   required
                   value={newRoomTitle}
                   onChange={(e) => setNewRoomTitle(e.target.value)}
-                  placeholder="게시판 제목 (예: 사회학 복수전공 게시판)"
+                  placeholder={
+                    newRoomType === "career"
+                      ? "게시판 제목 (예: 미디어·콘텐츠 제작 트랙 게시판)"
+                      : "게시판 제목 (예: 사회학 복수전공 게시판)"
+                  }
                   className="px-3 py-2 rounded-xl border border-line bg-surface"
                 />
               </div>
@@ -1074,7 +1151,7 @@ export default function AdminPage() {
                   type="text"
                   value={newRoomDesc}
                   onChange={(e) => setNewRoomDesc(e.target.value)}
-                  placeholder="게시판 설명 입력..."
+                  placeholder="게시판 소개 및 설명 입력..."
                   className="flex-1 px-3 py-2 rounded-xl border border-line bg-surface"
                 />
                 <button
@@ -1086,27 +1163,35 @@ export default function AdminPage() {
               </div>
             </form>
 
-            <div className="space-y-2 max-h-80 overflow-y-auto">
+            <div className="space-y-2 max-h-96 overflow-y-auto">
               {communityRooms
-                .filter((r) => r.type === "double_major")
+                .filter(
+                  (r) =>
+                    adminBoardTypeFilter === "all" || r.type === adminBoardTypeFilter
+                )
                 .map((room) => (
                   <div
                     key={room.id}
-                    className="p-3 rounded-xl border border-line text-xs space-y-2"
+                    className="p-3 rounded-xl border border-line text-xs space-y-2 bg-surface"
                   >
                     {editingRoomId === room.id ? (
                       <div className="space-y-2">
-                        <div className="flex gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-xs text-ink-3">
+                            [{room.type === "career" ? "진로 트랙" : "복수전공"}]
+                          </span>
                           <input
                             type="text"
                             value={editRoomCat}
                             onChange={(e) => setEditRoomCat(e.target.value)}
-                            className="w-28 px-2.5 py-1.5 rounded-lg border border-line bg-surface"
+                            placeholder="분류/분야명"
+                            className="w-32 px-2.5 py-1.5 rounded-lg border border-line bg-surface"
                           />
                           <input
                             type="text"
                             value={editRoomName}
                             onChange={(e) => setEditRoomName(e.target.value)}
+                            placeholder="게시판 제목"
                             className="flex-1 px-2.5 py-1.5 rounded-lg border border-line bg-surface"
                           />
                         </div>
@@ -1114,20 +1199,21 @@ export default function AdminPage() {
                           type="text"
                           value={editRoomDesc}
                           onChange={(e) => setEditRoomDesc(e.target.value)}
+                          placeholder="게시판 설명"
                           className="w-full px-2.5 py-1.5 rounded-lg border border-line bg-surface"
                         />
                         <div className="flex justify-end gap-1.5">
                           <button
                             type="button"
                             onClick={() => setEditingRoomId(null)}
-                            className="px-2.5 py-1 rounded bg-slate-200"
+                            className="px-2.5 py-1 rounded-lg bg-surface-2 border border-line text-ink-2 font-medium"
                           >
                             취소
                           </button>
                           <button
                             type="button"
                             onClick={() => handleSaveEditRoom(room.id)}
-                            className="px-2.5 py-1 rounded bg-brand-600 text-white font-bold"
+                            className="px-2.5 py-1 rounded-lg bg-brand-600 text-white font-bold"
                           >
                             저장
                           </button>
@@ -1136,6 +1222,16 @@ export default function AdminPage() {
                     ) : (
                       <div className="flex items-center justify-between gap-2">
                         <div>
+                          <span
+                            className={cn(
+                              "px-1.5 py-0.5 rounded text-[10px] font-bold mr-1.5",
+                              room.type === "career"
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-blue-100 text-blue-800"
+                            )}
+                          >
+                            {room.type === "career" ? "진로 트랙" : "복수전공"}
+                          </span>
                           <span className="font-bold text-brand-600">
                             [{room.categoryName}]
                           </span>{" "}
@@ -1149,7 +1245,7 @@ export default function AdminPage() {
                         <button
                           type="button"
                           onClick={() => startEditRoom(room)}
-                          className="px-2.5 py-1 rounded-lg border border-line font-semibold shrink-0 hover:bg-surface-2"
+                          className="px-2.5 py-1 rounded-lg border border-line font-semibold shrink-0 hover:bg-surface-2 cursor-pointer"
                         >
                           수정
                         </button>

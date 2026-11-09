@@ -178,3 +178,14 @@ test("9. [게시글 권한 분리] 관리자는 게시글을 수정할 수 없�
     /resource\.data\.authorId == request\.auth\.uid[\s\S]*?request\.resource\.data\.authorId == resource\.data\.authorId/
   );
 });
+
+test("10. [관리자 진로 트랙 및 복수전공 게시판 수정/관리] 관리자 센터에서 복수전공 게시판뿐만 아니라 진로 트랙 게시판도 수정 및 추가할 수 있다", () => {
+  const adminPage = fs.readFileSync(new URL("../src/app/admin/page.tsx", import.meta.url), "utf8");
+
+  // 진로 트랙 및 복수전공 전체 관리 UI 확인
+  assert.ok(adminPage.includes("진로 트랙 및 복수전공 게시판 관리"), "통합 관리 제목이 존재해야 함");
+  assert.ok(adminPage.includes('adminBoardTypeFilter === "career"'), "진로 트랙 필터가 존재해야 함");
+  assert.ok(adminPage.includes('adminBoardTypeFilter === "double_major"'), "복수전공 필터가 존재해야 함");
+  assert.ok(adminPage.includes('newRoomType === "career"'), "진로 트랙 라디오/타입 선택이 존재해야 함");
+  assert.ok(adminPage.includes("startEditRoom(room)"), "모든 유형의 게시판에서 수정 버튼이 작동해야 함");
+});
