@@ -931,17 +931,11 @@ export async function updatePostInFirestore(
   const { db } = getFirestoreInstance();
   if (!db) return;
   const postRef = doc(db, POSTS_COLLECTION, postId);
-  try {
-    await updateDoc(postRef, {
-      category: updatedPost.category,
-      title: updatedPost.title,
-      content: updatedPost.content,
-    });
-  } catch {
-    // 기존 배포된 Firestore 규칙에서 title/content 직접 update가 제한된 경우 delete + create로 안전하게 갱신
-    await deleteDoc(postRef);
-    await setDoc(postRef, updatedPost);
-  }
+  await updateDoc(postRef, {
+    category: updatedPost.category,
+    title: updatedPost.title,
+    content: updatedPost.content,
+  });
 }
 
 export async function deletePostInFirestore(postId: string): Promise<void> {

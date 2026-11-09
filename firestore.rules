@@ -180,11 +180,26 @@ service cloud.firestore {
                     && request.resource.data.content.size() >= 1
                     && request.resource.data.content.size() <= 5000;
 
-      // [댓글/공감 달기] 승인된 회원만 가능하며, 원본 제목과 본문은 수정 불가합니다.
-      allow update: if isApprovedUser()
-                    && request.resource.data.title == resource.data.title
-                    && request.resource.data.content == resource.data.content
-                    && request.resource.data.authorId == resource.data.authorId;
+      // [수정 및 댓글/공감]
+      // 1) 작성자 본인: 카테고리, 제목, 본문 수정 가능 (작성자 ID는 변경 불가, 관리자는 수정 불가)
+      // 2) 일반 승인 회원: 댓글 추가 및 공감 토글 가능 (제목, 본문, 작성자 ID 변경 불가)
+      allow update: if isApprovedUser() && (
+        (
+          resource.data.authorId == request.auth.uid
+          && request.resource.data.authorId == resource.data.authorId
+          && request.resource.data.title is string
+          && request.resource.data.title.size() >= 1
+          && request.resource.data.title.size() <= 120
+          && request.resource.data.content is string
+          && request.resource.data.content.size() >= 1
+          && request.resource.data.content.size() <= 5000
+        )
+        || (
+          request.resource.data.title == resource.data.title
+          && request.resource.data.content == resource.data.content
+          && request.resource.data.authorId == resource.data.authorId
+        )
+      );
 
       // [삭제] 작성자 본인이거나 승인된 관리자만 삭제할 수 있습니다.
       allow delete: if isApprovedUser() && (
