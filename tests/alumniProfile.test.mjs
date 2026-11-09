@@ -165,3 +165,31 @@ test("6. [기타 복수전공 필터링 정합성] '기타' 필터 선택 시 '�
   assert.equal(filterByDM("기타").length, 2); // E("기타"), F("미디어커뮤니케이션")
   assert.equal(filterByDM("전체").length, 6);
 });
+
+test("7. [프로필 전체 공개/비공개 설정] '졸업생 동문 연결에 프로필을 공개합니다 (해제 시 비공개)' 체크 해제 시 동문 연결 목록 및 홈 배너에서 프로필 카드가 숨겨진다", () => {
+  const alumniPage = fs.readFileSync(new URL("../src/app/alumni/page.tsx", import.meta.url), "utf8");
+  const homePage = fs.readFileSync(new URL("../src/app/page.tsx", import.meta.url), "utf8");
+  const roomsPage = fs.readFileSync(new URL("../src/app/rooms/page.tsx", import.meta.url), "utf8");
+  const typesFile = fs.readFileSync(new URL("../src/types/index.ts", import.meta.url), "utf8");
+
+  // 1) 타입 및 설정 체크박스 문구 확인
+  assert.ok(typesFile.includes("showProfileInDirectory?: boolean;"), "PrivacySettings에 showProfileInDirectory 필드가 정의되어야 함");
+  assert.ok(
+    alumniPage.includes("졸업생 동문 연결에 프로필을 공개합니다 (해제 시 비공개)"),
+    "공개 범위 설정 박스에 프로필 공개/비공개 체크박스 문구가 존재해야 함"
+  );
+
+  // 2) 동문 연결 목록(publicAlumniProfiles), 홈 추천 동문(recommendedAlumni), 게시판 연계 동문(relatedAlumni) 필터링 확인
+  assert.ok(
+    alumniPage.includes("a.privacy?.showProfileInDirectory !== false"),
+    "졸업생 동문 연결 페이지에서 비공개 프로필을 필터링해야 함"
+  );
+  assert.ok(
+    homePage.includes("a.privacy?.showProfileInDirectory !== false"),
+    "홈 화면 추천 졸업생 동문 프로필에서 비공개 프로필을 필터링해야 함"
+  );
+  assert.ok(
+    roomsPage.includes("a.privacy?.showProfileInDirectory !== false"),
+    "진로·복전 게시판 연계 졸업생에서도 비공개 프로필을 필터링해야 함"
+  );
+});
