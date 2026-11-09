@@ -133,7 +133,7 @@ export default function EditableCalendar({
   className = "",
   title,
 }: EditableCalendarProps) {
-  const { currentUser, currentRole } = useApp();
+  const { currentUser, currentRole, consultations } = useApp();
 
   // 교수, 졸업생, 관리자로 로그인했을 때는 '나의 캘린더'로 심플하게 표시
   const isNonStudent =
@@ -266,8 +266,47 @@ export default function EditableCalendar({
     }
   };
 
-  // 전체 이벤트 통합 (사용자가 직접 등록한 일정만 관리)
-  const allEvents = userEvents;
+  // 대면 상담 수락 시 해당 날짜로 달력 자동 이동 이벤트 리스너
+  useEffect(() => {
+    const handleSelectDate = (e: Event) => {
+      const customEv = e as CustomEvent<{ date?: string }>;
+      const targetDate = customEv.detail?.date;
+      if (targetDate && /^\d{4}-\d{2}-\d{2}$/.test(targetDate)) {
+        const [y, m] = targetDate.split("-").map(Number);
+        if (y && m) {
+          setCurrentYear(y);
+          setCurrentMonth(m);
+        }
+        setSelectedDate(targetDate);
+      }
+    };
+    window.addEventListener("dongguk-calendar-select-date", handleSelectDate);
+    return () => window.removeEventListener("dongguk-calendar-select-date", handleSelectDate);
+  }, []);
+
+  // 전체 이벤트 통합 (사용자가 직접 등록한 일정 + 승인된 대면 상담 일정 자동 연동)
+  const allEvents = useMemo(() => {
+    const existingIds = new Set(userEvents.map((ev) => ev.id));
+    const isProf = currentUser?.role === "professor" || currentRole === "professor";
+    const consultEvents: CalendarEvent[] = (consultations || [])
+      .filter((c) => c.status === "accepted" && c.consultationMethod !== "채팅" && Boolean(c.preferredDate))
+      .map((c) => ({
+        id: `consult-cal-${c.id}`,
+        userId: currentUser?.id,
+        title: isProf
+          ? `[대면 상담] ${c.studentName} 학생 (${c.consultationType})`
+          : `[대면 상담] ${c.professorName} 교수님 (${c.consultationType})`,
+        date: c.preferredDate,
+        time: c.preferredTime || "",
+        isAllDay: !c.preferredTime,
+        category: "personal" as EventCategory,
+        location: "교수 연구실 (대면 상담)",
+        memo: `상담 목적: ${c.purpose}`,
+      }))
+      .filter((ev) => !existingIds.has(ev.id));
+
+    return [...userEvents, ...consultEvents];
+  }, [userEvents, consultations, currentUser?.id, currentUser?.role, currentRole]);
 
   // 날짜별 이벤트 매핑 (빠른 조회를 위해)
   const eventsByDate = useMemo(() => {

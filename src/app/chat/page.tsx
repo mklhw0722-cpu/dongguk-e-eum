@@ -28,6 +28,7 @@ import {
   FirestoreChatMessage,
   PublicChatUser,
   getAvatarInitials,
+  saveUserCalendarEventToFirestore,
 } from "@/lib/firebase";
 import {
   unreadCountForMessage,
@@ -566,37 +567,71 @@ export default function ChatPage() {
     }
   };
 
-  // 교수용: 상담 승인 및 1:1 대화 시작 (상담 방식: 대면/채팅 선택값 적용)
+  // 교수용: 상담 승인 (비대면: 1:1 대화창 즉시 연결 / 대면: 상담 일정 및 캘린더 일정 생성)
   const handleProfessorApprove = async (c: ConsultationRequest) => {
     const method = approvalMethods[c.id] || "대면";
     try {
       setIsUpdatingConsultation(true);
-      // 1. 대화방 생성/조회 (태그에 상담 방식 반영)
-      const convId = await handleConnectConsultationChat(c, method);
-      // 2. 상태 승인(accepted)으로 업데이트
-      await handleUpdateConsultationStatus(
-        c.id,
-        "accepted",
-        undefined,
-        convId,
-        method
-      );
-      // 3. 1:1 대화방에 첫 승인 안내 메시지 자동 발송
-      try {
-        await sendMessage(
+      if (method === "채팅") {
+        // 1. 비대면 상담: 대화방 생성/조회 후 즉시 대화창 활성화
+        const convId = await handleConnectConsultationChat(c, "채팅");
+        await handleUpdateConsultationStatus(
+          c.id,
+          "accepted",
+          undefined,
           convId,
-          `[교수 상담 승인 안내]\n안녕하세요 ${c.studentName} 학생, 신청하신 '${c.consultationType}' 상담이 승인되었습니다.\n• 진행 방식: ${method} 상담\n• 제안 일시: ${c.preferredDate} · ${c.preferredTime}\n• 상담 질문/내용: ${c.purpose}\n\n상담 진행 및 세부 일정에 대해 편하게 대화해 보아요.`
+          "채팅"
         );
-      } catch (sendErr) {
-        console.warn("첫 안내 메시지 발송 경고:", sendErr);
+        try {
+          await sendMessage(
+            convId,
+            `[교수 상담 승인 안내]\n안녕하세요 ${c.studentName} 학생, 신청하신 '${c.consultationType}' 비대면 상담이 승인되었습니다.\n• 진행 방식: 비대면(채팅) 상담\n• 제안 일시: ${c.preferredDate} · ${c.preferredTime}\n• 상담 질문/내용: ${c.purpose}\n\n이 대화창에서 편하게 상담을 진행해 주세요.`
+          );
+        } catch (sendErr) {
+          console.warn("첫 안내 메시지 발송 경고:", sendErr);
+        }
+        newlySelectedConvIdRef.current = convId;
+        setActiveConvId(convId);
+        setMobileView("thread");
+        markConversationRead(convId);
+        alert(
+          `${c.studentName} 학생의 비대면 상담을 승인했습니다.\n1:1 대화방으로 바로 연결되었습니다!`
+        );
+      } else {
+        // 2. 대면 상담: 상태 승인 및 해당 날짜에 상담 일정(캘린더) 등록
+        await handleUpdateConsultationStatus(
+          c.id,
+          "accepted",
+          undefined,
+          undefined,
+          "대면"
+        );
+        const profId = currentUser.id || c.professorId;
+        const calEvent = {
+          id: `consult-cal-${c.id}`,
+          userId: profId,
+          title: `[대면 상담] ${c.studentName} 학생 (${c.consultationType})`,
+          date: c.preferredDate,
+          time: c.preferredTime || "",
+          isAllDay: !c.preferredTime,
+          category: "personal" as const,
+          location: "교수 연구실 (대면 상담)",
+          memo: `상담 목적: ${c.purpose}`,
+        };
+        if (profId) {
+          await saveUserCalendarEventToFirestore(profId, calEvent).catch(() => {});
+        }
+        if (c.studentId) {
+          await saveUserCalendarEventToFirestore(c.studentId, {
+            ...calEvent,
+            userId: c.studentId,
+            title: `[대면 상담] ${c.professorName} 교수님 (${c.consultationType})`,
+          }).catch(() => {});
+        }
+        alert(
+          `${c.studentName} 학생의 대면 상담을 승인했습니다.\n[${c.preferredDate} · ${c.preferredTime}] 상담 일정이 등록되었습니다!`
+        );
       }
-      // 4. 바로 해당 대화방으로 이동 및 활성화
-      newlySelectedConvIdRef.current = convId;
-      setActiveConvId(convId);
-      markConversationRead(convId);
-      alert(
-        `${c.studentName} 학생의 상담 신청을 승인했습니다 (${method} 상담).\n1:1 대화방이 바로 시작되었습니다!`
-      );
     } catch (err: any) {
       alert(`상담 승인 처리 오류: ${err?.message || err}`);
     } finally {
@@ -792,9 +827,7 @@ export default function ChatPage() {
 
       {/* 교수 전용: 접수된 학생 상담 신청 관리함 */}
       {(currentUser.role === "professor" || currentRole === "professor") &&
-        (consultations || []).filter(
-          (c) => c.professorId === currentUser.id && c.status === "pending"
-        ).length > 0 && (
+        (consultations || []).filter((c) => c.status === "pending").length > 0 && (
           <section className="bg-white rounded-3xl border border-orange-200 p-5 space-y-4 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
@@ -803,9 +836,7 @@ export default function ChatPage() {
                   접수된 학생 상담 신청
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-full bg-orange-100 text-orange-800 text-xs font-bold">
-                  {(consultations || []).filter(
-                    (c) => c.professorId === currentUser.id && c.status === "pending"
-                  ).length}건 대기 중
+                  {(consultations || []).filter((c) => c.status === "pending").length}건 대기 중
                 </span>
               </div>
               <p className="text-xs text-slate-500">
@@ -814,11 +845,7 @@ export default function ChatPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {(consultations || [])
-                .filter(
-                  (c) =>
-                    c.professorId === currentUser.id && c.status === "pending"
-                )
+              {(consultations || []).filter((c) => c.status === "pending")
                 .map((c) => {
                   const selectedMethod = approvalMethods[c.id] || "대면";
                   return (

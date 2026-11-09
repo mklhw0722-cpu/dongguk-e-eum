@@ -695,8 +695,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setApprovedMembersLoading(true);
     setApprovedMembersError(null);
 
-    // 1. 대화방 목록 실시간 구독
-    const currentUid = authUserProfile.id || (rawFirebaseUser ? rawFirebaseUser.uid : "");
+    // 1. 대화방 목록 실시간 구독 (Firestore 규칙의 request.auth.uid 와 일치하도록 rawFirebaseUser.uid 우선)
+    const currentUid = (rawFirebaseUser ? rawFirebaseUser.uid : "") || authUserProfile.uid || authUserProfile.id || "";
     const unsubChats = subscribeToUserChats(
       currentUid,
       (rooms) => {
@@ -1642,6 +1642,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
+      // 교수 계정 본인도 approvedProfessors에 반드시 포함 (본인에게 접수된 상담이 필터링에서 누락되지 않도록 보장)
+      if (authUserProfile?.role === "professor" && authUserProfile?.approvalStatus === "approved") {
+        const myProfId = (rawFirebaseUser ? rawFirebaseUser.uid : "") || authUserProfile.uid || authUserProfile.id;
+        if (myProfId && !seen.has(myProfId)) {
+          seen.add(myProfId);
+          profs.push({
+            id: myProfId,
+            uid: myProfId,
+            name: authUserProfile.name,
+            role: "professor",
+            avatarInitials: getAvatarInitials(authUserProfile.name, "professor"),
+            approvalStatus: "approved",
+            specialty: authUserProfile.specialty || "",
+            consultationAvailable: authUserProfile.consultationAvailable !== false,
+            studentIdOrYear: authUserProfile.studentIdOrYear || "교육학과 교수",
+          });
+        }
+      }
+
       return profs.sort((a, b) => a.name.localeCompare(b.name, "ko-KR"));
     }
 
@@ -2049,22 +2068,75 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // --- 교수 상담 신청 시스템 액션 ---
   const consultations: ConsultationRequest[] = useMemo(() => {
-    let all = isRealAuthActive ? cloudConsultations : (state.consultations || []);
+    const map = new Map<string, ConsultationRequest>();
+    if (isRealAuthActive) {
+      cloudConsultations.forEach((c) => {
+        if (c && c.id) map.set(c.id, c);
+      });
+      (state.consultations || []).forEach((c) => {
+        if (c && c.id && !c.id.startsWith("consult-mock-") && !map.has(c.id)) {
+          map.set(c.id, c);
+        }
+      });
+    } else {
+      (state.consultations || []).forEach((c) => {
+        if (c && c.id) map.set(c.id, c);
+      });
+    }
 
-    // 승인된 교수 목록에 실존하는 교수와의 상담만 필터링 (삭제된 교수의 과거 신청서 자동 배제)
+    let all = Array.from(map.values()).sort((a, b) =>
+      (b.createdAt || "").localeCompare(a.createdAt || "")
+    );
+
+    const myIds = new Set(
+      [
+        rawFirebaseUser?.uid,
+        authUserProfile?.uid,
+        authUserProfile?.id,
+        currentUser?.id,
+        (currentUser as any)?.uid,
+      ].filter(Boolean) as string[]
+    );
+    const normalizeProfName = (name?: string) =>
+      (name || "").replace(/\s*교수(님)?$/g, "").trim();
+    const myNormalizedName = normalizeProfName(authUserProfile?.name || currentUser?.name);
+    const isProfRole =
+      currentRole === "professor" ||
+      currentUser?.role === "professor" ||
+      authUserProfile?.role === "professor";
+
+    // 승인된 교수 목록에 실존하는 교수와의 상담만 필터링 (교수 본인에게 접수된 상담은 절대 배제하지 않음)
     const validProfIds = new Set(approvedProfessors.map((p) => p.id));
+    if (isProfRole) {
+      myIds.forEach((id) => validProfIds.add(id));
+    }
     if (approvedProfessors.length > 0) {
-      all = all.filter((c) => validProfIds.has(c.professorId));
+      all = all.filter(
+        (c) =>
+          validProfIds.has(c.professorId) ||
+          myIds.has(c.professorId) ||
+          (isProfRole &&
+            Boolean(myNormalizedName) &&
+            normalizeProfName(c.professorName) === myNormalizedName)
+      );
     }
 
-    if (currentRole === "student" && currentUser) {
-      return all.filter((c) => c.studentId === currentUser.id);
+    if (currentRole === "student" && currentUser && !isProfRole) {
+      return all.filter(
+        (c) =>
+          myIds.has(c.studentId) ||
+          (Boolean(currentUser.email) && c.studentEmail === currentUser.email)
+      );
     }
-    if (currentRole === "professor" && currentUser) {
-      return all.filter((c) => c.professorId === currentUser.id);
+    if (isProfRole && currentUser) {
+      return all.filter(
+        (c) =>
+          myIds.has(c.professorId) ||
+          (Boolean(myNormalizedName) && normalizeProfName(c.professorName) === myNormalizedName)
+      );
     }
     return all;
-  }, [isRealAuthActive, cloudConsultations, state.consultations, approvedProfessors, currentRole, currentUser]);
+  }, [isRealAuthActive, cloudConsultations, state.consultations, approvedProfessors, currentRole, currentUser, authUserProfile, rawFirebaseUser]);
 
   const handleCreateConsultation = async (payload: {
     professorId: string;
@@ -2074,7 +2146,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     preferredTime: string;
     purpose: string;
   }): Promise<ConsultationRequest> => {
-    const studentUid = authUserProfile?.id || (currentUser ? currentUser.id : "u-student-1");
+    const studentUid =
+      (rawFirebaseUser ? rawFirebaseUser.uid : "") ||
+      authUserProfile?.uid ||
+      authUserProfile?.id ||
+      (currentUser ? currentUser.id : "u-student-1");
     const studentName = authUserProfile?.name || (currentUser ? currentUser.name : "학생");
     const studentEmail = authUserProfile?.email || currentUser?.email || "";
     const studentIdOrYear = authUserProfile?.studentIdOrYear || currentUser?.studentIdOrYear || "";
