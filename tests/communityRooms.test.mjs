@@ -142,10 +142,8 @@ test("8. [동국이음 사용성 및 디자인 개선] 라이트 모드 통일, 
   assert.equal(roomsPage.includes("dark:"), false, "rooms/page.tsx에 dark: 클래스가 남아있지 않아야 함");
   assert.equal(alumniPage.includes("dark:"), false, "alumni/page.tsx에 dark: 클래스가 남아있지 않아야 함");
 
-  // 2) 홈 대시보드 딥링크 검증
-  assert.ok(homePage.includes("/rooms?roomId="), "홈에서 선택한 게시판으로 바로 이동하는 roomId 딥링크가 연결되어야 함");
-  assert.ok(homePage.includes("&postId="), "홈에서 선택한 후기 글로 바로 이동하는 postId 딥링크가 연결되어야 함");
-  assert.ok(homePage.includes("/chat?convId="), "홈에서 읽지 않은 대화방으로 바로 이동하는 convId 딥링크가 연결되어야 함");
+  // 2) 홈 대시보드 딥링크 검증 (읽지 않은 대화, 상담 대화방, 추천 동문)
+  assert.ok(homePage.includes("/chat?convId="), "홈에서 읽지 않은 대화방 및 비대면 상담 대화방으로 바로 이동하는 convId 딥링크가 연결되어야 함");
   assert.ok(homePage.includes("/alumni?alumniId="), "홈에서 추천 동문 상세 모달로 바로 이동하는 alumniId 딥링크가 연결되어야 함");
 
   // 3) 게시글 수정 및 댓글 삭제 기능 검증

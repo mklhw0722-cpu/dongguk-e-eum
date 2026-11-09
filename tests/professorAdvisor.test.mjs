@@ -846,3 +846,26 @@ test("19. [교수 홈 대시보드 지도학생 섹션 연동] 교수로 로그�
   assert.equal(showRecommendedAlumni, false);
   assert.equal(showMyAdviseeStudents, true);
 });
+
+test("20. [홈 대시보드 상담 요청·일정 위젯 및 대면/비대면 수락 연동] 홈 배너에서 진로·복전 게시판과 후기 대신 상담 요청 및 상담 일정이 표시되고, 비대면 수락 시 대화창 연결·대면 수락 시 상담 일정이 생성된다", () => {
+  const homePage = fs.readFileSync(path.join(rootDir, "src/app/page.tsx"), "utf8");
+  const calendarComp = fs.readFileSync(path.join(rootDir, "src/components/calendar/EditableCalendar.tsx"), "utf8");
+  const appContext = fs.readFileSync(path.join(rootDir, "src/context/AppContext.tsx"), "utf8");
+
+  // 1) 교수 본인 로그인 시 approvedProfessors 및 consultations 필터에서 본인 상담이 누락되지 않는지 확인
+  assert.ok(
+    appContext.includes("myIds.forEach((id) => validProfIds.add(id))"),
+    "교수 로그인 시 본인의 UID가 validProfIds에 포함되어 본인에게 온 상담 요청이 누락되지 않아야 함"
+  );
+
+  // 2) 홈 화면에서 기존 게시판/후기 위젯이 제거되고 상담 요청 및 상담 일정 위젯이 렌더링되는지 확인
+  assert.equal(homePage.includes("최근 등록된 복수전공 후기"), false, "홈에서 최근 등록된 복수전공 후기 위젯이 제거되어야 함");
+  assert.ok(homePage.includes("renderConsultationRequestsSection"), "홈에 상담 요청 위젯이 존재해야 함");
+  assert.ok(homePage.includes("renderConsultationScheduleSection"), "홈에 상담 일정 위젯이 존재해야 함");
+
+  // 3) 비대면 상담 수락 시 대화창(/chat?convId=...)으로 연결되고, 대면 상담 수락 시 상담 일정(캘린더)이 생성되는지 확인
+  assert.ok(homePage.includes("비대면 상담 수락"), "비대면 상담 수락 버튼이 존재해야 함");
+  assert.ok(homePage.includes("대면 상담 수락"), "대면 상담 수락 버튼이 존재해야 함");
+  assert.ok(homePage.includes("registerFaceToFaceCalendarEvent"), "대면 상담 수락 시 캘린더 일정 생성 함수가 호출되어야 함");
+  assert.ok(calendarComp.includes("consult-cal-"), "캘린더 컴포넌트에 승인된 대면 상담 일정이 자동 반영되어야 함");
+});
