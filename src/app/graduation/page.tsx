@@ -1995,7 +1995,7 @@ export default function GraduationPage() {
               </span>
             </div>
             <p className="text-xs text-ink-3">
-              2013학년도 입학자부터 2회 이상 적격 판정 필수 (학기당 1회만 인정)
+              2013학년도 입학자부터 2회 이상 적격 판정 필수 (최소 1년 간격 준수)
             </p>
             <div className="flex items-center gap-2 pt-1">
               <label className="text-ink-2 font-bold">적격 횟수:</label>
