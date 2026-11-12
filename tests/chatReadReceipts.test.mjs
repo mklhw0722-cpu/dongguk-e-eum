@@ -401,3 +401,21 @@ test("15. [대화방 나가기 보안 권한 및 원자적 배치 검증] 대화
     /setActiveConvId\(remaining\[0\]\?\.id\s*\|\|\s*""\)[\s\S]*?await leaveChat\(leavingId\)/
   );
 });
+
+test("16. [채팅방 헤더 나가기 버튼 및 참여자 보기 명칭 검증] 참여자 패널을 열지 않고도 상단 헤더에서 '방 나가기' 버튼을 즉시 누를 수 있고 '참여자 보기'로 표시된다", () => {
+  const chatPageSrc = fs.readFileSync(new URL("../src/app/chat/page.tsx", import.meta.url), "utf8");
+
+  // 1) 대화방 상단 헤더 영역에 '방 나가기' 버튼이 위치하는지 확인
+  assert.match(
+    chatPageSrc,
+    /onClick=\{handleLeaveCurrentChat\}[\s\S]*?방 나가기[\s\S]*?onClick=\{\(\)\s*=>\s*setShowMemberPanel/
+  );
+
+  // 2) '참여자 관리'가 아닌 '참여자 보기' (또는 열렸을 때 '참여자 닫기')로 표시되는지 확인
+  assert.match(
+    chatPageSrc,
+    /참여자\s*\{showMemberPanel\s*\?\s*"닫기"\s*:\s*"보기"\}/
+  );
+  assert.equal(chatPageSrc.includes('참여자 {showMemberPanel ? "닫기" : "관리"}'), false);
+});
+
