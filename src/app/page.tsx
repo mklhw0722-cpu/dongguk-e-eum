@@ -104,46 +104,84 @@ export default function HomePage() {
     .filter((a) => a.privacy?.showProfileInDirectory !== false)
     .slice(0, 3);
 
+  // 관리자 모드 판별
+  const isAdmin =
+    currentUser.role === "admin" || currentRole === "admin";
+
   // 재학생 모드 판별 (관리자, 교수진, 졸업생은 false)
   const isStudent =
     (currentUser.role === "student" || currentRole === "student") &&
-    currentUser.role !== "admin" &&
-    currentRole !== "admin" &&
+    !isAdmin &&
     currentUser.role !== "professor" &&
     currentRole !== "professor" &&
     currentUser.role !== "alumni" &&
     currentRole !== "alumni";
 
-  // 교수 모드 판별
+  // 교수 모드 판별 (관리자는 교수가 아님)
   const isProfessor =
-    currentUser.role === "professor" || currentRole === "professor";
+    (currentUser.role === "professor" || currentRole === "professor") && !isAdmin;
 
-  // 대기 중인 상담 요청 목록 (최신순)
-  const pendingConsultations = React.useMemo(
-    () => (consultations || []).filter((c) => c.status === "pending"),
-    [consultations]
+  // 내 계정 식별 ID 집합
+  const myIds = React.useMemo(() => {
+    return new Set(
+      [
+        currentUser?.id,
+        (currentUser as any)?.uid,
+        authUserProfile?.id,
+        authUserProfile?.uid,
+      ].filter(Boolean)
+    );
+  }, [currentUser, authUserProfile]);
+
+  const myEmail = currentUser?.email || authUserProfile?.email || "";
+  const myName = currentUser?.name || authUserProfile?.name || "";
+
+  // 상담 당사자 판별 함수 (본인이 학생 또는 담당 교수로 배정된 상담만 true, 관리자나 타인 상담은 false)
+  const isUserConsultation = React.useCallback(
+    (c: ConsultationRequest) => {
+      // 관리자(admin) 계정은 교수나 학생 본인이 아니므로 타인의 상담 일체 미노출
+      if (isAdmin) return false;
+
+      if (isProfessor) {
+        return (
+          myIds.has(c.professorId) ||
+          (Boolean(myName) && (c.professorName === myName || c.professorName === `${myName} 교수`))
+        );
+      }
+      if (isStudent) {
+        return myIds.has(c.studentId) || (Boolean(myEmail) && c.studentEmail === myEmail);
+      }
+      return false;
+    },
+    [isAdmin, isProfessor, isStudent, myIds, myName, myEmail]
   );
 
-  // 수락된 예정 상담 일정 목록 (날짜·시간순)
+  // 대기 중인 상담 요청 목록 (최신순 - 본인 관련 상담만)
+  const pendingConsultations = React.useMemo(
+    () => (consultations || []).filter((c) => c.status === "pending" && isUserConsultation(c)),
+    [consultations, isUserConsultation]
+  );
+
+  // 수락된 예정 상담 일정 목록 (날짜·시간순 - 본인 관련 상담만)
   const acceptedConsultations = React.useMemo(
     () =>
       (consultations || [])
-        .filter((c) => c.status === "accepted")
+        .filter((c) => c.status === "accepted" && isUserConsultation(c))
         .sort((a, b) => {
           const dCmp = (a.preferredDate || "").localeCompare(b.preferredDate || "");
           if (dCmp !== 0) return dCmp;
           return (a.preferredTime || "").localeCompare(b.preferredTime || "");
         }),
-    [consultations]
+    [consultations, isUserConsultation]
   );
 
-  // 취소된 상담 목록 (최근 취소 내역 표시용)
+  // 취소된 상담 목록 (최근 취소 내역 표시용 - 본인 관련 상담만)
   const cancelledConsultations = React.useMemo(
     () =>
       (consultations || [])
-        .filter((c) => c.status === "cancelled")
+        .filter((c) => c.status === "cancelled" && isUserConsultation(c))
         .slice(0, 5),
-    [consultations]
+    [consultations, isUserConsultation]
   );
 
   // 대면 상담 수락 시 캘린더 일정(로컬 스토리지 + Firestore) 자동 생성 및 해당 날짜 선택
@@ -163,17 +201,13 @@ export default function HomePage() {
     };
 
     try {
-      const keys = [
-        "dongguk_custom_calendar_events_v1",
-        profId ? `dongguk_custom_calendar_events_v2_${profId}` : "",
-      ].filter(Boolean);
-
-      keys.forEach((key) => {
+      if (profId) {
+        const key = `dongguk_custom_calendar_events_v2_${profId}`;
         const raw = window.localStorage.getItem(key);
         const list: CalendarEvent[] = raw ? JSON.parse(raw) : [];
         const next = [profEvent, ...list.filter((item) => item.id !== eventId)];
         window.localStorage.setItem(key, JSON.stringify(next));
-      });
+      }
     } catch {
       // ignore localStorage errors
     }
@@ -1159,8 +1193,8 @@ export default function HomePage() {
             </Panel>
           )}
 
-          {/* 비재학생(교수진·관리자·졸업생) 모드: 기존 게시판/후기 자리에 상담 요청 및 상담 일정 배치 */}
-          {!isStudent && (
+          {/* 교수진 모드: 기존 게시판/후기 자리에 본인 상담 요청 및 상담 일정 배치 (관리자/동문은 미노출) */}
+          {isProfessor && (
             <>
               {renderConsultationRequestsSection()}
               {renderConsultationScheduleSection()}

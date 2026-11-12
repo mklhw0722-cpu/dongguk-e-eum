@@ -2476,7 +2476,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       try {
         const keys = [
-          "dongguk_custom_calendar_events_v1",
           profId ? `dongguk_custom_calendar_events_v2_${profId}` : "",
           target.studentId ? `dongguk_custom_calendar_events_v2_${target.studentId}` : "",
         ].filter(Boolean);

@@ -179,6 +179,7 @@ export default function EditableCalendar({
   // 1. LocalStorage에서 일정 로드 및 기존 잔존 예시(더미) 데이터 완전 정제
   useEffect(() => {
     try {
+      const isAdmin = currentUser?.role === "admin" || currentRole === "admin";
       const keysToClean = [
         STORAGE_KEY,
         currentUser?.id ? `dongguk_custom_calendar_events_v2_${currentUser.id}` : null,
@@ -197,6 +198,11 @@ export default function EditableCalendar({
                 if (isSampleCalendarEvent(item)) return false;
                 if (item.id?.includes("c-req-1") || item.id?.includes("c-req-2")) return false;
                 if (item.title?.includes("백상아") || item.memo?.includes("백상아")) return false;
+                // 타인의 상담 일정 필터링: 관리자 계정은 대면 상담 일정 일체 미포함, 일반 회원은 본인 참여 일정만 포함
+                if (item.id?.startsWith("consult-cal-") || item.title?.includes("[대면 상담]")) {
+                  if (isAdmin) return false;
+                  if (item.userId && currentUser?.id && item.userId !== currentUser.id) return false;
+                }
                 return true;
               });
               if (clean.length !== parsed.length) {
@@ -217,19 +223,26 @@ export default function EditableCalendar({
     } catch {
       // 로컬스토리지 접근 제한 환경 등 안전 폴백
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentUser?.role, currentRole]);
 
   // 2. 로그인 사용자 대상 Firestore 실시간 연동 (모바일·PC 실시간 동기화)
   useEffect(() => {
     if (!currentUser?.id) return;
     const { db } = getFirebaseInstances();
     if (!db) return;
+    const isAdmin = currentUser?.role === "admin" || currentRole === "admin";
 
     const unsubscribe = subscribeToUserCalendarEvents(
       currentUser.id,
       (cloudEvents) => {
-        // 클라우드 일정 중 예시/더미 데이터 제외
-        const clean = cloudEvents.filter((ev) => !isSampleCalendarEvent(ev));
+        // 클라우드 일정 중 예시/더미 데이터 및 관리자 계정의 타인 상담 일정 제외
+        const clean = cloudEvents.filter((ev) => {
+          if (isSampleCalendarEvent(ev)) return false;
+          if (isAdmin && (ev.id?.startsWith("consult-cal-") || ev.title?.includes("[대면 상담]"))) {
+            return false;
+          }
+          return true;
+        });
         setUserEvents(clean);
 
         // 로컬스토리지 캐시 동기화
@@ -241,8 +254,14 @@ export default function EditableCalendar({
           // ignore
         }
 
-        // 만약 클라우드에 예시 일정이 등록되어 있다면 백그라운드 자동 정리
-        const samples = cloudEvents.filter(isSampleCalendarEvent);
+        // 만약 클라우드에 예시 일정이 등록되어 있거나 관리자 계정에 상담 일정이 남아있다면 백그라운드 자동 정리
+        const samples = cloudEvents.filter((ev) => {
+          if (isSampleCalendarEvent(ev)) return true;
+          if (isAdmin && (ev.id?.startsWith("consult-cal-") || ev.title?.includes("[대면 상담]"))) {
+            return true;
+          }
+          return false;
+        });
         samples.forEach((sample) => {
           deleteUserCalendarEventFromFirestore(currentUser.id, sample.id).catch(() => {});
         });
@@ -255,7 +274,7 @@ export default function EditableCalendar({
     return () => {
       unsubscribe();
     };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentUser?.role, currentRole]);
 
   // 일정 변경 시 LocalStorage에 자동 저장
   const saveEvents = (newEvents: CalendarEvent[]) => {
@@ -291,11 +310,26 @@ export default function EditableCalendar({
 
   // 전체 이벤트 통합 (사용자가 직접 등록한 일정 + 승인된 대면 상담 일정 자동 연동)
   const allEvents = useMemo(() => {
-    const existingIds = new Set(userEvents.map((ev) => ev.id));
+    const isAdmin = currentUser?.role === "admin" || currentRole === "admin";
     const myId = currentUser?.id;
     const isProf = currentUser?.role === "professor" || currentRole === "professor";
+
+    // 관리자 계정은 타인의 대면 상담 일정을 userEvents에서 철저히 배제
+    const filteredUserEvents = userEvents.filter((ev) => {
+      if (ev.title?.includes("백상아") || ev.memo?.includes("백상아")) return false;
+      if (ev.id?.startsWith("consult-cal-") || ev.title?.includes("[대면 상담]")) {
+        if (isAdmin) return false;
+        if (ev.userId && myId && ev.userId !== myId) return false;
+      }
+      return true;
+    });
+
+    const existingIds = new Set(filteredUserEvents.map((ev) => ev.id));
+
+    // consultEvents: 관리자 계정일 때는 빈 배열 반환 (타인의 상담 일정 절대 캘린더 미노출)
     const consultEvents: CalendarEvent[] = (consultations || [])
       .filter((c) => {
+        if (isAdmin) return false; // 관리자 계정에서는 타인의 상담 일정 절대 미노출
         if (c.status !== "accepted" || c.consultationMethod === "채팅" || !c.preferredDate) return false;
         if (
           c.id === "c-req-1" ||
@@ -324,7 +358,7 @@ export default function EditableCalendar({
       }))
       .filter((ev) => !existingIds.has(ev.id));
 
-    return [...userEvents, ...consultEvents].filter(
+    return [...filteredUserEvents, ...consultEvents].filter(
       (ev) => !ev.title?.includes("백상아") && !ev.memo?.includes("백상아")
     );
   }, [userEvents, consultations, currentUser?.id, currentUser?.role, currentRole]);

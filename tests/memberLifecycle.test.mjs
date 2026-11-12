@@ -335,3 +335,40 @@ test("10. 이메일 중복 가입 5대 케이스 분류 및 삭제된 이메일 
   assert.equal(c5.caseType, "completely_deleted");
   assert.equal(c5.canProceedNewAuthSignup, true);
 });
+
+test("10. [회원가입 비밀번호 보안 규칙 및 역할별 가입 항목 검증] 비밀번호는 영문·숫자·특수문자 포함 6자 이상이어야 하며 역할별 드롭다운이 정확히 제공된다", () => {
+  const authCode = fs.readFileSync(new URL("../src/app/auth/page.tsx", import.meta.url), "utf8");
+
+  // 비밀번호 검증 함수
+  function validatePassword(pw) {
+    const hasLetter = /[A-Za-z]/.test(pw);
+    const hasDigit = /\d/.test(pw);
+    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(pw);
+    if (pw.length < 6 || !hasLetter || !hasDigit || !hasSpecial) {
+      return false;
+    }
+    return true;
+  }
+
+  // 비밀번호 유효성 검사
+  assert.equal(validatePassword("12345"), false, "5자리 이하 불가");
+  assert.equal(validatePassword("abcdef"), false, "영문만 불가");
+  assert.equal(validatePassword("123456"), false, "숫자만 불가");
+  assert.equal(validatePassword("abc123"), false, "특수문자 누락 불가");
+  assert.equal(validatePassword("abc!@#"), false, "숫자 누락 불가");
+  assert.equal(validatePassword("123!@#"), false, "영문 누락 불가");
+  assert.equal(validatePassword("a1!"), false, "6자리 미만 불가");
+  assert.equal(validatePassword("dgu123!"), true, "영문+숫자+특수문자 6자 이상 통과");
+  assert.equal(validatePassword("Dongguk2026#"), true, "영문+숫자+특수문자 6자 이상 통과");
+
+  // auth 화면 코드에 비밀번호 안내 및 검증 조건 반영 확인
+  assert.ok(authCode.includes("비밀번호 (영문, 숫자, 특수문자 포함 6자리 이상) *"));
+  assert.ok(authCode.includes("비밀번호는 영문, 숫자, 특수문자를 모두 포함하여 6자리 이상이어야 합니다."));
+
+  // 역할별 드롭다운 제공 확인
+  assert.ok(authCode.includes("입학 연도 (신입학 재학생 기준) *"));
+  assert.ok(authCode.includes("졸업 연도 *"));
+  assert.ok(authCode.includes("교육학과 전임교원"));
+  assert.ok(authCode.includes("ALUMNI_GRADUATION_OPTIONS"));
+});
+

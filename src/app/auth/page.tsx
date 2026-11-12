@@ -155,8 +155,12 @@ export default function AuthPage() {
     e.preventDefault();
     setSignupError(null);
 
-    if (signupPassword.length < 6) {
-      setSignupError("비밀번호는 최소 6자리 이상이어야 합니다.");
+    const hasLetter = /[A-Za-z]/.test(signupPassword);
+    const hasDigit = /\d/.test(signupPassword);
+    const hasSpecial = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(signupPassword);
+
+    if (signupPassword.length < 6 || !hasLetter || !hasDigit || !hasSpecial) {
+      setSignupError("비밀번호는 영문, 숫자, 특수문자를 모두 포함하여 6자리 이상이어야 합니다.");
       return;
     }
 
@@ -706,14 +710,16 @@ export default function AuthPage() {
               </div>
 
               <div>
-                <label className="block font-bold text-ink mb-1.5">비밀번호 (6자리 이상) *</label>
+                <label className="block font-bold text-ink mb-1.5">
+                  비밀번호 (영문, 숫자, 특수문자 포함 6자리 이상) *
+                </label>
                 <input
                   type="password"
                   required
                   minLength={6}
                   value={signupPassword}
                   onChange={(e) => setSignupPassword(e.target.value)}
-                  placeholder="6자리 이상 입력"
+                  placeholder="영문, 숫자, 특수문자 포함 6자리 이상 입력"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-surface-2 text-ink text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
                 />
               </div>

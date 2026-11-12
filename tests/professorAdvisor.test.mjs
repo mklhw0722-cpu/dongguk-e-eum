@@ -936,3 +936,29 @@ test("23. [상담 취소 및 사유 필수 입력] 공백 불가 및 최대 500�
   assert.ok(homePage.includes("최근 취소된 상담"), "취소된 상담은 즉시 삭제되지 않고 취소 사유와 함께 목록에 보존되어야 합니다.");
   assert.ok(chatPage.includes("취소 사유 ("), "대화창 나의 상담 현황에서도 취소 사유가 보존 표시되어야 합니다.");
 });
+
+test("24. [타인의 상담 일정 관리자 계정 격리 검증] 관리자 로그인 시 홈 화면의 상담 요청, 상담 일정 및 캘린더에서 타인의 상담 일정이 일체 노출되지 않는다", () => {
+  const homePage = fs.readFileSync(path.join(rootDir, "src/app/page.tsx"), "utf8");
+  const calendarComp = fs.readFileSync(path.join(rootDir, "src/components/calendar/EditableCalendar.tsx"), "utf8");
+
+  // 1) 홈 화면 상담 필터링: 관리자 계정은 타인의 상담(pending, accepted, cancelled) 일체 미노출
+  assert.ok(homePage.includes("if (isAdmin) return false;"), "isUserConsultation에서 관리자 계정은 타인의 상담을 일체 제외해야 합니다.");
+  assert.ok(homePage.includes("isUserConsultation(c)"), "pending, accepted, cancelled 상담 목록에서 당사자 검증 함수를 거쳐야 합니다.");
+
+  // 2) 홈 화면 우측 패널에서 상담 위젯은 교수진에게만 노출되며 관리자 화면에는 타인 상담 위젯 미노출
+  assert.ok(homePage.includes("{isProfessor && ("), "상담 요청 및 일정 위젯은 교수진 모드에서만 배치되어야 합니다.");
+
+  // 3) 캘린더 컴포넌트(EditableCalendar): 관리자 계정 시 userEvents 및 consultEvents에서 대면 상담 일정 완전 격리
+  assert.ok(calendarComp.includes("if (isAdmin) return false;"), "캘린더 allEvents 계산 시 관리자 계정에서는 대면 상담 일정이 반환되지 않아야 합니다.");
+  assert.ok(
+    calendarComp.includes('ev.id?.startsWith("consult-cal-") || ev.title?.includes("[대면 상담]")'),
+    "대면 상담 일정을 식별하여 관리자 계정에서 필터링해야 합니다."
+  );
+
+  // 4) 대면 상담 수락 시 공용 키(dongguk_custom_calendar_events_v1) 오염 방지 확인
+  assert.equal(
+    homePage.includes('"dongguk_custom_calendar_events_v1",\n        profId'),
+    false,
+    "대면 상담 수락 시 전체 공유 로컬스토리지 키에 타인 상담을 기록하지 않아야 합니다."
+  );
+});
