@@ -417,5 +417,10 @@ test("16. [채팅방 헤더 나가기 버튼 및 참여자 보기 명칭 검증]
     /참여자\s*\{showMemberPanel\s*\?\s*"닫기"\s*:\s*"보기"\}/
   );
   assert.equal(chatPageSrc.includes('참여자 {showMemberPanel ? "닫기" : "관리"}'), false);
+
+  // 3) 참여자 상세 패널 내부에서는 '방 나가기' 버튼이 제거되어 상단 헤더에만 단독 존재하는지 확인
+  const memberPanelMatch = chatPageSrc.match(/\{showMemberPanel\s*&&[\s\S]*?채팅방 참여 구성원[\s\S]*?\{activeMembers\.map/);
+  assert.ok(memberPanelMatch);
+  assert.equal(memberPanelMatch[0].includes("방 나가기"), false, "참여자 패널 내부의 방 나가기 버튼은 삭제되어야 함");
 });
 

@@ -1289,20 +1289,13 @@ export default function ChatPage() {
                     <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                       <Users className="w-4 h-4 text-orange-600" /> 채팅방 참여 구성원 ({activeMembers.length}명)
                     </p>
-                    <div className="flex items-center gap-2">
+                    <div>
                       <button
                         type="button"
                         onClick={handleOpenInviteModal}
-                        className="px-2.5 py-1 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold inline-flex items-center gap-1 transition"
+                        className="px-2.5 py-1 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold inline-flex items-center gap-1 transition cursor-pointer"
                       >
                         <UserPlus className="w-3.5 h-3.5" /> 새 참여자 초대
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleLeaveCurrentChat}
-                        className="px-2.5 py-1 rounded-lg bg-slate-200 hover:bg-rose-100 hover:text-rose-700 text-slate-700 text-xs font-semibold inline-flex items-center gap-1 transition"
-                      >
-                        <LogOut className="w-3.5 h-3.5" /> 방 나가기
                       </button>
                     </div>
                   </div>
