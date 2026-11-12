@@ -116,7 +116,11 @@ import {
   UserDeletionReport,
   buildUserDeletionReport,
 } from "@/lib/memberLifecycle";
-import { unreadCountForUser, effectiveReadSeq } from "@/lib/chatReadReceipts";
+import {
+  unreadCountForUser,
+  effectiveReadSeq,
+  sortConversationsByLatestMessage,
+} from "@/lib/chatReadReceipts";
 import { CalendarEvent } from "@/components/calendar/EditableCalendar";
 import officialNoticesJson from "@/data/officialNotices.json";
 import { extractScheduleFromTitle } from "@/lib/officialNoticeParser";
@@ -1112,7 +1116,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const validMemberIds = new Set(approvedMembers.map((m) => m.id));
       validMemberIds.add(authUserProfile.id);
 
-      return firestoreRooms
+      const mappedFirestore = firestoreRooms
         .filter((room) => {
           // 1:1 대화방의 경우, 상대방이 이미 삭제되었거나 탈퇴한 회원이면 대화방 목록에서 제외
           if (!room.isGroup) {
@@ -1159,18 +1163,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             })),
             lastMessageText: room.lastMessageText || "",
             lastMessageAt: room.lastMessageAt || "",
+            lastMessageTimestamp: room.lastMessageTimestamp,
+            lastMessageIso: room.lastMessageIso,
+            createdAtTimestamp: room.createdAtTimestamp,
+            createdAt: room.createdAt,
             createdBy: room.createdBy,
             msgSeq: room.msgSeq,
             readSeq: room.readSeq,
             joinSeq: room.joinSeq,
           };
         });
+
+      return sortConversationsByLatestMessage(mappedFirestore);
     }
 
     const validUsers = new Set(state.users.map((u) => u.id));
     if (currentUser) validUsers.add(currentUser.id);
 
-    return state.conversations
+    const mappedLocal = state.conversations
       .filter((conv) => {
         if (!conv.isGroup) {
           const partnerId = conv.memberIds.find((id) => id !== currentUser?.id);
@@ -1204,6 +1214,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             })),
         };
       });
+
+    return sortConversationsByLatestMessage(mappedLocal);
   }, [isRealAuthActive, authUserProfile, approvedMembers, firestoreRooms, state.conversations, state.users, currentUser]);
 
   const switchRole = (role: UserRole) => {
@@ -1845,7 +1857,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    const nowTime = new Date().toLocaleTimeString("ko-KR", {
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    const nowTime = new Date(nowMs).toLocaleTimeString("ko-KR", {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -1884,6 +1898,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             readSeq: nextReadSeq,
             lastMessageText: trimmed,
             lastMessageAt: nowTime,
+            lastMessageTimestamp: nowMs,
+            lastMessageIso: nowIso,
             members: conv.members.map((m) => ({
               ...m,
               unreadCount: unreadCountForUser(readStateRoom, m.userId),
@@ -2048,8 +2064,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         role: "student" as UserRole,
       };
     const newConvId = `conv-${Date.now()}`;
-    const nowDate = new Date().toISOString().slice(0, 10);
-    const nowTime = new Date().toLocaleTimeString("ko-KR", {
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    const nowDate = nowIso.slice(0, 10);
+    const nowTime = new Date(nowMs).toLocaleTimeString("ko-KR", {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -2076,6 +2094,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ],
       lastMessageText: "대화가 시작되었습니다. 첫 인사를 건네보세요!",
       lastMessageAt: nowTime,
+      lastMessageTimestamp: nowMs,
+      lastMessageIso: nowIso,
+      createdAtTimestamp: nowMs,
+      createdAt: nowDate,
       createdBy: currentUser.id,
       msgSeq: 0,
       readSeq: { [currentUser.id]: 0, [targetUserId]: 0 },
@@ -2126,8 +2148,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const uniqueMembers = Array.from(new Set([currentUser.id, ...memberIds]));
     const newConvId = `conv-grp-${Date.now()}`;
-    const nowDate = new Date().toISOString().slice(0, 10);
-    const nowTime = new Date().toLocaleTimeString("ko-KR", {
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    const nowDate = nowIso.slice(0, 10);
+    const nowTime = new Date(nowMs).toLocaleTimeString("ko-KR", {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -2151,6 +2175,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       })),
       lastMessageText: `${currentUser.name}님이 단체 채팅방을 개설했습니다.`,
       lastMessageAt: nowTime,
+      lastMessageTimestamp: nowMs,
+      lastMessageIso: nowIso,
+      createdAtTimestamp: nowMs,
+      createdAt: nowDate,
       createdBy: currentUser.id,
       msgSeq: 0,
       readSeq: { ...initialCursor },

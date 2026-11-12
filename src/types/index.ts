@@ -197,6 +197,13 @@ export interface Conversation {
   members: ConversationMember[];
   lastMessageText: string;
   lastMessageAt: string;
+  /** 마지막 메시지 전송 시각의 정규 밀리초 타임스탬프 (최신 메시지순 정렬용) */
+  lastMessageTimestamp?: number;
+  /** 마지막 메시지 전송 시각의 ISO 8601 문자열 */
+  lastMessageIso?: string;
+  /** 대화방 개설 시각의 정규 밀리초 타임스탬프 */
+  createdAtTimestamp?: number;
+  createdAt?: string;
   createdBy: string;
   msgSeq?: number; // 마지막 일반 메시지 순번
   readSeq?: Record<string, number>; // 참여자별 마지막 읽은 순번

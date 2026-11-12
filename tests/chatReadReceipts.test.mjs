@@ -11,6 +11,10 @@ import {
   computeMarkReadTarget,
   compareBySeq,
   formatChatMemberHakbun,
+  resolveChatSortTimestamp,
+  compareChatRoomsByLatestMessage,
+  sortConversationsByLatestMessage,
+  parseTimeStringToMs,
 } from "../src/lib/chatReadReceipts.ts";
 
 test("1. [1:1 채팅] 사용자 A가 B에게 메시지를 보내면 A 화면에 '1'이 표시되고, A 본인의 안 읽은 메시지 수는 0이다", () => {
@@ -422,5 +426,195 @@ test("16. [채팅방 헤더 나가기 버튼 및 참여자 보기 명칭 검증]
   const memberPanelMatch = chatPageSrc.match(/\{showMemberPanel\s*&&[\s\S]*?채팅방 참여 구성원[\s\S]*?\{activeMembers\.map/);
   assert.ok(memberPanelMatch);
   assert.equal(memberPanelMatch[0].includes("방 나가기"), false, "참여자 패널 내부의 방 나가기 버튼은 삭제되어야 함");
+});
+
+test("17. [채팅방 목록 최신 메시지순 정렬] 메시지 전송 시 방이 즉시 목록 최상단(0번)으로 이동하며, 1:1 및 단체방 모두 동일하게 동작한다", () => {
+  const baseTime = 1762950000000;
+  const roomA = {
+    id: "chat-a",
+    title: "1:1 대화방 A",
+    isGroup: false,
+    lastMessageText: "안녕",
+    lastMessageTimestamp: baseTime,
+  };
+  const roomB = {
+    id: "chat-b",
+    title: "단체 대화방 B",
+    isGroup: true,
+    lastMessageText: "과제 공지",
+    lastMessageTimestamp: baseTime + 1000,
+  };
+  const roomC = {
+    id: "chat-c",
+    title: "1:1 대화방 C",
+    isGroup: false,
+    lastMessageText: "질문있습니다",
+    lastMessageTimestamp: baseTime + 2000,
+  };
+
+  // 초기 상태: C가 가장 최신이므로 [C, B, A] 순서
+  let list = [roomA, roomB, roomC];
+  let sorted = sortConversationsByLatestMessage(list);
+  assert.deepEqual(sorted.map((r) => r.id), ["chat-c", "chat-b", "chat-a"]);
+
+  // 1) 채팅방 A에서 내가 새 메시지를 전송 (lastMessageTimestamp 갱신)
+  const roomAUpdated = {
+    ...roomA,
+    lastMessageText: "새 메시지 전송",
+    lastMessageTimestamp: baseTime + 3000,
+  };
+  list = [roomAUpdated, roomB, roomC];
+  sorted = sortConversationsByLatestMessage(list);
+  // 방 A가 즉시 목록 맨 위로 이동
+  assert.deepEqual(sorted.map((r) => r.id), ["chat-a", "chat-c", "chat-b"]);
+
+  // 2) 이후 단체 채팅방 B에서 상대방이 새 메시지를 전송
+  const roomBUpdated = {
+    ...roomB,
+    lastMessageText: "상대방의 새 메시지",
+    lastMessageTimestamp: baseTime + 4000,
+  };
+  list = [roomAUpdated, roomBUpdated, roomC];
+  sorted = sortConversationsByLatestMessage(list);
+  // 방 B가 즉시 맨 위로 이동하고, 이전에 1등이던 A는 2번째로 이동
+  assert.deepEqual(sorted.map((r) => r.id), ["chat-b", "chat-a", "chat-c"]);
+});
+
+test("18. [읽기/클릭 시 정렬 순서 불변 검증] 채팅방을 클릭하거나 메시지를 읽었을 때(readSeq 갱신)는 순서가 변경되지 않는다", () => {
+  const baseTime = 1762950000000;
+  const room1 = {
+    id: "chat-1",
+    title: "대화방 1",
+    lastMessageTimestamp: baseTime + 5000,
+    readSeq: { userA: 1 },
+    msgSeq: 3,
+  };
+  const room2 = {
+    id: "chat-2",
+    title: "대화방 2",
+    lastMessageTimestamp: baseTime + 3000,
+    readSeq: { userA: 2 },
+    msgSeq: 2,
+  };
+  const room3 = {
+    id: "chat-3",
+    title: "대화방 3",
+    lastMessageTimestamp: baseTime + 1000,
+    readSeq: { userA: 0 },
+    msgSeq: 5,
+  };
+
+  const initialList = [room1, room2, room3];
+  const initialSorted = sortConversationsByLatestMessage(initialList);
+  assert.deepEqual(initialSorted.map((r) => r.id), ["chat-1", "chat-2", "chat-3"]);
+
+  // 사용자가 3번 방(가장 오래된 방)을 클릭하여 메시지를 모두 읽음 (readSeq 0 -> 5)
+  // 단, lastMessageTimestamp는 변경되지 않음
+  const room3Read = {
+    ...room3,
+    readSeq: { userA: 5 },
+  };
+
+  const afterReadList = [room1, room2, room3Read];
+  const afterReadSorted = sortConversationsByLatestMessage(afterReadList);
+
+  // 메시지를 읽거나 클릭해도 방의 순서는 [1, 2, 3] 그대로 유지되어야 함
+  assert.deepEqual(afterReadSorted.map((r) => r.id), ["chat-1", "chat-2", "chat-3"]);
+});
+
+test("19. [기존 채팅 기록 호환성 및 보조 정렬 검증] lastMessageTimestamp가 없는 구형 방, 한국어 시간 문자열, 생성 시각 폴백 및 누락 방지", () => {
+  // 1) 한국어 시간 문자열 파싱 검증: createdAt 날짜와 결합되어 정확한 시각 추출
+  const parsedYesterdayPM = parseTimeStringToMs("오후 11:50", "2026-11-10");
+  const parsedTodayAM = parseTimeStringToMs("오전 09:10", "2026-11-11");
+  assert.ok(parsedYesterdayPM);
+  assert.ok(parsedTodayAM);
+  // 어제 밤 11시 50분보다 오늘 아침 9시 10분이 더 최신이어야 함 (기존 localeCompare의 치명적 오류 해결 검증)
+  assert.ok(parsedTodayAM > parsedYesterdayPM, "오늘 아침 9시가 어제 밤 11시보다 최신이어야 함");
+
+  // 2) 레거시 방 목록 정렬
+  const legacyRooms = [
+    {
+      id: "legacy-yesterday",
+      title: "어제 밤 대화방",
+      lastMessageAt: "오후 11:50",
+      createdAt: "2026-11-10",
+    },
+    {
+      id: "legacy-today",
+      title: "오늘 아침 대화방",
+      lastMessageAt: "오전 09:10",
+      createdAt: "2026-11-11",
+    },
+    {
+      id: "new-room-no-msgs",
+      title: "메시지 없는 신규 개설 방",
+      lastMessageAt: "",
+      createdAt: "2026-11-12",
+    },
+    {
+      id: "modern-active-room",
+      title: "최신 메시지가 전송된 방",
+      lastMessageTimestamp: 1794500000000,
+    },
+    {
+      id: "very-old-room",
+      title: "타임스탬프 필드가 전혀 없는 극단적 레거시 방",
+    },
+  ];
+
+  const sortedLegacy = sortConversationsByLatestMessage(legacyRooms);
+
+  // 어떤 방도 필터링되거나 누락되지 않고 5개 모두 보존됨
+  assert.equal(sortedLegacy.length, 5);
+
+  // 1등: 현대식 숫자 타임스탬프 방
+  assert.equal(sortedLegacy[0].id, "modern-active-room");
+  // 2등: 2026-11-12 생성된 신규 방 (메시지 없지만 생성일 기준)
+  assert.equal(sortedLegacy[1].id, "new-room-no-msgs");
+  // 3등: 2026-11-11 오늘 아침 방
+  assert.equal(sortedLegacy[2].id, "legacy-today");
+  // 4등: 2026-11-10 어제 밤 방
+  assert.equal(sortedLegacy[3].id, "legacy-yesterday");
+  // 5등: 필드가 아예 없는 레거시 방 (맨 아래에 안전하게 유지)
+  assert.equal(sortedLegacy[4].id, "very-old-room");
+});
+
+test("20. [Firestore 보안 규칙 및 트랜잭션 동시성 검증] 대화방 갱신 시 lastMessageTimestamp, lastMessageIso가 원자적으로 저장되고 보안 규칙에 위배되지 않는다", () => {
+  const firebaseSrc = fs.readFileSync(new URL("../src/lib/firebase.ts", import.meta.url), "utf8");
+  const rulesSrc = fs.readFileSync(new URL("../firestore.rules", import.meta.url), "utf8");
+
+  // 1) firebase.ts에서 sendChatMessageInFirestore가 트랜잭션 내에서 lastMessageTimestamp, lastMessageIso를 원자적으로 갱신하는지 확인
+  assert.match(
+    firebaseSrc,
+    /lastMessageTimestamp:\s*effectiveTimestamp/
+  );
+  assert.match(
+    firebaseSrc,
+    /lastMessageIso:\s*nowIso/
+  );
+
+  // 2) 클라이언트 시계 역행이나 동시성 충돌을 방지하는 Math.max(nowMs, prevTs + 1) 단조 증가 보장 확인
+  assert.match(
+    firebaseSrc,
+    /Math\.max\(nowMs,\s*prevTs\s*\+\s*1\)/
+  );
+
+  // 3) subscribeToUserChats에서 compareChatRoomsByLatestMessage를 사용하여 실시간 최신순 정렬하는지 확인
+  assert.match(
+    firebaseSrc,
+    /list\.sort\(compareChatRoomsByLatestMessage\)/
+  );
+
+  // 4) Firestore 쿼리가 orderBy를 강제하여 필드 미존재 구형 방을 드롭하지 않고, where("participants", "array-contains")로 전체 조회 후 클라이언트 정렬하는 구조 확인
+  assert.match(
+    firebaseSrc,
+    /where\("participants",\s*"array-contains",\s*currentUid\)/
+  );
+
+  // 5) firestore.rules에서 참여자의 대화방 갱신(affectedKeys check)이 정상 허용되는지 확인
+  assert.match(
+    rulesSrc,
+    /match \/chats\/\{chatId\}[\s\S]*?allow update:\s*if isApprovedUser\(\)\s*&&/
+  );
 });
 
