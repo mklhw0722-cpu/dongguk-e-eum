@@ -23,7 +23,6 @@ import {
   Users,
   CheckSquare,
   ArrowRight,
-  Sparkles,
   GraduationCap,
   AlertCircle,
   Calendar as CalendarIcon,
@@ -707,11 +706,6 @@ export default function HomePage() {
       <SectionHeader
         title={`나의 지도학생 (${myAdviseeStudents.length}명)`}
         icon={<GraduationCap className="w-5 h-5 text-accent" />}
-        action={
-          <Link href="/chat" className={textLinkClass}>
-            지도학생 상담 및 대화 <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        }
       />
 
       {myAdviseeStudents.length === 0 ? (
@@ -786,10 +780,6 @@ export default function HomePage() {
         <ConnectionMotif />
 
         <div className="relative z-10 max-w-2xl space-y-2.5">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/20 backdrop-blur-xs text-xs font-bold text-white shadow-2xs">
-            <Sparkles className="w-3.5 h-3.5" />
-            동국대학교 교육학과 전용 종합 플랫폼 · 동국e음
-          </div>
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
             반갑습니다, {currentUser.name}님!
             {currentRole === "admin" ? ` (${ROLE_LABELS.admin} 모드)` : ""}
@@ -817,11 +807,6 @@ export default function HomePage() {
               <SectionHeader
                 title="나의 지도교수"
                 icon={<GraduationCap className="w-5 h-5 text-accent" />}
-                action={
-                  <span className="text-xs text-ink-3 font-medium">
-                    학생 지도 시스템
-                  </span>
-                }
               />
 
               {myAdvisorInfo.status === "assigned" && myAdvisorInfo.professor ? (

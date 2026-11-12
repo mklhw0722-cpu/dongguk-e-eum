@@ -307,9 +307,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     )}
                   </div>
                 </div>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <p className="text-xs text-ink-3">동국대학교 교육학과 전용 플랫폼</p>
-                  {rawFirebaseUser && (
+                {rawFirebaseUser && (
+                  <div className="mt-3 flex items-center justify-end">
                     <button
                       type="button"
                       onClick={() => handleLogout()}
@@ -318,8 +317,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       <LogOut className="size-3.5" aria-hidden="true" />
                       <span>로그아웃</span>
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             ) : (
               // 정상 승인 완료 회원 프로필
@@ -384,9 +383,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                     </button>
                   </div>
                 )}
-                <p className="mt-2.5 text-xs leading-relaxed text-ink-3">
-                  동국대학교 교육학과 전용 플랫폼
-                </p>
               </div>
             )}
           </div>
