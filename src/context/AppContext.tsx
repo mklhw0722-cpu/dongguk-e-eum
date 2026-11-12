@@ -104,7 +104,15 @@ import {
   subscribeToConsultationsInFirestore,
   updateConsultationStatusInFirestore,
   cancelConsultationInFirestore,
+  updateRegistrationByApplicantInFirestore,
+  recreateDeletedUserProfileInFirestore,
+  deleteOwnAuthAccountInFirebase,
 } from "@/lib/firebase";
+import {
+  RegistrationRevisionInput,
+  UserDeletionReport,
+  buildUserDeletionReport,
+} from "@/lib/memberLifecycle";
 import { unreadCountForUser, effectiveReadSeq } from "@/lib/chatReadReceipts";
 import officialNoticesJson from "@/data/officialNotices.json";
 import { extractScheduleFromTitle } from "@/lib/officialNoticeParser";
@@ -180,6 +188,14 @@ interface AppContextValue extends PlatformDataState {
   handleResetPassword: (email: string) => Promise<void>;
   handleClaimInitialAdmin: () => Promise<void>;
   handleUpdateUserName: (newName: string) => Promise<void>;
+  handleApplicantUpdateRegistration: (
+    input: RegistrationRevisionInput,
+    mode: "draft" | "resubmit"
+  ) => Promise<UserProfileDoc>;
+  handleRecreateDeletedProfile: (
+    input: RegistrationRevisionInput
+  ) => Promise<UserProfileDoc>;
+  handleDeleteOwnAuthAccount: () => Promise<void>;
 
   // 실제 관리자 회원 승인 액션
   realUsersForAdmin: UserProfileDoc[];
@@ -187,7 +203,8 @@ interface AppContextValue extends PlatformDataState {
     targetUid: string,
     status: ApprovalStatus,
     adminComment?: string,
-    role?: UserRole
+    role?: UserRole,
+    revisionFields?: string[]
   ) => Promise<void>;
   approvedProfessors: (PublicChatUser | User)[];
   myAdvisorInfo: {
@@ -198,7 +215,10 @@ interface AppContextValue extends PlatformDataState {
     studentId: string,
     professorId: string | null
   ) => Promise<void>;
-  handleAdminDeleteUser: (targetUid: string) => Promise<void>;
+  handleAdminDeleteUser: (
+    targetUid: string,
+    options?: { targetName?: string; targetEmail?: string }
+  ) => Promise<UserDeletionReport>;
 
   // 교수 상담 신청 시스템 액션
   consultations: ConsultationRequest[];
@@ -1446,17 +1466,56 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     );
   };
 
+  const handleApplicantUpdateRegistration = async (
+    input: RegistrationRevisionInput,
+    mode: "draft" | "resubmit"
+  ): Promise<UserProfileDoc> => {
+    const currentUid =
+      (rawFirebaseUser ? rawFirebaseUser.uid : "") || authUserProfile?.id || "";
+    if (!currentUid) {
+      throw new Error("로그인된 사용자 정보를 확인할 수 없습니다.");
+    }
+    const updated = await updateRegistrationByApplicantInFirestore(
+      currentUid,
+      input,
+      mode
+    );
+    setAuthUserProfile(updated);
+    setProfileStatus("loaded");
+    return updated;
+  };
+
+  const handleRecreateDeletedProfile = async (
+    input: RegistrationRevisionInput
+  ): Promise<UserProfileDoc> => {
+    const restored = await recreateDeletedUserProfileInFirestore(input);
+    setAuthUserProfile(restored);
+    setProfileStatus("loaded");
+    return restored;
+  };
+
+  const handleDeleteOwnAuthAccount = async (): Promise<void> => {
+    await deleteOwnAuthAccountInFirebase();
+    clearSessionFromStorage("logout");
+    setAuthSession(null);
+    setRawFirebaseUser(null);
+    setAuthUserProfile(null);
+    setProfileStatus("idle");
+  };
+
   const handleAdminUpdateApproval = async (
     targetUid: string,
     status: ApprovalStatus,
     adminComment?: string,
-    role?: UserRole
+    role?: UserRole,
+    revisionFields?: string[]
   ) => {
     await updateUserApprovalStatusByAdmin({
       targetUid,
       status,
       adminComment,
       role,
+      revisionFields,
     });
 
     // 재학생이 아닌 역할(졸업생, 교수진, 관리자)로 변경된 경우 지도학생 배정 정보 로컬 즉시 초기화
@@ -1484,11 +1543,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const handleAdminDeleteUser = async (targetUid: string) => {
-    // 1. Firebase 연동 상태라면 Firestore에서 대상 회원의 문서(users, publicProfiles, graduationRecords, calendarEvents, consultations, chats) 완전 삭제
+  const handleAdminDeleteUser = async (
+    targetUid: string,
+    options?: { targetName?: string; targetEmail?: string }
+  ): Promise<UserDeletionReport> => {
+    let report: UserDeletionReport;
+
+    // 1. Firebase 연동 상태라면 Firestore에서 대상 회원의 문서 완전 삭제 및 단계별 리포트 생성
     if (isRealAuthActive && isFirestoreConnected) {
-      await deleteUserByAdminInFirestore(targetUid);
+      report = await deleteUserByAdminInFirestore(targetUid, options);
       cleanupOrphanedUserDataInFirestore().catch(console.warn);
+    } else {
+      report = buildUserDeletionReport({
+        targetUid,
+        targetName: options?.targetName,
+        targetEmail: options?.targetEmail,
+        authDeletedOnServer: true,
+        steps: [
+          {
+            key: "userDoc",
+            label: "로컬 회원 문서",
+            status: "success",
+            detail: "데모/로컬 상태에서 회원 삭제 완료",
+          },
+        ],
+      });
     }
 
     // 2. 관리자용 실시간 목록에서 제거 및 삭제 대상이 교수였을 경우 배정되어 있던 학생들의 지도교수 정보 초기화
@@ -1550,6 +1629,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           participants: room.participants.filter((id) => id !== targetUid),
         }))
     );
+
+    return report;
   };
 
   const handleAdminAssignAdvisor = async (
@@ -3692,6 +3773,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handleResetPassword,
         handleClaimInitialAdmin,
         handleUpdateUserName,
+        handleApplicantUpdateRegistration,
+        handleRecreateDeletedProfile,
+        handleDeleteOwnAuthAccount,
         realUsersForAdmin,
         handleAdminUpdateApproval,
         approvedProfessors,

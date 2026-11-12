@@ -14,6 +14,11 @@ import { ROLE_LABELS, DemoInfoBanner } from "@/components/common/Cards";
 import { cn, Badge, CountBadge } from "@/components/ui";
 import { ADMIN_PROFILE_LOGO_DATA_URL } from "@/lib/adminSymbol";
 import {
+  REVISION_FIELD_OPTIONS,
+  USER_DELETION_DATA_POLICY,
+  UserDeletionReport,
+} from "@/lib/memberLifecycle";
+import {
   ShieldCheck,
   UserCheck,
   Users,
@@ -40,12 +45,16 @@ const STATUS_LABELS: Record<ApprovalStatus, { label: string; style: string }> = 
     label: "승인 완료",
     style: "bg-emerald-100 text-emerald-800",
   },
+  needs_revision: {
+    label: "보완 요청됨 (needs_revision)",
+    style: "bg-blue-100 text-blue-800",
+  },
   supplement_requested: {
     label: "보완 요청됨",
     style: "bg-blue-100 text-blue-800",
   },
   rejected: {
-    label: "승인 거절됨",
+    label: "승인 반려됨",
     style: "bg-rose-100 text-rose-800",
   },
   suspended: {
@@ -96,27 +105,58 @@ export default function AdminPage() {
     [approvalRequests]
   );
 
-  const handleDeleteUser = async (targetUser: { id: string; name: string; role: UserRole }) => {
+  // 회원 삭제 확인 및 단계별 결과 리포트 모달 상태
+  const [deleteModalTarget, setDeleteModalTarget] = useState<{
+    id: string;
+    name: string;
+    email?: string;
+    role: UserRole;
+    approvalStatus?: ApprovalStatus;
+  } | null>(null);
+  const [deleteModalReport, setDeleteModalReport] =
+    useState<UserDeletionReport | null>(null);
+  const [deleteModalError, setDeleteModalError] = useState<string | null>(null);
+
+  const handleDeleteUser = (targetUser: {
+    id: string;
+    name: string;
+    email?: string;
+    role: UserRole;
+    approvalStatus?: ApprovalStatus;
+  }) => {
     // 1. 현재 로그인 중인 관리자 본인 계정 삭제 차단
-    if (authUserProfile?.id === targetUser.id || authUserProfile?.uid === targetUser.id) {
+    if (
+      authUserProfile?.id === targetUser.id ||
+      authUserProfile?.uid === targetUser.id
+    ) {
       alert("현재 로그인 중인 관리자 본인 계정은 삭제할 수 없습니다.");
       return;
     }
 
-    // 2. 삭제 확인 다이얼로그 (실수 방지)
-    const roleName = ROLE_LABELS[targetUser.role] || targetUser.role;
-    const isConfirmed = window.confirm(
-      `정말 '${targetUser.name}' (${roleName}) 회원을 완전히 삭제하시겠습니까?\n\n※ 주의: 파이어베이스 데이터베이스에서 회원 정보 및 관련 프로필이 영구적으로 삭제되며, 이 작업은 되돌릴 수 없습니다.`
-    );
-    if (!isConfirmed) return;
+    // 2. 삭제 확인 및 데이터 처리 범위 안내 모달 열기
+    setDeleteModalTarget(targetUser);
+    setDeleteModalReport(null);
+    setDeleteModalError(null);
+  };
 
+  const executeConfirmedDeleteUser = async () => {
+    if (!deleteModalTarget) return;
+    setDeleteModalError(null);
+    setDeletingUserId(deleteModalTarget.id);
     try {
-      setDeletingUserId(targetUser.id);
-      await handleAdminDeleteUser(targetUser.id);
-      setAdvisorFeedback(`'${targetUser.name}' 회원이 파이어베이스 및 시스템에서 성공적으로 삭제되었습니다.`);
-      setTimeout(() => setAdvisorFeedback(null), 3500);
+      const report = await handleAdminDeleteUser(deleteModalTarget.id, {
+        targetName: deleteModalTarget.name,
+        targetEmail: deleteModalTarget.email,
+      });
+      setDeleteModalReport(report);
+      setAdvisorFeedback(
+        `'${deleteModalTarget.name}' 회원 삭제 처리가 완료되었습니다. (${report.summaryMessage})`
+      );
+      setTimeout(() => setAdvisorFeedback(null), 5000);
     } catch (e: any) {
-      alert(`회원 삭제 처리 중 오류가 발생했습니다: ${e?.message || e}`);
+      setDeleteModalError(
+        `회원 삭제 처리 중 오류가 발생했습니다: ${e?.message || e}`
+      );
     } finally {
       setDeletingUserId(null);
     }
@@ -154,6 +194,9 @@ export default function AdminPage() {
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>(
     {}
   );
+  const [revisionFieldSelects, setRevisionFieldSelects] = useState<
+    Record<string, string[]>
+  >({});
   const [roleSelects, setRoleSelects] = useState<Record<string, UserRole>>({});
   const [userRoleFilter, setUserRoleFilter] = useState<string>("all");
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
@@ -265,12 +308,37 @@ export default function AdminPage() {
     setEditingRoomId(null);
   };
 
-  // 실제 Firestore 가입 승인 처리
+  // 실제 Firestore 가입 승인 / 보완 요청(needs_revision) / 반려(rejected) 처리
   const onProcessRealUser = async (targetUid: string, status: ApprovalStatus) => {
-    const comment = commentInputs[targetUid] || (status === "approved" ? "소속 확인 완료 (정회원 승인)" : "관리자 검토 처리");
+    const defaultComment =
+      status === "approved"
+        ? "소속 확인 완료 (정회원 승인)"
+        : status === "needs_revision" || status === "supplement_requested"
+        ? "가입 신청 정보(학번/소속 확인 메모 등)의 보완이 필요합니다. 정보를 수정한 뒤 다시 승인 요청해 주세요."
+        : status === "rejected"
+        ? "동국대학교 교육학과 구성원 자격이 확인되지 않아 반려되었습니다."
+        : "관리자 검토 처리";
+    const comment = (commentInputs[targetUid] || "").trim() || defaultComment;
     const role = roleSelects[targetUid];
-    await handleAdminUpdateApproval(targetUid, status, comment, role);
+    const selectedRevisionFields = revisionFieldSelects[targetUid] || [];
+    await handleAdminUpdateApproval(
+      targetUid,
+      status,
+      comment,
+      role,
+      selectedRevisionFields
+    );
     setCommentInputs((prev) => ({ ...prev, [targetUid]: "" }));
+  };
+
+  const toggleRevisionField = (targetUid: string, fieldKey: string) => {
+    setRevisionFieldSelects((prev) => {
+      const current = prev[targetUid] || [];
+      const next = current.includes(fieldKey)
+        ? current.filter((k) => k !== fieldKey)
+        : [...current, fieldKey];
+      return { ...prev, [targetUid]: next };
+    });
   };
 
   // 2차 방어: 관리자 권한이 없거나 미승인 사용자인 경우 관리자 콘솔 렌더링 차단
@@ -479,6 +547,11 @@ export default function AdminPage() {
                           >
                             {st.label}
                           </span>
+                          {(userDoc.revisionCount ?? 0) > 0 && (
+                            <span className="px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-800 text-xs font-extrabold">
+                              재신청 완료 ({userDoc.revisionCount}회차)
+                            </span>
+                          )}
                           <span className="font-extrabold text-sm sm:text-base text-ink">
                             {userDoc.name}
                           </span>
@@ -486,9 +559,14 @@ export default function AdminPage() {
                             신청 역할: {ROLE_LABELS[userDoc.role]}{userDoc.role !== "admin" && userDoc.studentIdOrYear ? ` (${userDoc.studentIdOrYear})` : ""}
                           </span>
                         </div>
-                        <span className="text-xs text-ink-3">
-                          가입일: {userDoc.joinedAt}
-                        </span>
+                        <div className="text-xs text-ink-3 flex items-center gap-2">
+                          <span>가입일: {userDoc.joinedAt}</span>
+                          {userDoc.resubmittedAt && (
+                            <span className="text-indigo-700 font-bold">
+                              · 재신청: {userDoc.resubmittedAt.slice(0, 16).replace("T", " ")}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-ink-2 bg-surface-2 p-3.5 rounded-xl">
@@ -498,9 +576,26 @@ export default function AdminPage() {
                         <p>
                           <strong>UID:</strong> <code className="text-xs">{userDoc.id}</code>
                         </p>
+                        {userDoc.doubleMajor && (
+                          <p>
+                            <strong>복수전공/트랙:</strong> {userDoc.doubleMajor}
+                          </p>
+                        )}
                         {userDoc.verificationNote && (
                           <p className="sm:col-span-2">
                             <strong>가입 신청 메모:</strong> {userDoc.verificationNote}
+                          </p>
+                        )}
+                        {userDoc.revisionFields && userDoc.revisionFields.length > 0 && (
+                          <p className="sm:col-span-2 text-blue-700 font-semibold">
+                            <strong>보완 요청 항목:</strong>{" "}
+                            {userDoc.revisionFields
+                              .map(
+                                (fk) =>
+                                  REVISION_FIELD_OPTIONS.find((o) => o.key === fk)
+                                    ?.label || fk
+                              )
+                              .join(", ")}
                           </p>
                         )}
                         {userDoc.adminComment && (
@@ -508,6 +603,40 @@ export default function AdminPage() {
                             <strong>관리자 메시지:</strong> {userDoc.adminComment}
                           </p>
                         )}
+                      </div>
+
+                      {/* 보완 요청 시 보완 필요 항목 체크박스 선택 */}
+                      <div className="flex flex-wrap items-center gap-2 pt-1 text-xs">
+                        <span className="font-bold text-ink-3">
+                          보완 요청 시 수정 필요 항목 지정 (선택):
+                        </span>
+                        {REVISION_FIELD_OPTIONS.map((opt) => {
+                          const selected = (
+                            revisionFieldSelects[userDoc.id] ||
+                            userDoc.revisionFields ||
+                            []
+                          ).includes(opt.key);
+                          return (
+                            <label
+                              key={opt.key}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border cursor-pointer transition ${
+                                selected
+                                  ? "bg-blue-50 border-blue-400 text-blue-900 font-bold"
+                                  : "bg-surface border-line text-ink-2 hover:bg-surface-2"
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                onChange={() =>
+                                  toggleRevisionField(userDoc.id, opt.key)
+                                }
+                                className="rounded border-slate-300 text-blue-600"
+                              />
+                              <span>{opt.label}</span>
+                            </label>
+                          );
+                        })}
                       </div>
 
                       <div className="flex flex-col sm:flex-row gap-2 pt-1">
@@ -536,36 +665,36 @@ export default function AdminPage() {
                               [userDoc.id]: e.target.value,
                             }))
                           }
-                          placeholder="승인/보완/거절 메시지 입력..."
+                          placeholder="승인 / 보완 요청 사유 / 반려 사유 입력..."
                           className="flex-1 px-3 py-2 rounded-xl border border-line bg-surface-2 text-xs"
                         />
 
-                        <div className="flex gap-1.5 shrink-0">
+                        <div className="flex gap-1.5 shrink-0 flex-wrap">
                           <button
                             type="button"
                             onClick={() => onProcessRealUser(userDoc.id, "approved")}
-                            className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-1 transition"
+                            className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold inline-flex items-center gap-1 transition cursor-pointer"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" /> 승인
                           </button>
                           <button
                             type="button"
-                            onClick={() => onProcessRealUser(userDoc.id, "supplement_requested")}
-                            className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold inline-flex items-center gap-1 transition"
+                            onClick={() => onProcessRealUser(userDoc.id, "needs_revision")}
+                            className="px-3 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold inline-flex items-center gap-1 transition cursor-pointer"
                           >
                             <AlertCircle className="w-3.5 h-3.5" /> 보완 요청
                           </button>
                           <button
                             type="button"
                             onClick={() => onProcessRealUser(userDoc.id, "rejected")}
-                            className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold inline-flex items-center gap-1 transition"
+                            className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold inline-flex items-center gap-1 transition cursor-pointer"
                           >
-                            <XCircle className="w-3.5 h-3.5" /> 거절
+                            <XCircle className="w-3.5 h-3.5" /> 반려
                           </button>
                           <button
                             type="button"
                             onClick={() => onProcessRealUser(userDoc.id, "suspended")}
-                            className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold inline-flex items-center gap-1 transition"
+                            className="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-800 text-white text-xs font-bold inline-flex items-center gap-1 transition cursor-pointer"
                           >
                             이용 정지
                           </button>
@@ -573,8 +702,8 @@ export default function AdminPage() {
                             type="button"
                             disabled={deletingUserId === userDoc.id}
                             onClick={() => handleDeleteUser(userDoc)}
-                            title="가입 신청 회원 완전 삭제"
-                            className="px-2.5 py-2 rounded-xl border border-rose-200 bg-rose-50/70 text-rose-600 hover:bg-rose-100 text-xs font-bold inline-flex items-center gap-1 transition disabled:opacity-50"
+                            title="가입 신청 회원 삭제"
+                            className="px-2.5 py-2 rounded-xl border border-rose-200 bg-rose-50/70 text-rose-600 hover:bg-rose-100 text-xs font-bold inline-flex items-center gap-1 transition disabled:opacity-50 cursor-pointer"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                             <span>{deletingUserId === userDoc.id ? "삭제 중" : "삭제"}</span>
@@ -1769,6 +1898,237 @@ export default function AdminPage() {
           </div>
         );
       })()}
+
+      {/* 회원 삭제 확인 및 단계별 데이터 처리 결과 모달 */}
+      {deleteModalTarget && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-surface rounded-3xl border border-line max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-5 shadow-xl">
+            <div className="flex items-start justify-between gap-3 border-b border-line pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-black text-ink">
+                    {deleteModalReport
+                      ? "회원 삭제 단계별 처리 결과 리포트"
+                      : "회원 삭제 확인 및 데이터 처리 범위 안내"}
+                  </h3>
+                  <p className="text-xs text-ink-3">
+                    개인정보 삭제 범위와 공동 데이터(게시글·단체 대화) 보호 기준을 확인합니다.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={deletingUserId !== null}
+                onClick={() => {
+                  setDeleteModalTarget(null);
+                  setDeleteModalReport(null);
+                  setDeleteModalError(null);
+                }}
+                className="text-xs font-bold text-ink-3 hover:text-ink px-2 py-1 rounded-lg"
+              >
+                닫기 ✕
+              </button>
+            </div>
+
+            {/* 삭제 대상 회원 식별 정보 (UID, 이름, 이메일) */}
+            <div className="p-4 rounded-2xl bg-surface-2 border border-line text-xs space-y-1.5">
+              <p className="font-extrabold text-ink text-sm">
+                삭제 대상 회원 정보 확인
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-ink-2">
+                <p>
+                  • <strong>이름:</strong> {deleteModalTarget.name} (
+                  {ROLE_LABELS[deleteModalTarget.role] || deleteModalTarget.role})
+                </p>
+                <p>
+                  • <strong>이메일:</strong>{" "}
+                  {deleteModalTarget.email || "이메일 정보 없음"}
+                </p>
+                <p className="sm:col-span-2">
+                  • <strong>대상 UID:</strong>{" "}
+                  <code className="px-1.5 py-0.5 rounded bg-slate-200/70 text-[11px]">
+                    {deleteModalTarget.id}
+                  </code>
+                </p>
+              </div>
+            </div>
+
+            {/* 실행 전: 데이터 처리 범위 안내 */}
+            {!deleteModalReport && (
+              <div className="space-y-3 text-xs">
+                <p className="font-extrabold text-ink">
+                  회원 삭제 시 연결 데이터 처리 범위
+                </p>
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {USER_DELETION_DATA_POLICY.map((item) => (
+                    <div
+                      key={item.key}
+                      className="p-3 rounded-xl border border-line bg-surface flex flex-col gap-1"
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-bold text-ink">{item.label}</span>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${
+                            item.policyType === "delete"
+                              ? "bg-rose-100 text-rose-800"
+                              : item.policyType === "preserve_shared"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : item.policyType === "anonymize_or_detach"
+                              ? "bg-amber-100 text-amber-800"
+                              : "bg-blue-100 text-blue-800"
+                          }`}
+                        >
+                          {item.policyType === "delete"
+                            ? "개인정보 즉시 삭제"
+                            : item.policyType === "preserve_shared"
+                            ? "공동 기록 보존"
+                            : item.policyType === "anonymize_or_detach"
+                            ? "참조 분리 · 타 회원 기록 보호"
+                            : "서버 삭제 또는 재가입 자동 복구"}
+                        </span>
+                      </div>
+                      <p className="text-ink-3 text-[11px] leading-relaxed">
+                        {item.summary}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 진행 중 상태 표시 */}
+            {deletingUserId === deleteModalTarget.id && (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-center gap-2.5">
+                <RotateCcw className="w-4 h-4 animate-spin text-amber-600 shrink-0" />
+                <span>
+                  회원 문서 및 연결 데이터를 단계별로 안전하게 정리하고 있습니다. 잠시만 기다려 주세요...
+                </span>
+              </div>
+            )}
+
+            {/* 에러 메시지 */}
+            {deleteModalError && (
+              <div className="p-4 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold space-y-2">
+                <p>{deleteModalError}</p>
+              </div>
+            )}
+
+            {/* 실행 후: 단계별 검증 결과 리포트 */}
+            {deleteModalReport && (
+              <div className="space-y-3 text-xs">
+                <div
+                  className={`p-4 rounded-2xl border font-bold leading-relaxed ${
+                    deleteModalReport.overallStatus === "partial_failure"
+                      ? "bg-rose-50 border-rose-200 text-rose-900"
+                      : deleteModalReport.overallStatus === "completed_all"
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                      : "bg-blue-50 border-blue-200 text-blue-900"
+                  }`}
+                >
+                  <p className="text-sm font-black mb-1">
+                    {deleteModalReport.overallStatus === "partial_failure"
+                      ? "⚠️ 일부 단계 처리 실패 (재시도 가능)"
+                      : deleteModalReport.overallStatus === "completed_all"
+                      ? "✅ 모든 데이터 및 인증 계정 삭제 완료"
+                      : "✅ Firestore 개인 데이터 삭제 완료 (동일 이메일 재가입 복구 활성화)"}
+                  </p>
+                  <p className="font-medium">{deleteModalReport.summaryMessage}</p>
+                </div>
+
+                <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                  {deleteModalReport.steps.map((step) => (
+                    <div
+                      key={step.key}
+                      className="p-2.5 rounded-xl border border-line bg-surface-2 flex items-start justify-between gap-2"
+                    >
+                      <div>
+                        <p className="font-bold text-ink">{step.label}</p>
+                        <p className="text-[11px] text-ink-3 mt-0.5">
+                          {step.detail}
+                        </p>
+                      </div>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[11px] font-bold shrink-0 ${
+                          step.status === "success"
+                            ? "bg-emerald-100 text-emerald-800"
+                            : step.status === "failed"
+                            ? "bg-rose-100 text-rose-800"
+                            : step.status === "skipped"
+                            ? "bg-slate-200 text-slate-700"
+                            : "bg-blue-100 text-blue-800"
+                        }`}
+                      >
+                        {step.status === "success"
+                          ? "삭제·정리 완료"
+                          : step.status === "failed"
+                          ? "실패 (재시도 필요)"
+                          : step.status === "skipped"
+                          ? "정책상 보존"
+                          : "재가입 자동 복구 지원"}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 하단 액션 버튼 */}
+            <div className="flex flex-wrap items-center justify-end gap-2.5 pt-2 border-t border-line">
+              {!deleteModalReport ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={deletingUserId !== null}
+                    onClick={() => setDeleteModalTarget(null)}
+                    className="px-4 py-2 rounded-xl border border-line bg-surface hover:bg-surface-2 text-xs font-bold text-ink-2 cursor-pointer"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deletingUserId !== null}
+                    onClick={executeConfirmedDeleteUser}
+                    className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    {deletingUserId !== null
+                      ? "삭제 진행 중..."
+                      : "위 내용을 확인했으며 회원 삭제 실행"}
+                  </button>
+                </>
+              ) : (
+                <>
+                  {deleteModalReport.failedSteps.length > 0 && (
+                    <button
+                      type="button"
+                      disabled={deletingUserId !== null}
+                      onClick={executeConfirmedDeleteUser}
+                      className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      실패 단계 다시 시도
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteModalTarget(null);
+                      setDeleteModalReport(null);
+                      setDeleteModalError(null);
+                    }}
+                    className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold cursor-pointer"
+                  >
+                    확인 및 닫기
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

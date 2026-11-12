@@ -3,7 +3,13 @@
 
 export type UserRole = "student" | "alumni" | "professor" | "admin";
 
-export type ApprovalStatus = "pending" | "approved" | "rejected" | "supplement_requested" | "suspended";
+export type ApprovalStatus =
+  | "pending"
+  | "approved"
+  | "needs_revision"
+  | "rejected"
+  | "supplement_requested"
+  | "suspended";
 
 // 캘린더 개인 일정 모델 정의
 export type EventCategory =
@@ -92,6 +98,12 @@ export interface User {
   specialty?: string; // 교수의 전문 분야 (예: "교육공학·HRD 연구실")
   consultationAvailable?: boolean; // 교수의 상담 가능 여부
   photoUrl?: string; // 프로필 이미지 URL (선택)
+  verificationNote?: string; // 가입 신청 시 소속 확인 메모
+  adminComment?: string; // 관리자 승인/보완/반려 사유 (본인 및 관리자만 열람)
+  revisionFields?: string[]; // 관리자가 보완을 요청한 항목 키 목록
+  resubmittedAt?: string; // 보완/반려 후 다시 승인 요청한 시각
+  revisionCount?: number; // 재신청 횟수
+  lastModifiedAt?: string; // 가입 정보 마지막 수정 시각
 }
 
 // 교수 상담 신청 시스템 모델 정의

@@ -63,8 +63,8 @@ service cloud.firestore {
       );
 
       // [회원가입 및 생성 규칙]
-      // 1) 일반 회원가입: 본인 UID로만 문서를 만들 수 있으며, 승인 상태는 'pending', 역할은 학생/동문/교수만 가능
-      // 2) 최초 관리자 생성: 아직 관리자가 없거나, admin_bootstrap 등록자인 경우 관리자로 직접 생성 가능
+      // 1) 일반 회원가입(및 삭제 계정 재가입 복구): 본인 UID로만 문서를 만들 수 있으며, 승인 상태는 무조건 'pending', 역할은 학생/동문/교수만 가능
+      // 2) 최초 관리자 생성: system/admin_bootstrap 문서에 등록된 최초 관리자 본인만 관리자로 생성 가능
       allow create: if isAuthenticated()
                     && request.auth.uid == userId
                     && (
@@ -73,19 +73,23 @@ service cloud.firestore {
                         && request.resource.data.role in ['student', 'alumni', 'professor']
                       )
                       || (
-                        !exists(/databases/$(database)/documents/system/admin_bootstrap)
-                        || (
-                          exists(/databases/$(database)/documents/system/admin_bootstrap)
-                          && get(/databases/$(database)/documents/system/admin_bootstrap).data.adminUid == request.auth.uid
-                        )
+                        exists(/databases/$(database)/documents/system/admin_bootstrap)
+                        && get(/databases/$(database)/documents/system/admin_bootstrap).data.adminUid == request.auth.uid
                       )
                     );
 
-      // [프로필 수정 규칙]
-      // 1) 승인된 최고 관리자는 회원의 승인 상태(approvalStatus), 역할(role), 코멘트, 지도교수 배정 가능
-      //    (단, 관리자 수정 시에도 비재학생인 졸업생·교수·관리자에게 지도교수 ID가 배정되는 것은 데이터베이스 레벨에서 원천 차단)
-      // 2) 최초 관리자 부트스트랩: 시스템 미등록 시 또는 admin_bootstrap 등록자 본인인 경우 승격 허용
-      // 3) 일반 회원은 본인의 프로필만 수정 가능하며, 핵심 보호 필드(승인상태, 역할, 이메일, UID, 가입일, 지도교수 배정)는 절대 임의 변경 불가!
+      // [프로필 수정 및 보완·재신청 규칙]
+      // 1) 승인된 최고 관리자는 회원의 승인 상태(approvalStatus: pending/approved/needs_revision/supplement_requested/rejected/suspended),
+      //    역할(role), 보완 항목(revisionFields), 코멘트(adminComment), 지도교수 배정 가능
+      //    (단, 비재학생에게 지도교수 ID가 배정되는 것은 데이터베이스 레벨에서 원천 차단)
+      // 2) 최초 관리자 부트스트랩: system/admin_bootstrap 등록자 본인인 경우 승격 허용
+      // 3) 일반 회원의 일상 프로필 수정: 승인 상태·역할·UID·이메일·관리자 코멘트·지도교수 배정 정보는 절대 임의 변경 불가
+      // 4) 보완 요청(needs_revision / supplement_requested) 또는 반려(rejected) 상태인 회원의 가입정보 수정 및 재신청:
+      //    - 본인 문서만 수정 가능
+      //    - 허용된 가입 신청 항목(이름, 학번/입학연도, 소속/전공 트랙, 신청 메모 등)만 수정 가능
+      //    - 역할(role)은 ['student', 'alumni', 'professor'] 중에서만 선택 가능하며 절대 'admin'으로 변경 불가
+      //    - 승인 상태(approvalStatus)는 임시 저장 시 현재 상태 유지 또는 재신청 시 'pending'으로만 전환 가능하며 절대 'approved'로 변경 불가
+      //    - UID, 이메일, 관리자 코멘트(adminComment), 보완 항목(revisionFields), 지도교수 배정 정보는 변경 불가
       allow update: if isAuthenticated() && (
         (
           isApprovedAdmin()
@@ -98,13 +102,8 @@ service cloud.firestore {
         )
         || (
           request.auth.uid == userId
-          && (
-            !exists(/databases/$(database)/documents/system/admin_bootstrap)
-            || (
-              exists(/databases/$(database)/documents/system/admin_bootstrap)
-              && get(/databases/$(database)/documents/system/admin_bootstrap).data.adminUid == request.auth.uid
-            )
-          )
+          && exists(/databases/$(database)/documents/system/admin_bootstrap)
+          && get(/databases/$(database)/documents/system/admin_bootstrap).data.adminUid == request.auth.uid
         )
         || (
           // 본인 수정: 승인 상태·역할·UID·이메일·관리자 코멘트·지도교수 배정 정보는 바꿀 수 없음
@@ -112,6 +111,16 @@ service cloud.firestore {
           request.auth.uid == userId
           && !request.resource.data.diff(resource.data).affectedKeys()
                 .hasAny(['approvalStatus', 'role', 'uid', 'id', 'email', 'adminComment', 'advisorProfessorId', 'advisorAssignedAt'])
+          && isValidSessionRefresh(request.resource.data)
+        )
+        || (
+          // 보완 요청(needs_revision / supplement_requested) 또는 반려(rejected) 회원의 가입정보 수정 저장 및 재신청(pending 전환)
+          request.auth.uid == userId
+          && resource.data.approvalStatus in ['needs_revision', 'supplement_requested', 'rejected']
+          && request.resource.data.approvalStatus in ['pending', resource.data.approvalStatus]
+          && request.resource.data.role in ['student', 'alumni', 'professor']
+          && !request.resource.data.diff(resource.data).affectedKeys()
+                .hasAny(['uid', 'id', 'email', 'adminComment', 'revisionFields', 'advisorProfessorId', 'advisorAssignedAt'])
           && isValidSessionRefresh(request.resource.data)
         )
       );

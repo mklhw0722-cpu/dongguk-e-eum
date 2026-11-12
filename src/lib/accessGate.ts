@@ -20,6 +20,7 @@ export type AccessGateState =
   | "profile_missing"
   | "profile_error"
   | "pending"
+  | "needs_revision"
   | "supplement_requested"
   | "rejected"
   | "suspended"
@@ -68,6 +69,8 @@ export function resolveAccessGate(input: AccessGateInput): AccessGateState {
       return "approved";
     case "pending":
       return "pending";
+    case "needs_revision":
+      return "needs_revision";
     case "supplement_requested":
       return "supplement_requested";
     case "rejected":

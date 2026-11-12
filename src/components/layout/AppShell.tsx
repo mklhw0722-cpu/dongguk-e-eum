@@ -131,6 +131,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     accessGate,
     firestoreError,
     handleLogout,
+    handleApplicantUpdateRegistration,
+    handleRecreateDeletedProfile,
+    handleDeleteOwnAuthAccount,
     realUsersForAdmin,
     authSession,
     sessionEvaluation,
@@ -486,7 +489,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 studentIdOrYear={authUserProfile?.studentIdOrYear}
                 adminComment={authUserProfile?.adminComment}
                 errorMessage={firestoreError}
+                profile={authUserProfile}
                 onLogout={() => handleLogout()}
+                onUpdateRegistration={handleApplicantUpdateRegistration}
+                onRecreateProfile={handleRecreateDeletedProfile}
+                onDeleteOwnAuth={handleDeleteOwnAuthAccount}
               />
             )}
           </main>

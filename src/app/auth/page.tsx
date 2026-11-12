@@ -198,10 +198,20 @@ export default function AuthPage() {
             : undefined,
       });
       setSignupPassword("");
-    } catch (err: unknown) {
+    } catch (err: any) {
+      const code = err?.code || "";
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes("email-already-in-use")) {
-        setSignupError("이미 가입된 이메일 주소입니다. 로그인해 주세요.");
+      if (code === "auth/revision-or-rejected-redirect") {
+        // 로그인 완료 상태이므로 AppShell이 즉시 보완/반려 수정 화면(AccessGateScreen)으로 전환함
+        setSignupError(null);
+        return;
+      }
+      if (code === "auth/email-already-in-use" || msg.includes("email-already-in-use")) {
+        setSignupError(
+          msg.includes("이미 등록된 이메일")
+            ? msg
+            : "이미 등록된 이메일 주소입니다. ① 보완 요청·반려 대상이거나 기존 회원이라면 [로그인] 탭에서 로그인하여 정보를 확인·수정해 주세요. ② 과거에 삭제된 계정으로 재가입하려는 경우 이전 비밀번호를 입력하거나 [비밀번호 재설정] 후 로그인하여 재신청할 수 있습니다."
+        );
       } else {
         setSignupError(msg);
       }
@@ -504,10 +514,51 @@ export default function AuthPage() {
             </p>
           </div>
 
+          <div className="p-3.5 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 text-xs leading-relaxed">
+            <strong>안내:</strong> 가입 정보 <strong>보완 요청</strong>이나 <strong>반려</strong> 안내를 받으셨다면 새로 회원가입을 반복하지 마시고,{" "}
+            <button
+              type="button"
+              onClick={() => {
+                if (signupEmail.trim()) setLoginEmail(signupEmail.trim());
+                setActiveTab("login");
+              }}
+              className="underline font-extrabold text-blue-800 hover:text-blue-950 cursor-pointer"
+            >
+              [1. 로그인]
+            </button>{" "}
+            탭에서 기존 계정으로 로그인해 정보를 수정한 뒤 <strong>[다시 승인 요청하기]</strong>를 눌러주세요.
+          </div>
+
           {signupError && (
-            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-semibold flex items-center gap-2">
-              <XCircle className="w-4 h-4 shrink-0" />
-              <span>{signupError}</span>
+            <div className="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs space-y-2.5">
+              <div className="font-semibold flex items-start gap-2">
+                <XCircle className="w-4 h-4 shrink-0 mt-0.5 text-rose-600" />
+                <span className="leading-relaxed">{signupError}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pl-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (signupEmail.trim()) setLoginEmail(signupEmail.trim());
+                    setSignupError(null);
+                    setActiveTab("login");
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-rose-700 hover:bg-rose-800 text-white text-xs font-bold transition cursor-pointer"
+                >
+                  이 이메일로 로그인하여 확인·수정하기 →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (signupEmail.trim()) setResetEmail(signupEmail.trim());
+                    setSignupError(null);
+                    setActiveTab("reset");
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-white border border-rose-300 hover:bg-rose-100 text-rose-800 text-xs font-bold transition cursor-pointer"
+                >
+                  비밀번호 재설정하기
+                </button>
+              </div>
             </div>
           )}
 

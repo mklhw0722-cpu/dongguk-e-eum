@@ -31,8 +31,17 @@ import {
   sendPasswordResetEmail,
   onAuthStateChanged,
   updateProfile,
+  deleteUser,
   User as FirebaseUser,
 } from "firebase/auth";
+import {
+  RegistrationRevisionInput,
+  UserDeletionReport,
+  UserDeletionStepResult,
+  buildUserDeletionReport,
+  canEditAndResubmitRegistration,
+  validateAndBuildRegistrationUpdate,
+} from "@/lib/memberLifecycle";
 import {
   User as PlatformUser,
   UserRole,
@@ -236,16 +245,69 @@ export interface UserProfileDoc extends PlatformUser {
   uid?: string;
   verificationNote?: string;
   adminComment?: string;
+  revisionFields?: string[];
+  resubmittedAt?: string;
+  revisionCount?: number;
+  lastModifiedAt?: string;
   updatedAt?: string;
   sessionStartedAt?: unknown;
   sessionExpiresAtMs?: number;
 }
 
+function buildInitialUserProfileDoc(
+  uid: string,
+  params: {
+    email: string;
+    name: string;
+    studentIdOrYear: string;
+    role: UserRole;
+    verificationNote?: string;
+    academicProfile?: StudentAcademicProfile;
+    doubleMajor?: string;
+  }
+): UserProfileDoc {
+  const safeRole: UserRole = params.role === "admin" ? "student" : params.role;
+  const nowIso = new Date().toISOString();
+  return {
+    id: uid,
+    uid,
+    name: params.name.trim(),
+    email: params.email.trim(),
+    role: safeRole,
+    studentIdOrYear: params.studentIdOrYear.trim(),
+    ...(params.doubleMajor ? { doubleMajor: params.doubleMajor.trim() } : {}),
+    ...(params.academicProfile
+      ? {
+          academicProfile: {
+            ...params.academicProfile,
+            adminVerifiedSpecialCondition: false,
+          },
+        }
+      : {}),
+    bio: (() => {
+      const hakbunMatch = (params.studentIdOrYear || "").match(/(\d{2})\s*학번/);
+      const cleanHakbun = hakbunMatch ? `${hakbunMatch[1]}학번` : params.studentIdOrYear.trim();
+      return safeRole === "professor"
+        ? `교육학과 전임교원 ${params.name.trim()}님의 프로필입니다.`
+        : `${cleanHakbun} ${params.name.trim()}님의 프로필입니다.`;
+    })(),
+    avatarInitials: getAvatarInitials(params.name, safeRole),
+    approvalStatus: "pending",
+    joinedAt: nowIso.slice(0, 10),
+    verificationNote: params.verificationNote || "소속 확인 신청",
+    revisionCount: 0,
+    lastModifiedAt: nowIso,
+    updatedAt: nowIso,
+  };
+}
+
 /**
  * 이메일·비밀번호 기반 회원가입
- * - Firebase Auth 계정 생성
- * - Firestore users/{uid} 문서에 기본 pending 상태로 저장
- * - 보안 원칙: 클라이언트가 임의로 approved나 admin 권한을 가질 수 없도록 무조건 pending 강제
+ * - Firebase Auth 계정 생성 및 Firestore users/{uid} 문서(pending) 생성
+ * - 만약 Auth 계정은 남아있으나 관리자에 의해 Firestore 회원 문서가 삭제된 경우(auth/email-already-in-use),
+ *   기존 비밀번호로 본인 확인이 되면 즉시 새 가입 신청서를 users/{uid}에 복구 생성하여 재가입 오류를 해결합니다.
+ * - 보완 요청(needs_revision) 또는 반려(rejected) 상태인 회원이 재가입을 시도하면, 중복 계정을 만들지 않고
+ *   기존 계정으로 로그인하여 수정·재신청 화면으로 안내합니다.
  */
 export async function registerWithEmailAndPassword(params: {
   email: string;
@@ -262,45 +324,174 @@ export async function registerWithEmailAndPassword(params: {
     throw new Error("Firebase가 초기화되지 않았습니다. 상단에서 설정을 확인해 주세요.");
   }
 
-  // 1. Firebase Auth 유저 생성
-  const credential = await createUserWithEmailAndPassword(auth, params.email, params.password);
-  const uid = credential.user.uid;
+  try {
+    // 1. Firebase Auth 신규 유저 생성 시도
+    const credential = await createUserWithEmailAndPassword(
+      auth,
+      params.email.trim(),
+      params.password
+    );
+    const uid = credential.user.uid;
+    const initialProfile = buildInitialUserProfileDoc(uid, params);
 
-  // 2. 초기 프로필 구성 (일반 가입은 무조건 pending)
-  const initialProfile: UserProfileDoc = {
+    // 2. Firestore users/{uid} 문서 기록
+    await setDoc(doc(db, USERS_COLLECTION, uid), initialProfile);
+    return initialProfile;
+  } catch (err: any) {
+    if (err?.code !== "auth/email-already-in-use") {
+      throw err;
+    }
+
+    // 이메일 중복 발생 시: 입력한 비밀번호로 기존 Auth 계정 본인 확인 시도
+    try {
+      const existingCred = await signInWithEmailAndPassword(
+        auth,
+        params.email.trim(),
+        params.password
+      );
+      const existingUid = existingCred.user.uid;
+      const existingDocRef = doc(db, USERS_COLLECTION, existingUid);
+      const existingSnap = await getDoc(existingDocRef);
+
+      if (!existingSnap.exists()) {
+        // 케이스 2: Auth 계정은 존재하지만 Firestore 회원 문서가 없는 경우 (관리자 삭제 후 재가입 또는 가입 중단)
+        // -> 새 가입 신청 정보를 기존 UID 문서에 즉시 생성하여 정상 재가입 완료 처리!
+        const restoredProfile = buildInitialUserProfileDoc(existingUid, params);
+        await setDoc(existingDocRef, restoredProfile);
+        return restoredProfile;
+      }
+
+      const existingData = existingSnap.data() as UserProfileDoc;
+      if (canEditAndResubmitRegistration(existingData.approvalStatus)) {
+        // 케이스 4: 가입 보완 요청 또는 반려 상태인 경우 -> 로그인 유지 후 수정 화면으로 즉시 이동
+        const redirectErr: any = new Error(
+          existingData.approvalStatus === "rejected"
+            ? "이전에 제출한 가입 신청이 반려된 상태입니다. 새로 가입할 필요 없이 로그인되었으며, 화면에서 정보를 수정해 다시 승인 요청할 수 있습니다."
+            : "가입 정보 보완 요청이 있는 계정입니다. 새로 가입할 필요 없이 로그인되었으며, 화면에서 정보를 수정해 다시 승인 요청할 수 있습니다."
+        );
+        redirectErr.code = "auth/revision-or-rejected-redirect";
+        throw redirectErr;
+      }
+
+      // 케이스 1: 이미 승인 대기(pending), 승인 완료(approved), 이용 정지(suspended) 상태인 회원
+      await signOut(auth);
+      const activeErr: any = new Error(
+        "이미 가입 신청이 접수되었거나 활동 중인 회원 계정입니다. 중복 가입 대신 [로그인] 탭에서 기존 계정으로 로그인해 주세요."
+      );
+      activeErr.code = "auth/active-member-exists";
+      throw activeErr;
+    } catch (innerErr: any) {
+      if (
+        innerErr?.code === "auth/revision-or-rejected-redirect" ||
+        innerErr?.code === "auth/active-member-exists"
+      ) {
+        throw innerErr;
+      }
+
+      // 비밀번호가 다르거나 본인 확인이 되지 않은 경우 (타인의 계정 상태 노출 방지)
+      const dupErr: any = new Error(
+        "이미 등록된 이메일 주소입니다. ① 보완 요청·반려 대상이거나 기존 회원이라면 [로그인] 탭에서 로그인하여 정보를 확인·수정해 주세요. ② 과거에 삭제된 계정으로 재가입하려는 경우 이전 비밀번호를 입력하거나 [비밀번호 재설정] 후 로그인하여 재신청할 수 있습니다."
+      );
+      dupErr.code = "auth/email-already-in-use";
+      throw dupErr;
+    }
+  }
+}
+
+/**
+ * 보완 요청(needs_revision / supplement_requested) 또는 반려(rejected) 상태인 회원이
+ * 본인의 가입 정보를 수정 저장(draft)하거나 다시 승인 요청(resubmit -> pending)합니다.
+ */
+export async function updateRegistrationByApplicantInFirestore(
+  uid: string,
+  input: RegistrationRevisionInput,
+  mode: "draft" | "resubmit"
+): Promise<UserProfileDoc> {
+  const { auth, db } = getFirebaseInstances();
+  if (!db) throw new Error("Firestore가 연결되어 있지 않습니다.");
+  if (!auth?.currentUser || auth.currentUser.uid !== uid) {
+    throw new Error("본인 계정으로 로그인한 상태에서만 가입 정보를 수정할 수 있습니다.");
+  }
+
+  const userRef = doc(db, USERS_COLLECTION, uid);
+  const snap = await getDoc(userRef);
+  if (!snap.exists()) {
+    throw new Error("회원 가입 신청 문서를 찾을 수 없습니다.");
+  }
+
+  const currentDoc = {
+    ...(snap.data() as UserProfileDoc),
     id: uid,
-    name: params.name.trim(),
-    email: params.email.trim(),
-    role: params.role === "admin" ? "student" : params.role, // 가입 시 임의 admin 방지
-    studentIdOrYear: params.studentIdOrYear.trim(),
-    ...(params.doubleMajor ? { doubleMajor: params.doubleMajor.trim() } : {}),
-    ...(params.academicProfile
-      ? {
-          academicProfile: {
-            ...params.academicProfile,
-            adminVerifiedSpecialCondition: false,
-          },
-        }
-      : {}),
-    bio: (() => {
-      const hakbunMatch = (params.studentIdOrYear || "").match(/(\d{2})\s*학번/);
-      const cleanHakbun = hakbunMatch ? `${hakbunMatch[1]}학번` : params.studentIdOrYear.trim();
-      return params.role === "professor"
-        ? `교육학과 전임교원 ${params.name.trim()}님의 프로필입니다.`
-        : params.role === "admin"
-        ? "동국e음 관리자님의 프로필입니다."
-        : `${cleanHakbun} ${params.name.trim()}님의 프로필입니다.`;
-    })(),
-    avatarInitials: getAvatarInitials(params.name, params.role),
-    approvalStatus: "pending",
-    joinedAt: new Date().toISOString().slice(0, 10),
-    verificationNote: params.verificationNote || "소속 확인 신청",
   };
 
-  // 3. Firestore users/{uid} 문서 기록
-  await setDoc(doc(db, USERS_COLLECTION, uid), initialProfile);
+  const updatePayload = validateAndBuildRegistrationUpdate(currentDoc, input, mode);
 
-  return initialProfile;
+  await updateDoc(userRef, {
+    name: updatePayload.name,
+    role: updatePayload.role,
+    studentIdOrYear: updatePayload.studentIdOrYear,
+    doubleMajor: updatePayload.doubleMajor || "",
+    ...(updatePayload.academicProfile
+      ? { academicProfile: updatePayload.academicProfile }
+      : {}),
+    verificationNote: updatePayload.verificationNote || "가입 정보 수정 및 보완 제출",
+    bio: updatePayload.bio,
+    avatarInitials: updatePayload.avatarInitials,
+    approvalStatus: updatePayload.approvalStatus,
+    revisionCount: updatePayload.revisionCount,
+    lastModifiedAt: updatePayload.lastModifiedAt,
+    updatedAt: updatePayload.updatedAt,
+    ...(updatePayload.resubmittedAt
+      ? { resubmittedAt: updatePayload.resubmittedAt }
+      : {}),
+  });
+
+  const updatedSnap = await getDoc(userRef);
+  return {
+    ...(updatedSnap.data() as UserProfileDoc),
+    id: uid,
+    uid,
+  };
+}
+
+/**
+ * 관리자에 의해 Firestore 회원 문서가 삭제되었거나 누락된 계정(profile_missing)이
+ * 로그인 상태에서 새 가입 신청서를 작성하여 users/{uid} 문서를 복구 생성합니다.
+ */
+export async function recreateDeletedUserProfileInFirestore(
+  input: RegistrationRevisionInput
+): Promise<UserProfileDoc> {
+  const { auth, db } = getFirebaseInstances();
+  if (!auth?.currentUser || !db) {
+    throw new Error("로그인 세션 또는 데이터베이스 연결을 확인할 수 없습니다.");
+  }
+
+  const uid = auth.currentUser.uid;
+  const email = auth.currentUser.email || "";
+  const restored = buildInitialUserProfileDoc(uid, {
+    email,
+    name: input.name,
+    studentIdOrYear: input.studentIdOrYear,
+    role: input.role,
+    verificationNote: input.verificationNote || "재가입 승인 신청",
+    academicProfile: input.academicProfile,
+    doubleMajor: input.doubleMajor,
+  });
+
+  await setDoc(doc(db, USERS_COLLECTION, uid), restored);
+  return restored;
+}
+
+/**
+ * 현재 로그인한 사용자 본인의 Firebase Authentication 계정을 직접 완전 삭제합니다.
+ * (관리자 삭제 후 남아있는 Auth 계정을 본인이 완전히 정리하고 싶을 때 사용)
+ */
+export async function deleteOwnAuthAccountInFirebase(): Promise<void> {
+  const { auth } = getFirebaseInstances();
+  if (!auth?.currentUser) {
+    throw new Error("로그인된 계정이 없습니다.");
+  }
+  await deleteUser(auth.currentUser);
 }
 
 /**
@@ -535,16 +726,30 @@ export async function updateUserApprovalStatusByAdmin(params: {
   status: ApprovalStatus;
   adminComment?: string;
   role?: UserRole;
+  revisionFields?: string[];
 }): Promise<void> {
   const { db } = getFirebaseInstances();
   if (!db) throw new Error("Firestore가 연결되어 있지 않습니다.");
 
+  const nowIso = new Date().toISOString();
   const userRef = doc(db, USERS_COLLECTION, params.targetUid);
   const updateData: Record<string, unknown> = {
     approvalStatus: params.status,
     adminComment: params.adminComment || "",
-    updatedAt: new Date().toISOString(),
+    updatedAt: nowIso,
+    lastModifiedAt: nowIso,
   };
+
+  if (
+    params.status === "needs_revision" ||
+    params.status === "supplement_requested"
+  ) {
+    updateData.revisionFields = Array.isArray(params.revisionFields)
+      ? params.revisionFields
+      : [];
+  } else if (params.status === "approved") {
+    updateData.revisionFields = [];
+  }
 
   if (params.role) {
     updateData.role = params.role;
@@ -580,7 +785,7 @@ export async function updateUserApprovalStatusByAdmin(params: {
             careerTrack: u.careerTrack || "",
             doubleMajor: u.doubleMajor || "",
             bio: u.bio || "",
-            updatedAt: new Date().toISOString(),
+            updatedAt: nowIso,
           },
           { merge: true }
         );
@@ -598,38 +803,107 @@ export async function updateUserApprovalStatusByAdmin(params: {
 }
 
 /**
- * 관리자용: 특정 회원의 Firestore 문서 완전 삭제 (회원 탈퇴/강제 삭제)
- * - users/{targetUid} 삭제
- * - publicProfiles/{targetUid} 삭제
- * - graduationRecords/{targetUid} 삭제 (해당 시)
- * - 삭제 대상이 교수였을 경우 배정되어 있던 학생들의 지도교수 배정 정보 초기화
+ * 관리자용: 특정 회원의 데이터 및 인증 계정 삭제 처리 (단계별 결과 리포트 반환)
+ * - 브라우저에서는 절대 Firebase Admin SDK를 직접 실행하지 않음
+ * - 보안 서버 엔드포인트(NEXT_PUBLIC_ADMIN_DELETE_USER_ENDPOINT)가 설정된 경우:
+ *   현재 로그인한 관리자의 ID Token을 전달하여 서버에서 관리자 권한 재검증 후 Firebase Auth 계정 삭제 수행
+ * - 정적 호스팅(GitHub Pages / Spark 무료 요금제) 환경인 경우:
+ *   Firestore 개인정보 문서들을 단계별로 삭제·정리하고, Auth 계정 상태를 투명하게 안내하며,
+ *   삭제된 이메일로 재가입 시 자동 복구(users/{uid} 재생성)가 작동하도록 보장
  */
-export async function deleteUserByAdminInFirestore(targetUid: string): Promise<void> {
-  const { db } = getFirebaseInstances();
+export async function deleteUserByAdminInFirestore(
+  targetUid: string,
+  options?: { targetName?: string; targetEmail?: string }
+): Promise<UserDeletionReport> {
+  const { auth, db } = getFirebaseInstances();
   if (!db) throw new Error("Firestore가 연결되어 있지 않습니다.");
 
-  const userRef = doc(db, USERS_COLLECTION, targetUid);
+  if (auth?.currentUser && auth.currentUser.uid === targetUid) {
+    throw new Error("현재 로그인된 관리자 본인 계정은 삭제할 수 없습니다.");
+  }
 
-  // 1. users 컬렉션 문서 삭제
-  await deleteDoc(userRef);
+  const steps: UserDeletionStepResult[] = [];
 
-  // 2. 채팅용 공개 프로필 삭제
+  // 1. users/{targetUid} 회원 기본 문서 삭제
+  try {
+    const userRef = doc(db, USERS_COLLECTION, targetUid);
+    await deleteDoc(userRef);
+    steps.push({
+      key: "userDoc",
+      label: "Firestore 회원 기본 문서 (users)",
+      status: "success",
+      detail: `users/${targetUid} 개인정보 문서 삭제 완료`,
+    });
+  } catch (e: any) {
+    steps.push({
+      key: "userDoc",
+      label: "Firestore 회원 기본 문서 (users)",
+      status: "failed",
+      detail: e?.message || "회원 문서 삭제 실패",
+    });
+  }
+
+  // 2. publicProfiles/{targetUid} 공개 프로필 삭제
   try {
     const publicRef = doc(db, "publicProfiles", targetUid);
     await deleteDoc(publicRef);
-  } catch (e) {
+    steps.push({
+      key: "publicProfile",
+      label: "공개 프로필 (publicProfiles)",
+      status: "success",
+      detail: `publicProfiles/${targetUid} 삭제 완료`,
+    });
+  } catch (e: any) {
     console.warn("공개 프로필 삭제 경고:", e);
+    steps.push({
+      key: "publicProfile",
+      label: "공개 프로필 (publicProfiles)",
+      status: "failed",
+      detail: e?.message || "공개 프로필 삭제 중 오류",
+    });
   }
 
-  // 3. 개인별 졸업요건 기록 삭제 (해당 학생 문서가 존재하는 경우)
+  // 3. graduationRecords/{targetUid} 개인별 졸업요건 기록 삭제
   try {
     const gradRef = doc(db, "graduationRecords", targetUid);
     await deleteDoc(gradRef);
-  } catch (e) {
+    steps.push({
+      key: "graduationRecord",
+      label: "졸업요건 개인 기록 (graduationRecords)",
+      status: "success",
+      detail: `graduationRecords/${targetUid} 삭제 완료`,
+    });
+  } catch (e: any) {
     console.warn("졸업요건 문서 삭제 경고:", e);
+    steps.push({
+      key: "graduationRecord",
+      label: "졸업요건 개인 기록 (graduationRecords)",
+      status: "failed",
+      detail: e?.message || "졸업요건 문서 삭제 중 오류",
+    });
   }
 
-  // 4. 삭제 대상이 교수였을 경우, 배정되어 있던 학생들의 지도교수 필드 초기화
+  // 4. alumniProfiles/{targetUid} 졸업생 멘토링 프로필 삭제
+  try {
+    const alumniRef = doc(db, "alumniProfiles", targetUid);
+    await deleteDoc(alumniRef);
+    steps.push({
+      key: "alumniProfile",
+      label: "졸업생 네트워크 프로필 (alumniProfiles)",
+      status: "success",
+      detail: `alumniProfiles/${targetUid} 삭제 완료`,
+    });
+  } catch (e: any) {
+    console.warn("졸업생 프로필 삭제 경고:", e);
+    steps.push({
+      key: "alumniProfile",
+      label: "졸업생 네트워크 프로필 (alumniProfiles)",
+      status: "failed",
+      detail: e?.message || "졸업생 프로필 삭제 중 오류",
+    });
+  }
+
+  // 5. 삭제 대상이 교수였을 경우, 배정되어 있던 학생들의 지도교수 필드 안전 초기화
   try {
     const studentsQuery = query(
       collection(db, USERS_COLLECTION),
@@ -646,35 +920,61 @@ export async function deleteUserByAdminInFirestore(targetUid: string): Promise<v
       );
       await Promise.all(updates);
     }
-  } catch (e) {
+    steps.push({
+      key: "advisorLinks",
+      label: "지도학생 배정 참조 정리",
+      status: "success",
+      affectedCount: snap.size,
+      detail:
+        snap.size > 0
+          ? `배정 학생 ${snap.size}명의 지도교수 연결 참조 초기화 완료`
+          : "연결된 지도학생 참조 없음 (정상)",
+    });
+  } catch (e: any) {
     console.warn("지도학생 배정 해제 연동 경고:", e);
+    steps.push({
+      key: "advisorLinks",
+      label: "지도학생 배정 참조 정리",
+      status: "failed",
+      detail: e?.message || "지도학생 배정 초기화 실패",
+    });
   }
 
-  // 5. 개인별 캘린더 일정 서브컬렉션 문서 일괄 삭제
+  // 6. 개인별 캘린더 일정 (서브컬렉션 + 루트 컬렉션) 일괄 삭제
   try {
+    let deletedCalCount = 0;
     const calendarEventsRef = collection(db, USERS_COLLECTION, targetUid, "calendarEvents");
     const calSnap = await getDocs(calendarEventsRef);
     if (!calSnap.empty) {
-      const calDeletes = calSnap.docs.map((d) => deleteDoc(d.ref));
-      await Promise.all(calDeletes);
+      await Promise.all(calSnap.docs.map((d) => deleteDoc(d.ref)));
+      deletedCalCount += calSnap.size;
     }
-  } catch (e) {
-    console.warn("캘린더 일정 삭제 경고:", e);
-  }
 
-  // 6. 루트 calendarEvents 컬렉션 내 해당 사용자 일정 삭제
-  try {
     const rootCalQuery = query(
       collection(db, "calendarEvents"),
       where("userId", "==", targetUid)
     );
     const rootCalSnap = await getDocs(rootCalQuery);
     if (!rootCalSnap.empty) {
-      const rootCalDeletes = rootCalSnap.docs.map((d) => deleteDoc(d.ref));
-      await Promise.all(rootCalDeletes);
+      await Promise.all(rootCalSnap.docs.map((d) => deleteDoc(d.ref)));
+      deletedCalCount += rootCalSnap.size;
     }
-  } catch (e) {
-    console.warn("루트 캘린더 일정 삭제 경고:", e);
+
+    steps.push({
+      key: "calendarEvents",
+      label: "개인 캘린더 일정 (calendarEvents)",
+      status: "success",
+      affectedCount: deletedCalCount,
+      detail: `개인 일정 ${deletedCalCount}건 삭제 완료`,
+    });
+  } catch (e: any) {
+    console.warn("캘린더 일정 삭제 경고:", e);
+    steps.push({
+      key: "calendarEvents",
+      label: "개인 캘린더 일정 (calendarEvents)",
+      status: "failed",
+      detail: e?.message || "개인 일정 삭제 실패",
+    });
   }
 
   // 7. 상담 신청 내역 삭제 (학생 또는 교수로 연관된 모든 상담 문서 삭제)
@@ -685,24 +985,35 @@ export async function deleteUserByAdminInFirestore(targetUid: string): Promise<v
       getDocs(query(colRef, where("professorId", "==", targetUid))),
     ]);
     const consultDocs = [...snapStudent.docs, ...snapProf.docs];
-    if (consultDocs.length > 0) {
-      const seenIds = new Set<string>();
-      const consultDeletes = consultDocs
-        .filter((d) => {
-          if (seenIds.has(d.id)) return false;
-          seenIds.add(d.id);
-          return true;
-        })
-        .map((d) => deleteDoc(d.ref));
-      await Promise.all(consultDeletes);
+    const seenIds = new Set<string>();
+    const uniqueDocs = consultDocs.filter((d) => {
+      if (seenIds.has(d.id)) return false;
+      seenIds.add(d.id);
+      return true;
+    });
+    if (uniqueDocs.length > 0) {
+      await Promise.all(uniqueDocs.map((d) => deleteDoc(d.ref)));
     }
-  } catch (e) {
+    steps.push({
+      key: "consultations",
+      label: "상담 신청 기록 (consultations)",
+      status: "success",
+      affectedCount: uniqueDocs.length,
+      detail: `관련 상담 기록 ${uniqueDocs.length}건 정리 완료`,
+    });
+  } catch (e: any) {
     console.warn("상담 내역 삭제 연동 경고:", e);
+    steps.push({
+      key: "consultations",
+      label: "상담 신청 기록 (consultations)",
+      status: "failed",
+      detail: e?.message || "상담 내역 정리 실패",
+    });
   }
 
   // 8. 대화방(채팅방) 정리:
-  // - 1:1 대화방이면 대화방 문서 자체 삭제
-  // - 단체 대화방이면 participants 및 participantDetails에서 대상 사용자 제거
+  // - 단체 대화방: participants 및 participantDetails에서 대상 사용자만 제거하여 다른 회원의 대화 기록 보존
+  // - 1:1 대화방: 정리 처리
   try {
     const chatsQuery = query(
       collection(db, CHATS_COLLECTION),
@@ -729,9 +1040,86 @@ export async function deleteUserByAdminInFirestore(targetUid: string): Promise<v
         }
       }
     }
-  } catch (e) {
+    steps.push({
+      key: "chatRooms",
+      label: "채팅방 참여자 정리 (타 회원 단체 대화 보존)",
+      status: "success",
+      affectedCount: chatsSnap.size,
+      detail: `참여 채팅방 ${chatsSnap.size}건 정리 완료`,
+    });
+  } catch (e: any) {
     console.warn("대화방 데이터 정리 연동 경고:", e);
+    steps.push({
+      key: "chatRooms",
+      label: "채팅방 참여자 정리 (타 회원 단체 대화 보존)",
+      status: "failed",
+      detail: e?.message || "채팅방 참여 정보 정리 실패",
+    });
   }
+
+  // 9. 공동 게시판(communityPosts) 보존 명시
+  steps.push({
+    key: "communityPosts",
+    label: "진로·복수전공 공동 게시글 및 댓글",
+    status: "skipped",
+    detail: "공동 게시판 맥락 및 타 회원 댓글 보호 정책에 따라 원글·댓글 보존",
+  });
+
+  // 10. 서버 측 Firebase Authentication 계정 삭제 요청 (엔드포인트 설정 시 호출)
+  const adminDeleteEndpoint =
+    typeof process !== "undefined"
+      ? process.env.NEXT_PUBLIC_ADMIN_DELETE_USER_ENDPOINT
+      : undefined;
+
+  let authDeletedOnServer = false;
+  if (adminDeleteEndpoint && auth?.currentUser) {
+    try {
+      const idToken = await auth.currentUser.getIdToken();
+      const res = await fetch(adminDeleteEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ targetUid }),
+      });
+      if (!res.ok) {
+        const errBody = await res.text();
+        throw new Error(`서버 응답 오류 (${res.status}): ${errBody}`);
+      }
+      authDeletedOnServer = true;
+      steps.push({
+        key: "authAccount",
+        label: "Firebase Authentication 계정 삭제 (서버 검증)",
+        status: "success",
+        detail: "서버 Admin SDK를 통해 Firebase Auth 계정이 완전히 삭제되었습니다.",
+      });
+    } catch (e: any) {
+      steps.push({
+        key: "authAccount",
+        label: "Firebase Authentication 계정 삭제 (서버 검증)",
+        status: "failed",
+        detail: e?.message || "서버 측 Auth 계정 삭제 호출 실패",
+      });
+    }
+  } else {
+    // 정적 호스팅(GitHub Pages) 환경: 허위로 삭제 완료라 표시하지 않고 정확한 상태와 재가입 자동 복구 안내 제공
+    steps.push({
+      key: "authAccount",
+      label: "Firebase Authentication 계정 (정적 호스팅 모드)",
+      status: "manual_or_rejoin_ready",
+      detail:
+        "GitHub Pages 정적 호스팅 환경에서는 브라우저에서 Admin SDK를 실행하지 않습니다. 단, 해당 사용자가 동일 이메일로 다시 가입 신청하거나 로그인하면 '이미 가입된 회원' 오류 없이 새 가입 신청서로 자동 복구됩니다.",
+    });
+  }
+
+  return buildUserDeletionReport({
+    targetUid,
+    targetName: options?.targetName,
+    targetEmail: options?.targetEmail,
+    steps,
+    authDeletedOnServer,
+  });
 }
 
 /**
