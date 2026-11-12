@@ -187,3 +187,33 @@ test("10. [관리자 진로 트랙 및 복수전공 게시판 수정/관리] 관
   assert.ok(adminPage.includes('newRoomType === "career"'), "진로 트랙 라디오/타입 선택이 존재해야 함");
   assert.ok(adminPage.includes("startEditRoom(room)"), "모든 유형의 게시판에서 수정 버튼이 작동해야 함");
 });
+
+test("11. [게시물 삭제 확인 모달 검증] 게시글 삭제 버튼 클릭 시 즉시 삭제되지 않고 '삭제하시겠습니까?' 확인 창이 표시된다", () => {
+  const roomsPage = fs.readFileSync(new URL("../src/app/rooms/page.tsx", import.meta.url), "utf8");
+
+  // 1) 삭제 버튼 클릭 시 즉시 deleteCommunityPost를 호출하지 않고 삭제 대상(deletingPostTarget)을 설정하는지 확인
+  assert.match(
+    roomsPage,
+    /onClick=\{\(\)\s*=>\s*setDeletingPostTarget\(\{\s*id:\s*post\.id,\s*title:\s*post\.title/
+  );
+
+  // 2) '삭제하시겠습니까?' 확인 모달 헤더 및 안내 문구가 렌더링되는지 확인
+  assert.ok(roomsPage.includes("삭제하시겠습니까?"), "'삭제하시겠습니까?' 문구가 모달에 포함되어야 함");
+  assert.ok(roomsPage.includes("게시물을 삭제하면 복구할 수 없습니다."), "삭제 경고 문구가 포함되어야 함");
+
+  // 3) 모달 내에 취소 버튼과 최종 삭제 확인 버튼이 존재하는지 확인
+  assert.match(
+    roomsPage,
+    /onClick=\{\(\)\s*=>\s*setDeletingPostTarget\(null\)\}[\s\S]*?취소/
+  );
+  assert.match(
+    roomsPage,
+    /onClick=\{handleConfirmDeletePost\}[\s\S]*?삭제/
+  );
+
+  // 4) 최종 삭제 함수가 deleteCommunityPost를 호출하는지 확인
+  assert.match(
+    roomsPage,
+    /const handleConfirmDeletePost\s*=\s*async\s*\(\)\s*=>\s*\{[\s\S]*?await deleteCommunityPost\(deletingPostTarget\.id\)/
+  );
+});
