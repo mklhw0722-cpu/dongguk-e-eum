@@ -16,6 +16,7 @@ import {
   X,
   LogOut,
   AlertTriangle,
+  AlertCircle,
   RefreshCw,
   GraduationCap,
   Clock,
@@ -190,6 +191,7 @@ export default function ChatPage() {
     handleCreateConsultation,
     handleUpdateConsultationStatus,
     handleCancelConsultation,
+    handleRescheduleConsultation,
     handleConnectConsultationChat,
   } = useApp();
 
@@ -243,6 +245,22 @@ export default function ChatPage() {
     [consultId: string]: "대면" | "채팅";
   }>({});
   const [isUpdatingConsultation, setIsUpdatingConsultation] = useState(false);
+
+  // 1. 상담 신청 확인 모달 상태
+  const [isConfirmConsultationOpen, setIsConfirmConsultationOpen] = useState(false);
+
+  // 2. 교수 상담 일정 변경 모달 상태
+  const [rescheduleTarget, setRescheduleTarget] = useState<ConsultationRequest | null>(null);
+  const [rescheduleNewDate, setRescheduleNewDate] = useState("");
+  const [rescheduleNewTime, setRescheduleNewTime] = useState("");
+  const [rescheduleReason, setRescheduleReason] = useState("");
+  const [isRescheduleConfirmStep, setIsRescheduleConfirmStep] = useState(false);
+  const [isSubmittingReschedule, setIsSubmittingReschedule] = useState(false);
+
+  // 3. 상담 취소 모달 상태
+  const [cancelTarget, setCancelTarget] = useState<ConsultationRequest | null>(null);
+  const [cancelReasonInput, setCancelReasonInput] = useState("");
+  const [isSubmittingCancel, setIsSubmittingCancel] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -517,8 +535,8 @@ export default function ChatPage() {
     }
   };
 
-  // 학생용: 교수 상담 신청 제출
-  const handleSubmitConsultation = async (e: React.FormEvent) => {
+  // 학생용: 교수 상담 신청 버튼 클릭 시 검증 및 확인창 열기
+  const handleSubmitConsultation = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedProfessorForConsultation) return;
     if (!preferredDate.trim()) {
@@ -533,7 +551,12 @@ export default function ChatPage() {
       alert("상담 목적이나 질문 내용을 작성해 주세요.");
       return;
     }
+    setIsConfirmConsultationOpen(true);
+  };
 
+  // 학생용: 확인창에서 '신청하기' 클릭 시 실제 Firestore 저장
+  const handleActualSubmitConsultation = async () => {
+    if (!selectedProfessorForConsultation || isSubmittingConsultation) return;
     try {
       setIsSubmittingConsultation(true);
       await handleCreateConsultation({
@@ -544,6 +567,7 @@ export default function ChatPage() {
         preferredTime: preferredTime.trim(),
         purpose: consultationPurpose.trim(),
       });
+      setIsConfirmConsultationOpen(false);
       setConsultationModalOpen(false);
       setConsultationPurpose("");
       alert(
@@ -556,14 +580,87 @@ export default function ChatPage() {
     }
   };
 
-  // 학생용: 상담 신청 취소
-  const handleCancelStudentConsultation = async (consultationId: string) => {
-    if (!confirm("해당 교수 상담 신청을 취소하시겠습니까?")) return;
+  // 상담 취소 모달 열기
+  const handleOpenCancelModal = (c: ConsultationRequest) => {
+    setCancelTarget(c);
+    setCancelReasonInput("");
+  };
+
+  // 상담 취소 최종 확정 및 저장
+  const handleConfirmCancel = async () => {
+    if (!cancelTarget || isSubmittingCancel) return;
+    const trimmed = cancelReasonInput.trim();
+    if (!trimmed) {
+      alert("취소 사유를 입력해 주세요. (공백만 입력할 수 없습니다)");
+      return;
+    }
+    if (trimmed.length > 500) {
+      alert("취소 사유는 최대 500자까지 입력 가능합니다.");
+      return;
+    }
     try {
-      await handleCancelConsultation(consultationId);
-      alert("상담 신청이 취소되었습니다.");
+      setIsSubmittingCancel(true);
+      await handleCancelConsultation(
+        cancelTarget.id,
+        trimmed,
+        isCurrentUserProfessor ? "professor" : "student"
+      );
+      alert("상담이 취소 처리되었습니다.");
+      setCancelTarget(null);
+      setCancelReasonInput("");
     } catch (e: any) {
       alert(`신청 취소 실패: ${e?.message || e}`);
+    } finally {
+      setIsSubmittingCancel(false);
+    }
+  };
+
+  // 교수용: 상담 일정 변경 모달 열기
+  const handleOpenRescheduleModal = (c: ConsultationRequest) => {
+    setRescheduleTarget(c);
+    setRescheduleNewDate(c.preferredDate || new Date().toISOString().slice(0, 10));
+    setRescheduleNewTime(c.preferredTime || "14:00");
+    setRescheduleReason("");
+    setIsRescheduleConfirmStep(false);
+  };
+
+  // 일정 변경 다음 비교 확인 단계로 진행
+  const handleNextRescheduleStep = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rescheduleNewDate.trim()) {
+      alert("변경할 상담 날짜를 선택해 주세요.");
+      return;
+    }
+    const todayStr = new Date().toISOString().slice(0, 10);
+    if (rescheduleNewDate < todayStr) {
+      alert("지난 날짜로는 일정을 변경할 수 없습니다.");
+      return;
+    }
+    if (!rescheduleNewTime.trim()) {
+      alert("변경할 상담 시간을 입력해 주세요.");
+      return;
+    }
+    setIsRescheduleConfirmStep(true);
+  };
+
+  // 교수용: 일정 변경 최종 확정 및 저장
+  const handleConfirmReschedule = async () => {
+    if (!rescheduleTarget || isSubmittingReschedule) return;
+    try {
+      setIsSubmittingReschedule(true);
+      await handleRescheduleConsultation({
+        consultationId: rescheduleTarget.id,
+        newDate: rescheduleNewDate.trim(),
+        newTime: rescheduleNewTime.trim(),
+        reason: rescheduleReason.trim() || undefined,
+      });
+      alert("상담 일정이 성공적으로 변경되었습니다.");
+      setRescheduleTarget(null);
+      setIsRescheduleConfirmStep(false);
+    } catch (err: any) {
+      alert(`일정 변경 실패: ${err?.message || err}`);
+    } finally {
+      setIsSubmittingReschedule(false);
     }
   };
 
@@ -926,16 +1023,16 @@ export default function ChatPage() {
                         <button
                           type="button"
                           disabled={isUpdatingConsultation}
-                          onClick={() => handleProfessorReject(c)}
-                          className="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold text-xs hover:bg-white transition disabled:opacity-50"
+                          onClick={() => handleOpenCancelModal(c)}
+                          className="px-3.5 py-2 rounded-xl border border-slate-300 text-slate-600 font-bold text-xs hover:bg-white transition disabled:opacity-50 cursor-pointer"
                         >
-                          미승인 (거절)
+                          미승인 (거절/취소)
                         </button>
                         <button
                           type="button"
                           disabled={isUpdatingConsultation}
                           onClick={() => handleProfessorApprove(c)}
-                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition disabled:opacity-50 flex items-center gap-1.5"
+                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                         >
                           <Check className="w-3.5 h-3.5" /> 승인 및 대화 시작
                         </button>
@@ -971,7 +1068,7 @@ export default function ChatPage() {
                       key={c.id}
                       className="p-3.5 rounded-2xl border border-slate-200 bg-slate-50/50 space-y-2.5"
                     >
-                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-extrabold text-sm text-slate-900">
                             {c.professorName} 교수님
@@ -979,6 +1076,11 @@ export default function ChatPage() {
                           <span className="px-2 py-0.5 rounded-md bg-orange-50 text-orange-700 font-bold text-xs">
                             {c.consultationType}
                           </span>
+                          {c.rescheduledAt && (
+                            <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                              일정 변경됨
+                            </span>
+                          )}
                           {st && (
                             <span
                               className={`px-2 py-0.5 rounded-full text-[11px] font-bold ${st.style}`}
@@ -994,20 +1096,30 @@ export default function ChatPage() {
                         )}
                       </div>
 
-                      <p className="text-xs text-slate-500">
-                        희망 제안 일정: {c.preferredDate} · {c.preferredTime}
-                      </p>
+                      <div className="text-xs text-slate-600 space-y-1">
+                        <p>
+                          희망/확정 일정: <strong>{c.preferredDate} · {c.preferredTime}</strong>
+                        </p>
+                        {c.rescheduleHistory && c.rescheduleHistory.length > 0 && (
+                          <p className="text-[11px] text-slate-400">
+                            (변경 전: {c.rescheduleHistory[c.rescheduleHistory.length - 1].previousDate} {c.rescheduleHistory[c.rescheduleHistory.length - 1].previousTime})
+                          </p>
+                        )}
+                        {c.cancelReason && (
+                          <p className="p-2 rounded-xl bg-rose-50 text-rose-700 text-xs font-semibold border border-rose-100">
+                            취소 사유 ({c.cancelledBy === "professor" ? "교수님 취소" : "학생 취소"}): {c.cancelReason}
+                          </p>
+                        )}
+                      </div>
 
-                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
-                        {c.status === "pending" && (
+                      <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100 flex-wrap">
+                        {(c.status === "pending" || c.status === "accepted") && (
                           <button
                             type="button"
-                            onClick={() =>
-                              handleCancelStudentConsultation(c.id)
-                            }
-                            className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-500 hover:bg-slate-100 font-bold text-xs transition"
+                            onClick={() => handleOpenCancelModal(c)}
+                            className="px-3 py-1.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold text-xs transition cursor-pointer"
                           >
-                            신청 취소
+                            상담 취소
                           </button>
                         )}
                         {c.status === "accepted" && c.conversationId && (
@@ -1904,6 +2016,342 @@ export default function ChatPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 1. 상담 신청 전 확인 모달 */}
+      {/* ========================================================= */}
+      {isConfirmConsultationOpen && selectedProfessorForConsultation && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-orange-100 flex items-center justify-center text-orange-600">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">
+                  상담을 신청하시겠습니까?
+                </h3>
+                <p className="text-xs text-slate-500">
+                  신청 내용을 확인하신 후 신청하기를 눌러주세요.
+                </p>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2.5 text-xs">
+              <div className="flex justify-between items-center py-1 border-b border-slate-200">
+                <span className="text-slate-500 font-semibold">상담 교수</span>
+                <span className="font-bold text-slate-900">
+                  {selectedProfessorForConsultation.name} 교수님
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-200">
+                <span className="text-slate-500 font-semibold">상담 유형</span>
+                <span className="px-2 py-0.5 rounded-md bg-orange-100 text-orange-800 font-bold">
+                  {consultationType}
+                </span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-200">
+                <span className="text-slate-500 font-semibold">희망 날짜</span>
+                <span className="font-bold text-slate-900">{preferredDate}</span>
+              </div>
+              <div className="flex justify-between items-center py-1 border-b border-slate-200">
+                <span className="text-slate-500 font-semibold">희망 시간</span>
+                <span className="font-bold text-slate-900">{preferredTime}</span>
+              </div>
+              <div className="pt-1">
+                <span className="text-slate-500 font-semibold block mb-1">상담 목적 및 질문</span>
+                <p className="p-2.5 rounded-xl bg-white border border-slate-200 text-slate-700 whitespace-pre-wrap leading-relaxed">
+                  {consultationPurpose}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                disabled={isSubmittingConsultation}
+                onClick={() => setIsConfirmConsultationOpen(false)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingConsultation}
+                onClick={handleActualSubmitConsultation}
+                className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-xs transition disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmittingConsultation ? "신청 저장 중..." : "신청하기"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 2. 교수용: 일정 변경 모달 */}
+      {/* ========================================================= */}
+      {rescheduleTarget && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            {!isRescheduleConfirmStep ? (
+              <form onSubmit={handleNextRescheduleStep} className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-orange-600" />
+                    <h3 className="text-base font-extrabold text-slate-900">
+                      상담 일정 변경
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRescheduleTarget(null)}
+                    className="text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+                  <p className="text-slate-600">
+                    상담 대상:{" "}
+                    <strong className="text-slate-900">{rescheduleTarget.studentName} 학생</strong> (
+                    {rescheduleTarget.consultationType})
+                  </p>
+                  <p className="text-slate-600">
+                    현재 확정 일정:{" "}
+                    <strong className="text-orange-600">
+                      {rescheduleTarget.preferredDate} · {rescheduleTarget.preferredTime}
+                    </strong>
+                  </p>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      변경할 날짜 *
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      min={new Date().toISOString().slice(0, 10)}
+                      value={rescheduleNewDate}
+                      onChange={(e) => setRescheduleNewDate(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-900 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      변경할 시간 *
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="예: 15:00 또는 오후 3시"
+                      value={rescheduleNewTime}
+                      onChange={(e) => setRescheduleNewTime(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-900 font-medium"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">
+                      변경 사유 (선택)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="예: 학과 일정 조정으로 시간 변경"
+                      value={rescheduleReason}
+                      onChange={(e) => setRescheduleReason(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={() => setRescheduleTarget(null)}
+                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-xs transition cursor-pointer"
+                  >
+                    변경 내용 확인
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-orange-600" />
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    상담 일정을 변경하시겠습니까?
+                  </h3>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-2xl bg-rose-50/60 border border-rose-200">
+                      <span className="block text-[11px] font-bold text-rose-700 mb-1">
+                        변경 전 일정
+                      </span>
+                      <p className="font-extrabold text-slate-800">
+                        {rescheduleTarget.preferredDate}
+                      </p>
+                      <p className="text-xs text-slate-600">
+                        {rescheduleTarget.preferredTime}
+                      </p>
+                    </div>
+                    <div className="p-3 rounded-2xl bg-emerald-50/80 border border-emerald-300">
+                      <span className="block text-[11px] font-bold text-emerald-800 mb-1">
+                        변경 후 일정
+                      </span>
+                      <p className="font-extrabold text-emerald-950">
+                        {rescheduleNewDate}
+                      </p>
+                      <p className="text-xs text-emerald-800">
+                        {rescheduleNewTime}
+                      </p>
+                    </div>
+                  </div>
+
+                  {rescheduleReason.trim() && (
+                    <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200">
+                      <span className="text-[11px] font-bold text-slate-500 block mb-0.5">
+                        변경 사유
+                      </span>
+                      <p className="text-slate-800">{rescheduleReason.trim()}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    disabled={isSubmittingReschedule}
+                    onClick={() => setIsRescheduleConfirmStep(false)}
+                    className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    이전으로
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSubmittingReschedule}
+                    onClick={handleConfirmReschedule}
+                    className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-xs transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {isSubmittingReschedule ? "일정 저장 중..." : "일정 변경 확정"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* 3. 상담 취소 모달 */}
+      {/* ========================================================= */}
+      {cancelTarget && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xl max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-rose-600">
+                <AlertCircle className="w-5 h-5" />
+                <h3 className="text-base font-extrabold text-slate-900">
+                  상담을 취소하시겠습니까?
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCancelTarget(null)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs space-y-1">
+              <p className="text-slate-600">
+                상담 정보:{" "}
+                <strong className="text-slate-900">
+                  {isCurrentUserProfessor ? `${cancelTarget.studentName} 학생` : `${cancelTarget.professorName} 교수님`}
+                </strong>{" "}
+                · {cancelTarget.consultationType}
+              </p>
+              <p className="text-slate-600">
+                예정 일시:{" "}
+                <strong className="text-slate-900">
+                  {cancelTarget.preferredDate} · {cancelTarget.preferredTime}
+                </strong>
+              </p>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <label className="block font-bold text-slate-700">
+                취소 사유 입력 <span className="text-rose-500">* (필수)</span>
+              </label>
+
+              <div className="flex flex-wrap gap-1.5">
+                {[
+                  "개인 일정 변경",
+                  "부득이한 사정",
+                  "학사 및 학과 일정 중복",
+                  "기타 사유",
+                ].map((chip) => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => setCancelReasonInput(chip)}
+                    className="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 text-[11px] font-semibold transition cursor-pointer"
+                  >
+                    + {chip}
+                  </button>
+                ))}
+              </div>
+
+              <textarea
+                rows={3}
+                required
+                maxLength={500}
+                value={cancelReasonInput}
+                onChange={(e) => setCancelReasonInput(e.target.value)}
+                placeholder="취소 사유를 직접 작성해 주세요. (공백 제외 필수, 최대 500자)"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-slate-900 text-xs focus:outline-none focus:ring-2 focus:ring-rose-500"
+              />
+
+              <div className="flex justify-between text-[11px] text-slate-400">
+                <span>공백만 입력된 경우 취소할 수 없습니다.</span>
+                <span className={cancelReasonInput.length > 500 ? "text-rose-600 font-bold" : ""}>
+                  {cancelReasonInput.length} / 500자
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isSubmittingCancel}
+                onClick={() => setCancelTarget(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-slate-50 transition cursor-pointer"
+              >
+                닫기
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingCancel || !cancelReasonInput.trim()}
+                onClick={handleConfirmCancel}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition disabled:opacity-50 cursor-pointer"
+              >
+                {isSubmittingCancel ? "취소 처리 중..." : "상담 취소"}
+              </button>
+            </div>
           </div>
         </div>
       )}

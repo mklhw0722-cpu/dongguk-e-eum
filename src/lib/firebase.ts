@@ -57,6 +57,7 @@ import {
   ConsultationRequest,
   ConsultationType,
   ConsultationStatus,
+  RescheduleHistoryItem,
   CalendarEvent,
   EventCategory,
 } from "@/types";
@@ -2560,7 +2561,7 @@ export function subscribeToConsultationsInFirestore(
 }
 
 /**
- * 교수의 상담 상태 갱신 (수락, 일정 조정 요청, 거절, 완료)
+ * 교수의 상담 상태 갱신 (수락, 일정 조정 요청, 거절, 완료, 취소)
  */
 export async function updateConsultationStatusInFirestore(params: {
   consultationId: string;
@@ -2569,6 +2570,10 @@ export async function updateConsultationStatusInFirestore(params: {
   conversationId?: string;
   consultationMethod?: "대면" | "채팅";
   professorId?: string;
+  cancelReason?: string;
+  cancelledBy?: "student" | "professor";
+  cancelledByUid?: string;
+  cancelledAt?: string;
 }): Promise<void> {
   const { db } = getFirebaseInstances();
   if (!db) {
@@ -2593,24 +2598,111 @@ export async function updateConsultationStatusInFirestore(params: {
   if (params.professorId !== undefined) {
     updateData.professorId = params.professorId;
   }
+  if (params.cancelReason !== undefined) {
+    updateData.cancelReason = params.cancelReason;
+  }
+  if (params.cancelledBy !== undefined) {
+    updateData.cancelledBy = params.cancelledBy;
+  }
+  if (params.cancelledByUid !== undefined) {
+    updateData.cancelledByUid = params.cancelledByUid;
+  }
+  if (params.cancelledAt !== undefined) {
+    updateData.cancelledAt = params.cancelledAt;
+  }
 
   await updateDoc(docRef, updateData);
 }
 
 /**
- * 학생의 상담 신청 취소 (대기 중인 건에 한함)
+ * 상담 신청 취소 (사유, 취소 주체 및 시각 보존)
  */
-export async function cancelConsultationInFirestore(consultationId: string): Promise<void> {
+export async function cancelConsultationInFirestore(
+  params:
+    | {
+        consultationId: string;
+        cancelReason?: string;
+        cancelledBy?: "student" | "professor";
+        cancelledByUid?: string;
+      }
+    | string
+): Promise<void> {
   const { db } = getFirebaseInstances();
   if (!db) {
     throw new Error("Firestore 데이터베이스가 연결되어 있지 않습니다.");
   }
 
+  const consultationId = typeof params === "string" ? params : params.consultationId;
+  const cancelReason = typeof params === "string" ? "" : params.cancelReason || "";
+  const cancelledBy = typeof params === "string" ? undefined : params.cancelledBy;
+  const cancelledByUid = typeof params === "string" ? undefined : params.cancelledByUid;
+
   const docRef = doc(db, CONSULTATIONS_COLLECTION, consultationId);
-  await updateDoc(docRef, {
+  const nowIso = new Date().toISOString();
+  const updateData: Record<string, unknown> = {
     status: "cancelled",
-    updatedAt: new Date().toISOString(),
-  });
+    updatedAt: nowIso,
+    cancelledAt: nowIso,
+  };
+  if (cancelReason) {
+    updateData.cancelReason = cancelReason;
+  }
+  if (cancelledBy) {
+    updateData.cancelledBy = cancelledBy;
+  }
+  if (cancelledByUid) {
+    updateData.cancelledByUid = cancelledByUid;
+  }
+
+  await updateDoc(docRef, updateData);
+}
+
+/**
+ * 교수의 확정 상담 일정 변경 (변경 이력 기록 및 날짜·시간 갱신)
+ */
+export async function rescheduleConsultationInFirestore(params: {
+  consultationId: string;
+  newDate: string;
+  newTime: string;
+  previousDate: string;
+  previousTime: string;
+  reason?: string;
+  professorId?: string;
+  existingHistory?: RescheduleHistoryItem[];
+}): Promise<RescheduleHistoryItem> {
+  const { db } = getFirebaseInstances();
+  if (!db) {
+    throw new Error("Firestore 데이터베이스가 연결되어 있지 않습니다.");
+  }
+
+  const docRef = doc(db, CONSULTATIONS_COLLECTION, params.consultationId);
+  const nowIso = new Date().toISOString();
+
+  const historyItem: RescheduleHistoryItem = {
+    previousDate: params.previousDate,
+    previousTime: params.previousTime,
+    newDate: params.newDate,
+    newTime: params.newTime,
+    changedAt: nowIso,
+    reason: params.reason || "",
+  };
+
+  const nextHistory = [...(params.existingHistory || []), historyItem];
+
+  const updateData: Record<string, unknown> = {
+    preferredDate: params.newDate,
+    preferredTime: params.newTime,
+    updatedAt: nowIso,
+    rescheduledAt: nowIso,
+    rescheduleHistory: nextHistory,
+  };
+
+  if (params.professorId) {
+    updateData.professorId = params.professorId;
+  }
+
+  await updateDoc(docRef, updateData);
+  return historyItem;
 }
 
 /**

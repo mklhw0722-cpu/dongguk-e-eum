@@ -122,6 +122,15 @@ export type ConsultationStatus =
   | "completed" // 완료
   | "cancelled"; // 취소
 
+export interface RescheduleHistoryItem {
+  previousDate: string;
+  previousTime: string;
+  newDate: string;
+  newTime: string;
+  changedAt: string;
+  reason?: string;
+}
+
 export interface ConsultationRequest {
   id: string;
   studentId: string;
@@ -140,6 +149,12 @@ export interface ConsultationRequest {
   conversationId?: string; // 승인 시 연결된 1:1 대화방 ID
   createdAt: string;
   updatedAt: string;
+  cancelReason?: string; // 취소 사유
+  cancelledBy?: "student" | "professor"; // 취소한 주체 (학생 또는 교수)
+  cancelledByUid?: string; // 취소한 사용자의 UID
+  cancelledAt?: string; // 취소 처리 시각
+  rescheduledAt?: string; // 최근 일정 변경 시각
+  rescheduleHistory?: RescheduleHistoryItem[]; // 일정 변경 이력
 }
 
 export interface ApprovalRequest {

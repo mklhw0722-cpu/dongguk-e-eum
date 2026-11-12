@@ -360,6 +360,8 @@ service cloud.firestore {
           && request.resource.data.studentId == resource.data.studentId
           && request.resource.data.professorId == resource.data.professorId
           && request.resource.data.status in ['pending', 'cancelled']
+          && request.resource.data.preferredDate == resource.data.preferredDate
+          && request.resource.data.preferredTime == resource.data.preferredTime
         )
         || (
           (

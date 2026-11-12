@@ -869,3 +869,70 @@ test("20. [홈 대시보드 상담 요청·일정 위젯 및 대면/비대면 �
   assert.ok(homePage.includes("registerFaceToFaceCalendarEvent"), "대면 상담 수락 시 캘린더 일정 생성 함수가 호출되어야 함");
   assert.ok(calendarComp.includes("consult-cal-"), "캘린더 컴포넌트에 승인된 대면 상담 일정이 자동 반영되어야 함");
 });
+
+test("21. [상담 신청 확인창 로직] 신청 전 확인 모달 제공, 필수 정보(교수, 유형, 날짜, 시간) 검증 및 중복 저장 방지", () => {
+  const homePage = fs.readFileSync(path.join(rootDir, "src/app/page.tsx"), "utf8");
+  const chatPage = fs.readFileSync(path.join(rootDir, "src/app/chat/page.tsx"), "utf8");
+
+  // 1) 홈 화면 및 대화창에 '상담을 신청하시겠습니까?' 확인창 상태 및 텍스트 검증
+  assert.ok(homePage.includes("상담을 신청하시겠습니까?"), "홈 화면에 신청 전 확인 모달 텍스트가 있어야 합니다.");
+  assert.ok(chatPage.includes("상담을 신청하시겠습니까?"), "대화창에 신청 전 확인 모달 텍스트가 있어야 합니다.");
+
+  // 2) 확인창 내 필수 정보(상담 교수, 상담 유형, 희망 날짜, 희망 시간) 표시 검증
+  assert.ok(homePage.includes("상담 교수"), "홈 확인 모달에 상담 교수가 표시되어야 합니다.");
+  assert.ok(homePage.includes("상담 유형"), "홈 확인 모달에 상담 유형이 표시되어야 합니다.");
+  assert.ok(homePage.includes("희망 날짜"), "홈 확인 모달에 희망 날짜가 표시되어야 합니다.");
+  assert.ok(homePage.includes("희망 시간"), "홈 확인 모달에 희망 시간이 표시되어야 합니다.");
+
+  // 3) 중복 신청 방지 (isSubmittingReq, isSubmittingConsultation) 및 '취소' 시 모달 닫기
+  assert.ok(homePage.includes("disabled={isSubmittingReq}"), "홈 확인 모달에서 중복 신청을 방지해야 합니다.");
+  assert.ok(chatPage.includes("disabled={isSubmittingConsultation}"), "대화창 확인 모달에서 중복 신청을 방지해야 합니다.");
+  assert.ok(homePage.includes("setIsConfirmRequestModalOpen(false)"), "확인 모달 취소 시 폼 내용이 유지된 채 모달만 닫혀야 합니다.");
+});
+
+test("22. [교수 상담 일정 변경] 수락된 상담의 날짜·시간 수정, 이전 일정과 변경 사유 이력(rescheduleHistory) 기록, 과거 날짜 방지 및 학생 임의 변조 차단", () => {
+  const appContext = fs.readFileSync(path.join(rootDir, "src/context/AppContext.tsx"), "utf8");
+  const homePage = fs.readFileSync(path.join(rootDir, "src/app/page.tsx"), "utf8");
+  const firebaseLib = fs.readFileSync(path.join(rootDir, "src/lib/firebase.ts"), "utf8");
+
+  // 1) 일정 변경 함수 및 히스토리 기록 구조 검증
+  assert.ok(firebaseLib.includes("rescheduleConsultationInFirestore"), "Firebase에 일정 변경 함수가 구현되어 있어야 합니다.");
+  assert.ok(appContext.includes("handleRescheduleConsultation"), "AppContext에 handleRescheduleConsultation이 제공되어야 합니다.");
+  assert.ok(firebaseLib.includes("rescheduleHistory"), "rescheduleHistory 필드에 이전 일정이 누적 보존되어야 합니다.");
+
+  // 2) 홈 화면에 '상담 일정을 변경하시겠습니까?' 변경 전 vs 변경 후 비교 확인창 존재 확인
+  assert.ok(homePage.includes("상담 일정을 변경하시겠습니까?"), "일정 변경 확정 전 비교 확인창이 있어야 합니다.");
+  assert.ok(homePage.includes("변경 전 일정"), "비교 확인창에 변경 전 일정이 표시되어야 합니다.");
+  assert.ok(homePage.includes("변경 후 일정"), "비교 확인창에 변경 후 일정이 표시되어야 합니다.");
+
+  // 3) 지난 날짜 검증 로직 확인
+  assert.ok(homePage.includes("지난 날짜로는 일정을 변경할 수 없습니다"), "과거 날짜로의 변경은 차단되어야 합니다.");
+
+  // 4) Firestore 보안 규칙에서 학생의 preferredDate, preferredTime 임의 변조 차단 검증
+  assert.match(
+    firestoreRules,
+    /request\.resource\.data\.preferredDate == resource\.data\.preferredDate[\s\S]*?request\.resource\.data\.preferredTime == resource\.data\.preferredTime/,
+    "학생이 상담 문서를 수정할 때 상담 일정을 임의로 변경할 수 없도록 보안 규칙에서 원천 차단되어야 합니다."
+  );
+});
+
+test("23. [상담 취소 및 사유 필수 입력] 공백 불가 및 최대 500자 제한, 취소자(professor/student)와 취소 시각 기록, 취소 후 수락·일정변경 버튼 비활성화 및 이력 보존", () => {
+  const homePage = fs.readFileSync(path.join(rootDir, "src/app/page.tsx"), "utf8");
+  const chatPage = fs.readFileSync(path.join(rootDir, "src/app/chat/page.tsx"), "utf8");
+  const appContext = fs.readFileSync(path.join(rootDir, "src/context/AppContext.tsx"), "utf8");
+
+  // 1) 취소 확인창 및 필수 취소 사유 문구 확인
+  assert.ok(homePage.includes("상담을 취소하시겠습니까?"), "상담 취소 확인 모달이 제공되어야 합니다.");
+  assert.ok(chatPage.includes("상담을 취소하시겠습니까?"), "대화창에 상담 취소 확인 모달이 제공되어야 합니다.");
+  assert.ok(homePage.includes("취소 사유를 입력해 주세요"), "취소 사유 미입력 시 차단되어야 합니다.");
+  assert.ok(homePage.includes("최대 500자"), "취소 사유는 최대 500자 제한이 있어야 합니다.");
+
+  // 2) AppContext 및 Firebase에서 취소자(cancelledBy)와 취소 사유(cancelReason), 취소 시각(cancelledAt) 보존
+  assert.ok(appContext.includes("cancelReason"), "취소 사유가 상태 및 DB에 저장되어야 합니다.");
+  assert.ok(appContext.includes("cancelledBy"), "취소 주체(professor 또는 student)가 저장되어야 합니다.");
+  assert.ok(appContext.includes("cancelledAt"), "취소 일시가 저장되어야 합니다.");
+
+  // 3) 취소된 상담은 바로 삭제되지 않고 목록에서 취소 사유와 함께 표시
+  assert.ok(homePage.includes("최근 취소된 상담"), "취소된 상담은 즉시 삭제되지 않고 취소 사유와 함께 목록에 보존되어야 합니다.");
+  assert.ok(chatPage.includes("취소 사유 ("), "대화창 나의 상담 현황에서도 취소 사유가 보존 표시되어야 합니다.");
+});

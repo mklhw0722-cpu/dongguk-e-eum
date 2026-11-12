@@ -32,6 +32,7 @@ import {
   ConsultationRequest,
   ConsultationType,
   ConsultationStatus,
+  RescheduleHistoryItem,
 } from "@/types";
 import {
   OFFICIAL_GRADUATION_CATALOG,
@@ -104,6 +105,8 @@ import {
   subscribeToConsultationsInFirestore,
   updateConsultationStatusInFirestore,
   cancelConsultationInFirestore,
+  rescheduleConsultationInFirestore,
+  saveUserCalendarEventToFirestore,
   updateRegistrationByApplicantInFirestore,
   recreateDeletedUserProfileInFirestore,
   deleteOwnAuthAccountInFirebase,
@@ -114,6 +117,7 @@ import {
   buildUserDeletionReport,
 } from "@/lib/memberLifecycle";
 import { unreadCountForUser, effectiveReadSeq } from "@/lib/chatReadReceipts";
+import { CalendarEvent } from "@/components/calendar/EditableCalendar";
 import officialNoticesJson from "@/data/officialNotices.json";
 import { extractScheduleFromTitle } from "@/lib/officialNoticeParser";
 import { User as FirebaseUser } from "firebase/auth";
@@ -237,7 +241,17 @@ interface AppContextValue extends PlatformDataState {
     conversationId?: string,
     consultationMethod?: "대면" | "채팅"
   ) => Promise<void>;
-  handleCancelConsultation: (consultationId: string) => Promise<void>;
+  handleCancelConsultation: (
+    consultationId: string,
+    cancelReason?: string,
+    cancelledBy?: "student" | "professor"
+  ) => Promise<void>;
+  handleRescheduleConsultation: (params: {
+    consultationId: string;
+    newDate: string;
+    newTime: string;
+    reason?: string;
+  }) => Promise<void>;
   handleConnectConsultationChat: (
     consultation: ConsultationRequest,
     customMethod?: "대면" | "채팅"
@@ -2342,14 +2356,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCloudConsultations((prev) => prev.map(updater));
   };
 
-  const handleCancelConsultation = async (consultationId: string): Promise<void> => {
+  const handleCancelConsultation = async (
+    consultationId: string,
+    cancelReason?: string,
+    cancelledBy?: "student" | "professor"
+  ): Promise<void> => {
     const isMock =
       consultationId.startsWith("c-req-") ||
       consultationId.startsWith("consult-mock-");
 
+    const callerUid =
+      (rawFirebaseUser ? rawFirebaseUser.uid : "") ||
+      authUserProfile?.uid ||
+      authUserProfile?.id ||
+      currentUser?.id ||
+      "";
+
+    const resolvedCancelledBy =
+      cancelledBy ||
+      (currentRole === "professor" || currentUser?.role === "professor" ? "professor" : "student");
+
     if (!isMock && isRealAuthActive && isFirestoreConnected) {
       try {
-        await cancelConsultationInFirestore(consultationId);
+        await cancelConsultationInFirestore({
+          consultationId,
+          cancelReason,
+          cancelledBy: resolvedCancelledBy,
+          cancelledByUid: callerUid,
+        });
       } catch (firestoreErr) {
         console.warn("Firestore 상담 취소 실패 (로컬 상태로 계속 진행):", firestoreErr);
       }
@@ -2361,7 +2395,127 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         ? {
             ...c,
             status: "cancelled" as ConsultationStatus,
+            cancelReason: cancelReason || c.cancelReason || "일정 변경으로 인한 취소",
+            cancelledBy: resolvedCancelledBy,
+            cancelledByUid: callerUid,
+            cancelledAt: nowIso,
             updatedAt: nowIso,
+          }
+        : c;
+
+    setState((prev: PlatformDataState) => ({
+      ...prev,
+      consultations: (prev.consultations || []).map(updater),
+    }));
+
+    setCloudConsultations((prev) => prev.map(updater));
+  };
+
+  const handleRescheduleConsultation = async (params: {
+    consultationId: string;
+    newDate: string;
+    newTime: string;
+    reason?: string;
+  }): Promise<void> => {
+    const target = (consultations || []).find((c) => c.id === params.consultationId);
+    if (!target) {
+      throw new Error("변경할 상담 내역을 찾을 수 없습니다.");
+    }
+
+    const nowIso = new Date().toISOString();
+    const prevDate = target.preferredDate;
+    const prevTime = target.preferredTime;
+
+    const historyItem: RescheduleHistoryItem = {
+      previousDate: prevDate,
+      previousTime: prevTime,
+      newDate: params.newDate,
+      newTime: params.newTime,
+      changedAt: nowIso,
+      reason: params.reason || "",
+    };
+
+    const nextHistory = [...(target.rescheduleHistory || []), historyItem];
+
+    const isMock =
+      params.consultationId.startsWith("c-req-") ||
+      params.consultationId.startsWith("consult-mock-");
+
+    if (!isMock && isRealAuthActive && isFirestoreConnected) {
+      try {
+        await rescheduleConsultationInFirestore({
+          consultationId: params.consultationId,
+          newDate: params.newDate,
+          newTime: params.newTime,
+          previousDate: prevDate,
+          previousTime: prevTime,
+          reason: params.reason,
+          professorId: target.professorId,
+          existingHistory: target.rescheduleHistory,
+        });
+      } catch (firestoreErr) {
+        console.warn("Firestore 상담 일정 변경 실패 (로컬 상태로 계속 진행):", firestoreErr);
+      }
+    }
+
+    // 대면 상담의 경우 캘린더 이벤트 날짜/시간도 함께 실시간 갱신
+    if (target.consultationMethod !== "채팅") {
+      const eventId = `consult-cal-${target.id}`;
+      const profId = currentUser?.id || target.professorId;
+      const updatedEvent: CalendarEvent = {
+        id: eventId,
+        userId: profId,
+        title: `[대면 상담] ${target.studentName} 학생 (${target.consultationType})`,
+        date: params.newDate,
+        time: params.newTime || "",
+        isAllDay: !params.newTime,
+        category: "personal",
+        location: "교수 연구실 (대면 상담)",
+        memo: `상담 목적: ${target.purpose} (일정 변경됨)`,
+      };
+
+      try {
+        const keys = [
+          "dongguk_custom_calendar_events_v1",
+          profId ? `dongguk_custom_calendar_events_v2_${profId}` : "",
+          target.studentId ? `dongguk_custom_calendar_events_v2_${target.studentId}` : "",
+        ].filter(Boolean);
+
+        keys.forEach((key) => {
+          const raw = window.localStorage.getItem(key);
+          const list: CalendarEvent[] = raw ? JSON.parse(raw) : [];
+          const next = [updatedEvent, ...list.filter((item) => item.id !== eventId)];
+          window.localStorage.setItem(key, JSON.stringify(next));
+        });
+      } catch {
+        // ignore
+      }
+
+      try {
+        if (profId) {
+          await saveUserCalendarEventToFirestore(profId, updatedEvent).catch(() => {});
+        }
+        if (target.studentId) {
+          await saveUserCalendarEventToFirestore(target.studentId, {
+            ...updatedEvent,
+            userId: target.studentId,
+            title: `[대면 상담] ${target.professorName} 교수님 (${target.consultationType})`,
+          }).catch(() => {});
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    const updater = (c: ConsultationRequest) =>
+      c.id === params.consultationId
+        ? {
+            ...c,
+            preferredDate: params.newDate,
+            preferredTime: params.newTime,
+            updatedAt: nowIso,
+            rescheduledAt: nowIso,
+            rescheduleHistory: nextHistory,
           }
         : c;
 
@@ -3786,6 +3940,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handleCreateConsultation,
         handleUpdateConsultationStatus,
         handleCancelConsultation,
+        handleRescheduleConsultation,
         handleConnectConsultationChat,
         sendMessage,
         markConversationRead,
