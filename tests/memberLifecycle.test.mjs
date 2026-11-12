@@ -16,6 +16,10 @@ import {
   isRevisionRequestedStatus,
   normalizeApprovalStatus,
   validateAndBuildRegistrationUpdate,
+  extractEntranceHakbun,
+  compareAdminUsers,
+  sortAdminUsers,
+  filterAndSortAdminUsers,
 } from "../src/lib/memberLifecycle.ts";
 
 const MOCK_FIREBASE_USER = { uid: "uid-student-2024" };
@@ -373,4 +377,212 @@ test("10. [회원가입 비밀번호 보안 규칙 및 역할별 가입 항목 �
   assert.ok(authCode.includes("ALUMNI_HAKBUN_OPTIONS"));
   assert.ok(authCode.includes("ALUMNI_GRAD_YEAR_OPTIONS"));
 });
+
+test("11. [학번 파싱 정규화 - extractEntranceHakbun] 2자리 학번, 4자리 입학연도, '2026학년도(22학번)', '99학번 이전', 10자리 학번을 정확하게 입학 학번 4자리 숫자로 파싱한다", () => {
+  // 24학번 -> 2024
+  assert.equal(extractEntranceHakbun({ studentIdOrYear: "24학번" }), 2024);
+  // 2022 -> 2022
+  assert.equal(extractEntranceHakbun({ studentIdOrYear: "2022" }), 2022);
+  // 2026학년도(22학번) -> 졸업연도가 아닌 괄호 안 입학 학번 2022 추출
+  assert.equal(extractEntranceHakbun({ studentIdOrYear: "2026학년도(22학번)" }), 2022);
+  // 99학번 이전 -> 1999
+  assert.equal(extractEntranceHakbun({ studentIdOrYear: "99학번 이전" }), 1999);
+  // 10자리 학번 2023112345 -> 2023
+  assert.equal(extractEntranceHakbun({ studentIdOrYear: "2023112345" }), 2023);
+  // 빈 값 / 미기재 -> null
+  assert.equal(extractEntranceHakbun({ studentIdOrYear: "" }), null);
+  assert.equal(extractEntranceHakbun(null), null);
+  assert.equal(extractEntranceHakbun(undefined), null);
+});
+
+test("12. [관리자 센터 재학생 정렬] 입학 학번 작은 순서(20 -> 21 -> 22...)로 정렬되고 동일 학번은 한국어 이름 가나다순, 미기재자는 맨 뒤에 위치한다", () => {
+  const students = [
+    { id: "s1", name: "홍길동", role: "student", studentIdOrYear: "24학번" },
+    { id: "s2", name: "강감찬", role: "student", studentIdOrYear: "21학번" },
+    { id: "s3", name: "김유신", role: "student", studentIdOrYear: "21학번" },
+    { id: "s4", name: "이순신", role: "student", studentIdOrYear: "20학번" },
+    { id: "s5", name: "나미정", role: "student", studentIdOrYear: "" },
+    { id: "s6", name: "안중근", role: "student", studentIdOrYear: "26학번" },
+  ];
+
+  const sorted = sortAdminUsers(students, "student");
+  // 20학번: 이순신 (s4)
+  // 21학번: 강감찬 (s2) -> 김유신 (s3)
+  // 24학번: 홍길동 (s1)
+  // 26학번: 안중근 (s6)
+  // 미기재: 나미정 (s5)
+  assert.deepEqual(
+    sorted.map((u) => u.id),
+    ["s4", "s2", "s3", "s1", "s6", "s5"]
+  );
+});
+
+test("13. [관리자 센터 졸업생 정렬] 졸업 연도가 아닌 입학 학번 기준으로 작은 순서대로 정렬되며 동일 학번은 가나다순, 미기재자는 맨 뒤에 위치한다", () => {
+  const alumni = [
+    { id: "a1", name: "최선배", role: "alumni", studentIdOrYear: "2026학년도(22학번)" }, // 입학: 2022
+    { id: "a2", name: "강선배", role: "alumni", studentIdOrYear: "2024학년도(18학번)" }, // 입학: 2018
+    { id: "a3", name: "김선배", role: "alumni", studentIdOrYear: "2024학년도(18학번)" }, // 입학: 2018
+    { id: "a4", name: "고선배", role: "alumni", studentIdOrYear: "99학번 이전" },        // 입학: 1999
+    { id: "a5", name: "박선배", role: "alumni", studentIdOrYear: "20학번" },             // 입학: 2020
+    { id: "a6", name: "무학번", role: "alumni", studentIdOrYear: "" },                   // 입학: 미기재
+  ];
+
+  const sorted = sortAdminUsers(alumni, "alumni");
+  // 1999: 고선배 (a4)
+  // 2018: 강선배 (a2) -> 김선배 (a3) (가나다순)
+  // 2020: 박선배 (a5)
+  // 2022: 최선배 (a1)
+  // 미기재: 무학번 (a6)
+  assert.deepEqual(
+    sorted.map((u) => u.id),
+    ["a4", "a2", "a3", "a5", "a1", "a6"]
+  );
+});
+
+test("14. [관리자 센터 교수진 정렬] 학번 기준이 적용되지 않고 교수 이름의 한국어 가나다순(ko-KR)으로 정렬된다", () => {
+  const professors = [
+    { id: "p1", name: "황교수", role: "professor", studentIdOrYear: "95학번" },
+    { id: "p2", name: "강교수", role: "professor", studentIdOrYear: "00학번" },
+    { id: "p3", name: "김교수", role: "professor", studentIdOrYear: "" },
+    { id: "p4", name: "남궁교수", role: "professor", studentIdOrYear: "88학번" },
+  ];
+
+  const sorted = sortAdminUsers(professors, "professor");
+  // 가나다순: 강교수 -> 김교수 -> 남궁교수 -> 황교수
+  assert.deepEqual(
+    sorted.map((u) => u.id),
+    ["p2", "p3", "p4", "p1"]
+  );
+});
+
+test("15. [관리자 센터 관리자 정렬] 관리자 이름의 한국어 가나다순(ko-KR)으로 정렬된다", () => {
+  const admins = [
+    { id: "adm3", name: "홍관리자", role: "admin" },
+    { id: "adm1", name: "강관리자", role: "admin" },
+    { id: "adm2", name: "이관리자", role: "admin" },
+  ];
+
+  const sorted = sortAdminUsers(admins, "admin");
+  assert.deepEqual(
+    sorted.map((u) => u.id),
+    ["adm1", "adm2", "adm3"]
+  );
+});
+
+test("16. [관리자 센터 전체 회원 정렬] 전체 탭 선택 시 재학생 -> 졸업생 -> 교수진 -> 관리자 순으로 구분 및 각 카테고리 내부 정렬된다", () => {
+  const mixed = [
+    { id: "adm1", name: "관리자", role: "admin" },
+    { id: "prof1", name: "강교수", role: "professor" },
+    { id: "alm1", name: "김졸업", role: "alumni", studentIdOrYear: "20학번" },
+    { id: "stu2", name: "홍길동", role: "student", studentIdOrYear: "24학번" },
+    { id: "stu1", name: "이순신", role: "student", studentIdOrYear: "22학번" },
+  ];
+
+  const sorted = sortAdminUsers(mixed, "all");
+  // 재학생: stu1(22학번) -> stu2(24학번)
+  // 졸업생: alm1
+  // 교수진: prof1
+  // 관리자: adm1
+  assert.deepEqual(
+    sorted.map((u) => u.id),
+    ["stu1", "stu2", "alm1", "prof1", "adm1"]
+  );
+});
+
+test("17. [동일 학번·이름 안정적 정렬] 학번과 이름이 완전히 같아도 UID 기준 일관된 순서를 보장한다", () => {
+  const users = [
+    { id: "user-b", name: "이동국", role: "student", studentIdOrYear: "23학번" },
+    { id: "user-a", name: "이동국", role: "student", studentIdOrYear: "23학번" },
+  ];
+
+  const sorted = sortAdminUsers(users, "student");
+  assert.deepEqual(
+    sorted.map((u) => u.id),
+    ["user-a", "user-b"]
+  );
+});
+
+test("18. [검색 및 승인 상태 필터링 연동 - filterAndSortAdminUsers] 역할, 승인 상태, 검색어 필터가 모두 정상 적용되고 정렬된다", () => {
+  const users = [
+    { id: "u1", name: "이순신", role: "student", studentIdOrYear: "22학번", approvalStatus: "approved", email: "lee@dgu.ac.kr" },
+    { id: "u2", name: "강감찬", role: "student", studentIdOrYear: "21학번", approvalStatus: "pending", email: "kang@dgu.ac.kr" },
+    { id: "u3", name: "김유신", role: "student", studentIdOrYear: "23학번", approvalStatus: "needs_revision", email: "kim@dgu.ac.kr" },
+    { id: "u4", name: "홍길동", role: "student", studentIdOrYear: "20학번", approvalStatus: "approved", email: "hong@dgu.ac.kr" },
+    { id: "u5", name: "최선배", role: "alumni", studentIdOrYear: "19학번", approvalStatus: "approved", email: "choi@dgu.ac.kr" },
+  ];
+
+  // 1) 승인 상태 필터: approved만 조회 -> u4(20학번) -> u1(22학번)
+  const approvedStudents = filterAndSortAdminUsers(users, {
+    roleFilter: "student",
+    statusFilter: "approved",
+  });
+  assert.deepEqual(
+    approvedStudents.map((u) => u.id),
+    ["u4", "u1"]
+  );
+
+  // 2) 승인 상태 필터: pending만 조회 -> u2
+  const pendingStudents = filterAndSortAdminUsers(users, {
+    roleFilter: "student",
+    statusFilter: "pending",
+  });
+  assert.deepEqual(
+    pendingStudents.map((u) => u.id),
+    ["u2"]
+  );
+
+  // 3) 검색어 필터: "이순신" -> u1
+  const searchName = filterAndSortAdminUsers(users, {
+    searchQuery: "이순신",
+  });
+  assert.deepEqual(
+    searchName.map((u) => u.id),
+    ["u1"]
+  );
+
+  // 4) 검색어 필터: "21학번" -> u2
+  const searchHakbun = filterAndSortAdminUsers(users, {
+    searchQuery: "21학번",
+  });
+  assert.deepEqual(
+    searchHakbun.map((u) => u.id),
+    ["u2"]
+  );
+});
+
+test("19. [관리자 센터 UI 소스코드 검증] 4대 카테고리 탭, 검색창, 승인상태 필터, 정렬 배지, 역할 변경 및 삭제 기능이 유지된다", () => {
+  const adminSrc = fs.readFileSync(new URL("../src/app/admin/page.tsx", import.meta.url), "utf8");
+
+  // 1) 4대 카테고리 탭 (재학생, 졸업생, 교수진, 관리자, 전체)
+  assert.match(adminSrc, /key:\s*"student"[\s\S]*?label:\s*"재학생"/);
+  assert.match(adminSrc, /key:\s*"alumni"[\s\S]*?label:\s*"졸업생"/);
+  assert.match(adminSrc, /key:\s*"professor"[\s\S]*?label:\s*"교수진"/);
+  assert.match(adminSrc, /key:\s*"admin"[\s\S]*?label:\s*"관리자"/);
+
+  // 2) 검색창
+  assert.match(adminSrc, /userSearchQuery/);
+  assert.match(adminSrc, /회원 이름, 학번, 이메일, UID, 복수전공 검색/);
+
+  // 3) 승인 상태별 필터 드롭다운
+  assert.match(adminSrc, /userStatusFilter/);
+  assert.match(adminSrc, /전체 승인 상태/);
+
+  // 4) filterAndSortAdminUsers 연동
+  assert.match(adminSrc, /filterAndSortAdminUsers\(targetList/);
+
+  // 5) 역할 변경 버튼 및 회원 삭제 버튼 유지
+  assert.match(adminSrc, /handleUpdateRole/);
+  assert.match(adminSrc, /handleDeleteUser/);
+});
+
+test("20. [단체 채팅방 및 타 시스템 영향 없음 검증] 단체 채팅방 개설 모달과 회원 분류가 온전히 유지된다", () => {
+  const chatSrc = fs.readFileSync(new URL("../src/app/chat/page.tsx", import.meta.url), "utf8");
+
+  assert.match(chatSrc, /GroupChatCategoryTab/);
+  assert.match(chatSrc, /sortChatUsersForGroupCreation/);
+  assert.match(chatSrc, /label:\s*"재학생"/);
+  assert.match(chatSrc, /label:\s*"졸업생"/);
+  assert.match(chatSrc, /label:\s*"교수진"/);
+});
+
 

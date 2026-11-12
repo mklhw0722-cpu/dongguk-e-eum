@@ -5,6 +5,84 @@ import type {
   UserRole,
 } from "../types/index.ts";
 
+export type AdminUserRoleCategory = "all" | "student" | "alumni" | "professor" | "admin";
+export type AdminUserApprovalFilter =
+  | "all"
+  | "approved"
+  | "pending"
+  | "needs_revision"
+  | "rejected"
+  | "suspended";
+
+/**
+ * 회원 객체에서 입학 학번(또는 입학연도)을 4자리 정규 연도 숫자(예: 2024, 2020, 1999)로 안전하게 추출합니다.
+ * - "24학번" -> 2024
+ * - "2026학년도(22학번)" -> 2022 (졸업연도가 아닌 괄호 안의 입학 학번 추출)
+ * - "99학번 이전" -> 1999
+ * - 10자리 학번(2023112345) -> 2023
+ * - 학번이 없는 경우 null 반환
+ */
+export function extractEntranceHakbun(u: {
+  studentIdOrYear?: string | null;
+  bio?: string | null;
+  academicProfile?: { studentId?: string; admissionYear?: number } | null;
+} | null | undefined): number | null {
+  if (!u) return null;
+
+  // 1. academicProfile.admissionYear가 명시적으로 숫자로 존재하는 경우
+  if (
+    typeof u.academicProfile?.admissionYear === "number" &&
+    u.academicProfile.admissionYear >= 1950 &&
+    u.academicProfile.admissionYear <= 2035
+  ) {
+    return Math.floor(u.academicProfile.admissionYear);
+  }
+
+  // 2. studentIdOrYear와 bio 텍스트에서 추출
+  const raw = `${u.studentIdOrYear || ""} ${u.bio || ""}`.trim();
+  if (raw) {
+    // 2-1) "22학번", "(22학번)", "99학번" 등 (\d{2})\s*학번 패턴 우선 매칭
+    // 졸업생의 경우 "2026학년도(22학번)" 처럼 졸업연도가 앞에 적혀 있어도 괄호 안의 입학 학번을 정확하게 추출
+    const matchHakbun = raw.match(/(\d{2})\s*학번/);
+    if (matchHakbun) {
+      const twoDigits = parseInt(matchHakbun[1], 10);
+      // 00 ~ 35년은 2000년대(2000~2035), 36 ~ 99년은 1900년대(1936~1999)
+      return twoDigits <= 35 ? 2000 + twoDigits : 1900 + twoDigits;
+    }
+
+    // 2-2) "99학번 이전"
+    if (raw.includes("99학번 이전")) {
+      return 1999;
+    }
+
+    // 2-3) "2024년", "2020" 등 4자리 연도 매칭
+    const match4Digit = raw.match(/\b(19\d{2}|20\d{2})\b/);
+    if (match4Digit) {
+      const year = parseInt(match4Digit[1], 10);
+      if (year >= 1950 && year <= 2035) {
+        return year;
+      }
+    }
+
+    // 2-4) 10자리 학번(2023110000) 매칭
+    const match10Digit = raw.match(/\b(19\d{2}|20\d{2})\d{4,8}\b/);
+    if (match10Digit) {
+      return parseInt(match10Digit[1], 10);
+    }
+  }
+
+  // 3. academicProfile.studentId 확인
+  const studId = u.academicProfile?.studentId?.trim();
+  if (studId) {
+    const matchStudId = studId.match(/^(19\d{2}|20\d{2})/);
+    if (matchStudId) {
+      return parseInt(matchStudId[1], 10);
+    }
+  }
+
+  return null;
+}
+
 /**
  * 보완 요청 항목 선택지 (관리자가 체크박스로 지정 가능)
  */
@@ -503,3 +581,174 @@ export function buildUserDeletionReport(params: {
     completedAt: nowIso,
   };
 }
+
+/**
+ * 관리자 센터 회원 목록 정렬 비교 함수
+ *
+ * [정렬 규칙]
+ * 1. category가 'all'이거나 지정되지 않은 경우:
+ *    - 4대 카테고리 순서: 재학생(student) -> 졸업생(alumni) -> 교수진(professor) -> 관리자(admin)
+ * 2. 재학생(student):
+ *    - 입학 학번 작은 순서대로 정렬 (오름차순: 20학번 -> 21학번 -> ... -> 26학번)
+ *    - 동일 학번인 경우 한국어 이름 가나다순 ('ko-KR')
+ *    - 학번이 없는 회원은 해당 카테고리의 마지막에 표시
+ * 3. 졸업생(alumni):
+ *    - 졸업 연도가 아닌 입학 학번이 작은 순서대로 정렬 (예: 2026학년도(22학번)은 22학번 기준)
+ *    - 동일 학번인 경우 한국어 이름 가나다순 ('ko-KR')
+ *    - 학번이 없는 회원은 해당 카테고리의 마지막에 표시
+ * 4. 교수진(professor):
+ *    - 교수 이름의 한국어 가나다순 ('ko-KR', 학번 미적용)
+ * 5. 관리자(admin):
+ *    - 관리자 이름의 한국어 가나다순 ('ko-KR', 학번 미적용)
+ * 6. 안정적인 정렬:
+ *    - 학번과 이름이 완전히 같을 경우 고유 ID(id)로 일관된 보조 정렬 보장
+ */
+export function compareAdminUsers<
+  T extends {
+    id?: string;
+    name?: string;
+    role?: string;
+    studentIdOrYear?: string | null;
+    bio?: string | null;
+    academicProfile?: any;
+  }
+>(a: T, b: T, category?: AdminUserRoleCategory): number {
+  const roleA = a.role;
+  const roleB = b.role;
+
+  // 전체('all') 탭인 경우 역할 카테고리 우선 순서 (재학생 -> 졸업생 -> 교수진 -> 관리자)
+  if (!category || category === "all") {
+    const roleOrder: Record<string, number> = {
+      student: 1,
+      alumni: 2,
+      professor: 3,
+      admin: 4,
+    };
+    const orderA = roleOrder[roleA || ""] || 99;
+    const orderB = roleOrder[roleB || ""] || 99;
+    if (orderA !== orderB) {
+      return orderA - orderB;
+    }
+  }
+
+  const effectiveCategory =
+    category && category !== "all" ? category : (roleA as AdminUserRoleCategory);
+
+  // 1) 재학생 및 졸업생: 입학 학번 오름차순 -> 가나다순 -> 학번 누락자 맨 뒤
+  if (effectiveCategory === "student" || effectiveCategory === "alumni") {
+    const hakbunA = extractEntranceHakbun(a);
+    const hakbunB = extractEntranceHakbun(b);
+
+    if (hakbunA !== null && hakbunB !== null) {
+      if (hakbunA !== hakbunB) {
+        return hakbunA - hakbunB;
+      }
+    } else if (hakbunA !== null && hakbunB === null) {
+      return -1; // 학번 보유자가 앞
+    } else if (hakbunA === null && hakbunB !== null) {
+      return 1; // 학번 누락자가 뒤
+    }
+
+    const nameDiff = (a.name || "").localeCompare(b.name || "", "ko-KR");
+    if (nameDiff !== 0) return nameDiff;
+
+    return (a.id || "").localeCompare(b.id || "");
+  }
+
+  // 2) 교수진 및 관리자: 한국어 이름 가나다순 ('ko-KR', 학번 미적용)
+  const nameDiff = (a.name || "").localeCompare(b.name || "", "ko-KR");
+  if (nameDiff !== 0) return nameDiff;
+
+  return (a.id || "").localeCompare(b.id || "");
+}
+
+/**
+ * 관리자 센터 회원 목록 정렬 함수
+ */
+export function sortAdminUsers<
+  T extends {
+    id?: string;
+    name?: string;
+    role?: string;
+    studentIdOrYear?: string | null;
+    bio?: string | null;
+    academicProfile?: any;
+  }
+>(users: T[], category?: AdminUserRoleCategory): T[] {
+  if (!Array.isArray(users)) return [];
+  return [...users].sort((a, b) => compareAdminUsers(a, b, category));
+}
+
+/**
+ * 관리자 센터 회원 필터링 (역할 + 승인 상태 + 검색어) 및 정렬 함수
+ */
+export function filterAndSortAdminUsers<
+  T extends {
+    id?: string;
+    name?: string;
+    email?: string;
+    role?: string;
+    studentIdOrYear?: string | null;
+    approvalStatus?: ApprovalStatus | string;
+    doubleMajor?: string | null;
+    careerTrack?: string | null;
+    verificationNote?: string | null;
+    bio?: string | null;
+    academicProfile?: any;
+  }
+>(
+  users: T[],
+  options: {
+    roleFilter?: AdminUserRoleCategory;
+    statusFilter?: AdminUserApprovalFilter;
+    searchQuery?: string;
+  }
+): T[] {
+  if (!Array.isArray(users)) return [];
+  const { roleFilter = "all", statusFilter = "all", searchQuery = "" } = options;
+
+  let result = users;
+
+  // 1. 역할 필터
+  if (roleFilter !== "all") {
+    result = result.filter((u) => u.role === roleFilter);
+  }
+
+  // 2. 승인 상태 필터
+  if (statusFilter !== "all") {
+    result = result.filter((u) => {
+      const st = u.approvalStatus || "pending";
+      if (statusFilter === "needs_revision") {
+        return isRevisionRequestedStatus(st);
+      }
+      return st === statusFilter;
+    });
+  }
+
+  // 3. 검색어 필터 (이름, 이메일, 학번, UID, 복수전공/트랙, 메모)
+  const q = searchQuery.trim().toLowerCase();
+  if (q) {
+    result = result.filter((u) => {
+      const name = (u.name || "").toLowerCase();
+      const email = (u.email || "").toLowerCase();
+      const id = (u.id || "").toLowerCase();
+      const studId = (u.studentIdOrYear || "").toLowerCase();
+      const track = (u.careerTrack || "").toLowerCase();
+      const doubleMaj = (u.doubleMajor || "").toLowerCase();
+      const note = (u.verificationNote || "").toLowerCase();
+      return (
+        name.includes(q) ||
+        email.includes(q) ||
+        id.includes(q) ||
+        studId.includes(q) ||
+        track.includes(q) ||
+        doubleMaj.includes(q) ||
+        note.includes(q)
+      );
+    });
+  }
+
+  // 4. 카테고리별 정렬 적용
+  return sortAdminUsers(result, roleFilter);
+}
+

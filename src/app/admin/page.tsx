@@ -17,6 +17,10 @@ import {
   REVISION_FIELD_OPTIONS,
   USER_DELETION_DATA_POLICY,
   UserDeletionReport,
+  AdminUserRoleCategory,
+  AdminUserApprovalFilter,
+  filterAndSortAdminUsers,
+  sortAdminUsers,
 } from "@/lib/memberLifecycle";
 import {
   ShieldCheck,
@@ -34,6 +38,7 @@ import {
   GraduationCap,
   ExternalLink,
   RotateCcw,
+  Search,
 } from "lucide-react";
 
 const STATUS_LABELS: Record<ApprovalStatus, { label: string; style: string }> = {
@@ -198,7 +203,9 @@ export default function AdminPage() {
     Record<string, string[]>
   >({});
   const [roleSelects, setRoleSelects] = useState<Record<string, UserRole>>({});
-  const [userRoleFilter, setUserRoleFilter] = useState<string>("all");
+  const [userRoleFilter, setUserRoleFilter] = useState<AdminUserRoleCategory>("all");
+  const [userStatusFilter, setUserStatusFilter] = useState<AdminUserApprovalFilter>("all");
+  const [userSearchQuery, setUserSearchQuery] = useState<string>("");
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
 
   const handleUpdateRole = async (
@@ -844,7 +851,7 @@ export default function AdminPage() {
             </div>
           )}
 
-          {/* 역할별 필터 탭 (전체, 재학생, 졸업생, 교수진, 관리자) */}
+          {/* 1. 회원 유형별 목록 구분 탭 (재학생, 졸업생, 교수진, 관리자, 전체 회원) */}
           <div className="flex items-center gap-1.5 flex-wrap">
             {[
               { key: "all", label: "전체 회원" },
@@ -860,11 +867,11 @@ export default function AdminPage() {
                 <button
                   key={tab.key}
                   type="button"
-                  onClick={() => setUserRoleFilter(tab.key)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  onClick={() => setUserRoleFilter(tab.key as AdminUserRoleCategory)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
                     userRoleFilter === tab.key
                       ? "bg-brand-600 text-white shadow-xs"
-                      : "bg-surface  border border-line  text-ink-2  hover:bg-surface-2"
+                      : "bg-surface border border-line text-ink-2 hover:bg-surface-2"
                   }`}
                 >
                   <span>{tab.label}</span>
@@ -872,7 +879,7 @@ export default function AdminPage() {
                     className={`px-1.5 py-0.2 rounded-full text-xs font-black ${
                       userRoleFilter === tab.key
                         ? "bg-surface/20 text-white"
-                        : "bg-slate-100  text-ink-3"
+                        : "bg-slate-100 text-ink-3"
                     }`}
                   >
                     {count}
@@ -882,45 +889,120 @@ export default function AdminPage() {
             })}
           </div>
 
-          <div className="bg-surface rounded-2xl border border-line overflow-hidden shadow-xs">
-            {/* 상단 안내 바 */}
-            <div className="px-5 py-3 bg-surface-2 border-b border-line flex items-center justify-between text-xs">
-              <span className="font-bold text-ink-2 flex items-center gap-1.5">
-                <Database className="w-4 h-4 text-brand-600" />
-                {realUsersForAdmin.length > 0
-                  ? `Firebase 실제 등록 회원 목록 (${realUsersForAdmin.length}명)`
-                  : `예시 회원 목록 (${users.length}명)`}
-              </span>
-              <span className="text-ink-3">
-                역할 버튼 클릭 시 권한이 즉시 변경됩니다.
-              </span>
+          {/* 2. 검색 및 승인 상태별 필터 도구 모음 */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 bg-surface p-3 rounded-2xl border border-line shadow-2xs">
+            {/* 검색창 */}
+            <div className="relative flex-1">
+              <Search className="w-4 h-4 text-ink-3 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={userSearchQuery}
+                onChange={(e) => setUserSearchQuery(e.target.value)}
+                placeholder="회원 이름, 학번, 이메일, UID, 복수전공 검색..."
+                className="w-full pl-9 pr-8 py-2 rounded-xl border border-line bg-surface-2 text-xs font-semibold text-ink placeholder:text-ink-3 focus:outline-orange-600"
+              />
+              {userSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setUserSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink text-xs font-bold p-0.5"
+                  title="검색어 초기화"
+                >
+                  ✕
+                </button>
+              )}
             </div>
 
-            <div className="divide-y divide-slate-100">
-              {(() => {
-                const targetList = realUsersForAdmin.length > 0 ? realUsersForAdmin : users;
-                const filtered = targetList.filter(
-                  (u) => userRoleFilter === "all" || u.role === userRoleFilter
-                );
+            {/* 승인 상태별 필터 */}
+            <div className="flex items-center gap-2 shrink-0">
+              <label className="text-xs font-bold text-ink-3 shrink-0">
+                승인 상태:
+              </label>
+              <select
+                value={userStatusFilter}
+                onChange={(e) => setUserStatusFilter(e.target.value as AdminUserApprovalFilter)}
+                className="px-3 py-2 rounded-xl border border-line bg-surface-2 text-xs font-semibold text-ink focus:outline-orange-600"
+              >
+                <option value="all">전체 승인 상태</option>
+                <option value="approved">승인 완료</option>
+                <option value="pending">승인 대기중</option>
+                <option value="needs_revision">보완 요청됨</option>
+                <option value="rejected">승인 반려됨</option>
+                <option value="suspended">이용 정지</option>
+              </select>
+            </div>
+          </div>
 
-                if (filtered.length === 0) {
-                  return (
-                    <div className="p-8 text-center text-xs text-ink-3 space-y-1">
-                      <Users className="w-6 h-6 mx-auto text-slate-300 mb-1" />
-                      <p className="font-semibold text-ink-2">
-                        선택한 역할({ROLE_LABELS[userRoleFilter as UserRole] || userRoleFilter})의 회원이 없습니다.
-                      </p>
-                      <p className="text-xs">
-                        다른 필터 탭을 선택하거나 신규 회원이 가입하면 표시됩니다.
-                      </p>
+          <div className="bg-surface rounded-2xl border border-line overflow-hidden shadow-xs">
+            {/* 상단 안내 바 및 정렬 기준 안내 */}
+            {(() => {
+              const targetList = realUsersForAdmin.length > 0 ? realUsersForAdmin : users;
+              const filteredUsers = filterAndSortAdminUsers(targetList, {
+                roleFilter: userRoleFilter,
+                statusFilter: userStatusFilter,
+                searchQuery: userSearchQuery,
+              });
+
+              const sortLabel =
+                userRoleFilter === "student"
+                  ? "정렬: 학번 오름차순 (20학번 → 26학번) · 이름 가나다순"
+                  : userRoleFilter === "alumni"
+                  ? "정렬: 입학 학번 오름차순 (졸업연도 제외) · 이름 가나다순"
+                  : userRoleFilter === "professor"
+                  ? "정렬: 교수 성함 가나다순"
+                  : userRoleFilter === "admin"
+                  ? "정렬: 관리자 성함 가나다순"
+                  : "정렬: 재학생 → 졸업생 → 교수진 → 관리자 순서 및 유형별 정렬";
+
+              return (
+                <>
+                  <div className="px-5 py-3 bg-surface-2 border-b border-line flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-ink-2 flex items-center gap-1.5">
+                        <Database className="w-4 h-4 text-brand-600" />
+                        {realUsersForAdmin.length > 0
+                          ? `Firebase 실제 등록 회원 (${realUsersForAdmin.length}명 중 ${filteredUsers.length}명 표시)`
+                          : `예시 회원 (${users.length}명 중 ${filteredUsers.length}명 표시)`}
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full bg-slate-200 text-ink-2 text-[11px] font-bold">
+                        {sortLabel}
+                      </span>
                     </div>
-                  );
-                }
+                    <span className="text-ink-3">
+                      역할 버튼 클릭 시 권한이 즉시 변경됩니다.
+                    </span>
+                  </div>
 
-                return filtered.map((u) => {
-                  const isUpdating = updatingUserId === u.id;
-                  const st = STATUS_LABELS[u.approvalStatus];
-                  return (
+                  <div className="divide-y divide-slate-100">
+                    {filteredUsers.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-ink-3 space-y-2">
+                        <Users className="w-8 h-8 mx-auto text-slate-300 mb-1" />
+                        <p className="font-bold text-sm text-ink-2">
+                          해당 조건에 일치하는 회원이 없습니다.
+                        </p>
+                        <p className="text-xs text-ink-3">
+                          {userSearchQuery || userStatusFilter !== "all"
+                            ? "검색어 또는 승인 상태 필터를 변경해 보세요."
+                            : "선택한 역할 카테고리에 등록된 회원이 없습니다."}
+                        </p>
+                        {(userSearchQuery || userStatusFilter !== "all") && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setUserSearchQuery("");
+                              setUserStatusFilter("all");
+                            }}
+                            className="mt-2 px-3 py-1.5 rounded-xl border border-line bg-surface hover:bg-surface-2 text-xs font-bold text-brand-600 transition"
+                          >
+                            검색 및 필터 초기화
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      filteredUsers.map((u) => {
+                        const isUpdating = updatingUserId === u.id;
+                        const st = STATUS_LABELS[u.approvalStatus];
+                        return (
                     <div
                       key={u.id}
                       className="p-4 flex flex-col gap-3 hover:bg-surface-2 transition"
@@ -1076,14 +1158,15 @@ export default function AdminPage() {
                                 className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-line bg-surface text-ink focus:outline-hidden focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
                               >
                                 <option value="">-- 배정할 재학생 선택 --</option>
-                                {targetList
-                                  .filter(
+                                {sortAdminUsers(
+                                  targetList.filter(
                                     (s) =>
                                       s.role === "student" &&
                                       s.id !== u.id &&
                                       s.approvalStatus === "approved"
-                                  )
-                                  .map((student) => {
+                                  ),
+                                  "student"
+                                ).map((student) => {
                                     const isAlreadyAssignedToMe =
                                       student.advisorProfessorId === u.id ||
                                       (student as any).advisorProfessorId === (u as any).uid;
@@ -1164,12 +1247,14 @@ export default function AdminPage() {
                       )}
                     </div>
                   );
-                });
-              })()}
-            </div>
-          </div>
-        </div>
-      )}
+                }))}
+              </div>
+            </>
+          );
+        })()}
+      </div>
+    </div>
+  )}
 
       {/* 탭 3: 게시판 및 게시글 관리 */}
       {activeTab === "rooms_posts" && (
