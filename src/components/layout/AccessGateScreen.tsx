@@ -59,6 +59,13 @@ interface AccessGateScreenProps {
  * - suspended: 이용 정지
  * - profile_missing: 삭제된 계정 또는 가입 중단 계정 (즉시 재가입 신청서 제출 또는 인증 계정 완전 삭제 지원)
  */
+const ALUMNI_GRADUATION_OPTIONS = Array.from({ length: 23 }, (_, i) => {
+  const hakbunNum = 22 - i; // 22부터 00까지
+  const gradYear = 2004 + hakbunNum; // 2026학년도부터 2004학년도까지
+  const prefix = hakbunNum < 10 ? `0${hakbunNum}` : `${hakbunNum}`;
+  return `${gradYear}학년도(${prefix}학번)`;
+});
+
 export function AccessGateScreen({
   state,
   name,
@@ -233,7 +240,7 @@ export function AccessGateScreen({
     if (editRole === "alumni" && !editStudentIdOrYear.trim()) {
       setFeedbackBanner({
         type: "error",
-        text: "졸업 학번(예: 18학번 졸업)을 입력해 주세요.",
+        text: "졸업 연도(예: 2026학년도(22학번))를 선택해 주세요.",
       });
       return;
     }
@@ -292,7 +299,7 @@ export function AccessGateScreen({
     if (editRole === "alumni" && !editStudentIdOrYear.trim()) {
       setFeedbackBanner({
         type: "error",
-        text: "졸업 학번(예: 18학번 졸업)을 입력해 주세요.",
+        text: "졸업 연도(예: 2026학년도(22학번))를 선택해 주세요.",
       });
       return;
     }
@@ -501,26 +508,26 @@ export function AccessGateScreen({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-bold text-slate-800 mb-1">
-              학번 *
+              졸업 연도 *
             </label>
             <select
               value={
-                editStudentIdOrYear && editStudentIdOrYear.includes("학번 졸업")
+                editStudentIdOrYear && ALUMNI_GRADUATION_OPTIONS.includes(editStudentIdOrYear)
                   ? editStudentIdOrYear
-                  : "19학번 졸업"
+                  : ALUMNI_GRADUATION_OPTIONS.find(
+                      (opt) =>
+                        editStudentIdOrYear &&
+                        opt.includes(editStudentIdOrYear.replace(/[^0-9]/g, "").slice(0, 2))
+                    ) || ALUMNI_GRADUATION_OPTIONS[0]
               }
               onChange={(e) => setEditStudentIdOrYear(e.target.value)}
               className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 font-semibold"
             >
-              {Array.from({ length: 23 }, (_, i) => {
-                const num = 22 - i;
-                const prefix = num < 10 ? `0${num}` : `${num}`;
-                return (
-                  <option key={prefix} value={`${prefix}학번 졸업`}>
-                    {prefix}학번 졸업
-                  </option>
-                );
-              })}
+              {ALUMNI_GRADUATION_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
             </select>
           </div>
           <div>
