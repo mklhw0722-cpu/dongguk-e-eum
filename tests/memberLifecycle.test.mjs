@@ -365,10 +365,12 @@ test("10. [회원가입 비밀번호 보안 규칙 및 역할별 가입 항목 �
   assert.ok(authCode.includes("비밀번호 (영문, 숫자, 특수문자 포함 6자리 이상) *"));
   assert.ok(authCode.includes("비밀번호는 영문, 숫자, 특수문자를 모두 포함하여 6자리 이상이어야 합니다."));
 
-  // 역할별 드롭다운 제공 확인
+  // 역할별 드롭다운 제공 확인 (졸업생의 경우 학번과 졸업연도가 분리되어 제공됨)
   assert.ok(authCode.includes("입학 연도 (신입학 재학생 기준) *"));
+  assert.ok(authCode.includes("학번 *"));
   assert.ok(authCode.includes("졸업 연도 *"));
   assert.ok(authCode.includes("교육학과 전임교원"));
-  assert.ok(authCode.includes("ALUMNI_GRADUATION_OPTIONS"));
+  assert.ok(authCode.includes("ALUMNI_HAKBUN_OPTIONS"));
+  assert.ok(authCode.includes("ALUMNI_GRAD_YEAR_OPTIONS"));
 });
 

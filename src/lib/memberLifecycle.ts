@@ -15,6 +15,25 @@ export const REVISION_FIELD_OPTIONS = [
   { key: "verificationNote", label: "소속 확인 메모 / 증빙 내용" },
 ] as const;
 
+export const ALUMNI_HAKBUN_OPTIONS = [
+  ...Array.from({ length: 25 }, (_, i) => {
+    const hakbunNum = 24 - i; // 24학번부터 00학번까지
+    const prefix = hakbunNum < 10 ? `0${hakbunNum}` : `${hakbunNum}`;
+    return `${prefix}학번`;
+  }),
+  "99학번 이전",
+];
+
+export const ALUMNI_GRAD_YEAR_OPTIONS = [
+  ...Array.from({ length: 27 }, (_, i) => {
+    const yr = 2026 - i; // 2026년부터 2000년까지
+    return `${yr}년`;
+  }),
+  "1999년 이전",
+];
+
+export const ALUMNI_GRADUATION_OPTIONS = ALUMNI_GRAD_YEAR_OPTIONS;
+
 export type RevisionFieldKey = (typeof REVISION_FIELD_OPTIONS)[number]["key"];
 
 /**

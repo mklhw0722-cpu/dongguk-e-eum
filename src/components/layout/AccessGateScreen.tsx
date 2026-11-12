@@ -12,6 +12,9 @@ import { UserProfileDoc } from "@/lib/firebase";
 import {
   REVISION_FIELD_OPTIONS,
   RegistrationRevisionInput,
+  ALUMNI_HAKBUN_OPTIONS,
+  ALUMNI_GRAD_YEAR_OPTIONS,
+  ALUMNI_GRADUATION_OPTIONS,
 } from "@/lib/memberLifecycle";
 import { formatAdmissionYearLabel } from "@/lib/graduationCurriculum";
 import { ROLE_LABELS } from "@/components/common/Cards";
@@ -59,12 +62,7 @@ interface AccessGateScreenProps {
  * - suspended: 이용 정지
  * - profile_missing: 삭제된 계정 또는 가입 중단 계정 (즉시 재가입 신청서 제출 또는 인증 계정 완전 삭제 지원)
  */
-const ALUMNI_GRADUATION_OPTIONS = Array.from({ length: 23 }, (_, i) => {
-  const hakbunNum = 22 - i; // 22부터 00까지
-  const gradYear = 2004 + hakbunNum; // 2026학년도부터 2004학년도까지
-  const prefix = hakbunNum < 10 ? `0${hakbunNum}` : `${hakbunNum}`;
-  return `${gradYear}학년도(${prefix}학번)`;
-});
+
 
 export function AccessGateScreen({
   state,
@@ -95,6 +93,16 @@ export function AccessGateScreen({
   const [editStudentIdOrYear, setEditStudentIdOrYear] = useState(
     profile?.studentIdOrYear || studentIdOrYear || ""
   );
+  const [editAlumniHakbun, setEditAlumniHakbun] = useState(() => {
+    const raw = profile?.studentIdOrYear || studentIdOrYear || "";
+    const match = raw.match(/(\d{2})\s*학번/);
+    return match ? `${match[1]}학번` : "22학번";
+  });
+  const [editAlumniGradYear, setEditAlumniGradYear] = useState(() => {
+    const raw = profile?.studentIdOrYear || studentIdOrYear || "";
+    const match = raw.match(/20(\d{2})|19(\d{2})/);
+    return match ? `${match[0]}년` : "2026년";
+  });
   const [editMajorPlanType, setEditMajorPlanType] = useState<MajorPlanType>(
     profile?.academicProfile?.majorPlanType || "single"
   );
@@ -132,7 +140,13 @@ export function AccessGateScreen({
       setEditRole(profile.role);
     }
     if (profile.name) setEditName(profile.name);
-    if (profile.studentIdOrYear) setEditStudentIdOrYear(profile.studentIdOrYear);
+    if (profile.studentIdOrYear) {
+      setEditStudentIdOrYear(profile.studentIdOrYear);
+      const matchHakbun = profile.studentIdOrYear.match(/(\d{2})\s*학번/);
+      if (matchHakbun) setEditAlumniHakbun(`${matchHakbun[1]}학번`);
+      const matchYear = profile.studentIdOrYear.match(/20(\d{2})|19(\d{2})/);
+      if (matchYear) setEditAlumniGradYear(`${matchYear[0]}년`);
+    }
     if (profile.academicProfile) {
       setEditAdmissionYear(
         profile.academicProfile.admissionYearNumber || 2024
@@ -185,7 +199,7 @@ export function AccessGateScreen({
         ? formatAdmissionYearLabel(editAdmissionYear)
         : editRole === "professor"
         ? editStudentIdOrYear.trim() || "교육학과 전임교원"
-        : editStudentIdOrYear.trim();
+        : `${editAlumniHakbun} (${editAlumniGradYear} 졸업)`;
 
     let academicProfile: StudentAcademicProfile | undefined;
     if (editRole === "student") {
@@ -237,10 +251,10 @@ export function AccessGateScreen({
       return;
     }
 
-    if (editRole === "alumni" && !editStudentIdOrYear.trim()) {
+    if (editRole === "alumni" && (!editAlumniHakbun || !editAlumniGradYear)) {
       setFeedbackBanner({
         type: "error",
-        text: "졸업 연도(예: 2026학년도(22학번))를 선택해 주세요.",
+        text: "학번과 졸업 연도를 모두 선택해 주세요.",
       });
       return;
     }
@@ -296,10 +310,10 @@ export function AccessGateScreen({
       });
       return;
     }
-    if (editRole === "alumni" && !editStudentIdOrYear.trim()) {
+    if (editRole === "alumni" && (!editAlumniHakbun || !editAlumniGradYear)) {
       setFeedbackBanner({
         type: "error",
-        text: "졸업 연도(예: 2026학년도(22학번))를 선택해 주세요.",
+        text: "학번과 졸업 연도를 모두 선택해 주세요.",
       });
       return;
     }
@@ -505,30 +519,40 @@ export function AccessGateScreen({
           </div>
         </div>
       ) : editRole === "alumni" ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="block text-xs font-bold text-slate-800 mb-1">
-              졸업 연도 *
-            </label>
-            <select
-              value={
-                editStudentIdOrYear && ALUMNI_GRADUATION_OPTIONS.includes(editStudentIdOrYear)
-                  ? editStudentIdOrYear
-                  : ALUMNI_GRADUATION_OPTIONS.find(
-                      (opt) =>
-                        editStudentIdOrYear &&
-                        opt.includes(editStudentIdOrYear.replace(/[^0-9]/g, "").slice(0, 2))
-                    ) || ALUMNI_GRADUATION_OPTIONS[0]
-              }
-              onChange={(e) => setEditStudentIdOrYear(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 font-semibold"
-            >
-              {ALUMNI_GRADUATION_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
-                </option>
-              ))}
-            </select>
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">
+                학번 *
+              </label>
+              <select
+                value={editAlumniHakbun}
+                onChange={(e) => setEditAlumniHakbun(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 font-semibold"
+              >
+                {ALUMNI_HAKBUN_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-800 mb-1">
+                졸업 연도 *
+              </label>
+              <select
+                value={editAlumniGradYear}
+                onChange={(e) => setEditAlumniGradYear(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 font-semibold"
+              >
+                {ALUMNI_GRAD_YEAR_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>
+                    {opt}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-800 mb-1">

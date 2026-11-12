@@ -10,6 +10,11 @@ import {
   UserRole,
 } from "@/types";
 import { formatAdmissionYearLabel } from "@/lib/graduationCurriculum";
+import {
+  ALUMNI_HAKBUN_OPTIONS,
+  ALUMNI_GRAD_YEAR_OPTIONS,
+  ALUMNI_GRADUATION_OPTIONS,
+} from "@/lib/memberLifecycle";
 import { ROLE_LABELS } from "@/components/common/Cards";
 import {
   UserCheck,
@@ -38,12 +43,7 @@ type AuthScreenTab =
   | "bootstrap_admin"
   | "rejected_or_supplement";
 
-const ALUMNI_GRADUATION_OPTIONS = Array.from({ length: 23 }, (_, i) => {
-  const hakbunNum = 22 - i; // 22부터 00까지
-  const gradYear = 2004 + hakbunNum; // 2026학년도부터 2004학년도까지
-  const prefix = hakbunNum < 10 ? `0${hakbunNum}` : `${hakbunNum}`;
-  return `${gradYear}학년도(${prefix}학번)`;
-});
+
 
 export default function AuthPage() {
   const {
@@ -84,9 +84,8 @@ export default function AuthPage() {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupStudentId, setSignupStudentId] = useState("");
-  const [signupAlumniGraduationYear, setSignupAlumniGraduationYear] = useState(
-    ALUMNI_GRADUATION_OPTIONS[0]
-  );
+  const [signupAlumniHakbun, setSignupAlumniHakbun] = useState("22학번");
+  const [signupAlumniGradYear, setSignupAlumniGradYear] = useState("2026년");
   const [signupProfessorTitle, setSignupProfessorTitle] = useState("교육학과 전임교원");
   const [signupNote, setSignupNote] = useState("");
   const [signupLoading, setSignupLoading] = useState(false);
@@ -194,7 +193,7 @@ export default function AuthPage() {
       selectedRole === "student"
         ? admissionYearLabel
         : selectedRole === "alumni"
-        ? signupAlumniGraduationYear
+        ? `${signupAlumniHakbun} (${signupAlumniGradYear} 졸업)`
         : signupProfessorTitle;
 
     setSignupLoading(true);
@@ -668,19 +667,35 @@ export default function AuthPage() {
                   </select>
                 </div>
               ) : selectedRole === "alumni" ? (
-                <div>
-                  <label className="block font-bold text-ink mb-1.5">졸업 연도 *</label>
-                  <select
-                    value={signupAlumniGraduationYear}
-                    onChange={(e) => setSignupAlumniGraduationYear(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-surface-2 text-ink text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  >
-                    {ALUMNI_GRADUATION_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-ink mb-1.5">학번 *</label>
+                    <select
+                      value={signupAlumniHakbun}
+                      onChange={(e) => setSignupAlumniHakbun(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-surface-2 text-ink text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    >
+                      {ALUMNI_HAKBUN_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-ink mb-1.5">졸업 연도 *</label>
+                    <select
+                      value={signupAlumniGradYear}
+                      onChange={(e) => setSignupAlumniGradYear(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-surface-2 text-ink text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    >
+                      {ALUMNI_GRAD_YEAR_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               ) : (
                 <div>
