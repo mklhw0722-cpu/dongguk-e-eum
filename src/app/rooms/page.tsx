@@ -77,6 +77,26 @@ export default function RoomsPage() {
   const [newPostTitle, setNewPostTitle] = useState("");
   const [newPostContent, setNewPostContent] = useState("");
 
+  // 게시물 삭제 확인 모달 상태 ("삭제하시겠습니까?")
+  const [deletingPostTarget, setDeletingPostTarget] = useState<{
+    id: string;
+    title: string;
+  } | null>(null);
+  const [isDeletingPost, setIsDeletingPost] = useState(false);
+
+  const handleConfirmDeletePost = async () => {
+    if (!deletingPostTarget || isDeletingPost) return;
+    try {
+      setIsDeletingPost(true);
+      await deleteCommunityPost(deletingPostTarget.id);
+      setDeletingPostTarget(null);
+    } catch (err) {
+      console.error("게시물 삭제 실패:", err);
+    } finally {
+      setIsDeletingPost(false);
+    }
+  };
+
   // 홈 대시보드 등에서 ?roomId=...&postId=... 로 진입 시 해당 게시판 및 게시글로 바로 이동
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -365,7 +385,12 @@ export default function RoomsPage() {
                       {canDelete && (
                         <button
                           type="button"
-                          onClick={() => deleteCommunityPost(post.id)}
+                          onClick={() =>
+                            setDeletingPostTarget({
+                              id: post.id,
+                              title: post.title,
+                            })
+                          }
                           title="게시글 삭제 (작성자 본인 또는 관리자)"
                           className="px-2 py-1 rounded-lg text-xs font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 inline-flex items-center gap-1 transition cursor-pointer"
                         >
@@ -565,6 +590,49 @@ export default function RoomsPage() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        )}
+
+        {/* 게시물 삭제 확인 모달 */}
+        {deletingPostTarget && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl border border-slate-200 max-w-sm w-full p-6 space-y-4 shadow-xl animate-in fade-in zoom-in-95">
+              <div className="w-12 h-12 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mx-auto">
+                <Trash2 className="w-6 h-6" />
+              </div>
+
+              <div className="text-center space-y-1">
+                <h3 className="text-lg font-black text-slate-900">
+                  삭제하시겠습니까?
+                </h3>
+                <p className="text-xs text-slate-500">
+                  게시물을 삭제하면 복구할 수 없습니다. 정말 삭제하시겠습니까?
+                </p>
+              </div>
+
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-100 text-xs text-slate-700 font-semibold text-center truncate">
+                {deletingPostTarget.title}
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setDeletingPostTarget(null)}
+                  disabled={isDeletingPost}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 font-bold text-xs text-slate-600 hover:bg-slate-50 transition cursor-pointer disabled:opacity-50"
+                >
+                  취소
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDeletePost}
+                  disabled={isDeletingPost}
+                  className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-raise transition cursor-pointer disabled:opacity-50"
+                >
+                  {isDeletingPost ? "삭제 중..." : "삭제"}
+                </button>
+              </div>
             </div>
           </div>
         )}
