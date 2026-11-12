@@ -129,19 +129,54 @@ export const PlatformRepository = {
         doubleMajor: mapDoubleMajor(a.doubleMajor) || a.doubleMajor,
       }));
 
-      const loadedUsers = (parsed.users || initial.users).map((u) => ({
-        ...u,
-        doubleMajor: mapDoubleMajor(u.doubleMajor),
-      }));
+      const loadedUsers = (parsed.users || initial.users)
+        .filter((u) => u.id !== "u-prof-1" && !u.name?.includes("백상아"))
+        .map((u) => ({
+          ...u,
+          doubleMajor: mapDoubleMajor(u.doubleMajor),
+          advisorProfessorId: u.advisorProfessorId === "u-prof-1" ? undefined : u.advisorProfessorId,
+        }));
 
-      return {
+      const loadedConsultations = (parsed.consultations || initial.consultations || []).filter(
+        (c) =>
+          c.id !== "c-req-1" &&
+          c.id !== "c-req-2" &&
+          c.professorId !== "u-prof-1" &&
+          !c.professorName?.includes("백상아")
+      );
+
+      const loadedConversations = (parsed.conversations || initial.conversations || [])
+        .filter((c) => c.id !== "conv-2" && !c.title?.includes("백상아"))
+        .map((c) => ({
+          ...c,
+          memberIds: (c.memberIds || []).filter((id) => id !== "u-prof-1"),
+          members: (c.members || []).filter((m) => m.userId !== "u-prof-1"),
+        }));
+
+      const loadedMessages = (parsed.messages || initial.messages || []).filter(
+        (m) => m.senderId !== "u-prof-1" && m.conversationId !== "conv-2"
+      );
+
+      const sanitizedState: PlatformDataState = {
         ...initial,
         ...parsed,
         users: loadedUsers,
+        consultations: loadedConsultations,
+        conversations: loadedConversations,
+        messages: loadedMessages,
         alumniProfiles: loadedAlumniProfiles,
         communityRooms: loadedRooms,
         communityPosts: loadedPosts,
       };
+
+      // localStorage에 남아있을 수 있는 백상아 교수 및 잔여 예시 상담 데이터 자동 즉시 동기화
+      try {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizedState));
+      } catch {
+        // ignore
+      }
+
+      return sanitizedState;
     } catch {
       return getInitialDataState();
     }

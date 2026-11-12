@@ -75,7 +75,7 @@ test("3. [지도교수 상태 판정] 지도교수 미배정 학생은 'unassign
   const professors = [
     {
       id: "prof-1",
-      name: "백상아 교수",
+      name: "신나민 교수",
       role: "professor",
       approvalStatus: "approved",
       specialty: "교육공학·HRD",
@@ -114,7 +114,7 @@ test("4. [지도교수 상태 판정] 승인된 교수가 정상 배정된 경�
   const professors = [
     {
       id: "prof-1",
-      name: "백상아 교수",
+      name: "신나민 교수",
       role: "professor",
       approvalStatus: "approved",
       specialty: "교육공학·HRD 연구실",
@@ -124,7 +124,7 @@ test("4. [지도교수 상태 판정] 승인된 교수가 정상 배정된 경�
   const result = resolveAdvisor(studentWithAdvisor, professors);
   assert.equal(result.status, "assigned");
   assert.ok(result.professor);
-  assert.equal(result.professor.name, "백상아 교수");
+  assert.equal(result.professor.name, "신나민 교수");
   assert.equal(result.professor.specialty, "교육공학·HRD 연구실");
 });
 
@@ -282,7 +282,7 @@ test("9. [상담 신청 데이터 생성 및 유효성 검증] 학생이 희망 
   const newReq = createConsultation(
     {
       professorId: "prof-1",
-      professorName: "백상아 교수",
+      professorName: "신나민 교수",
       type: "career",
       preferredDate: "2026-11-10",
       preferredTime: "14:00~15:00",
@@ -390,7 +390,7 @@ test("12. [실시간 1:1 대화 연결 연동] 승인된 상담에서 대화하�
       id: "conv-101",
       type: "direct",
       participants: ["student-1", "prof-1"],
-      participantNames: ["김학생", "백상아 교수"],
+      participantNames: ["김학생", "신나민 교수"],
     },
   ];
 
@@ -467,7 +467,7 @@ test("14. [메신저 통합 상담 신청 및 진행 방식(대면/채팅) 승�
     studentId: "student-1",
     studentName: "홍길동",
     professorId: "prof-1",
-    professorName: "백상아",
+    professorName: "신나민",
     consultationType: "진로 상담",
     preferredDate: "2026-11-05",
     preferredTime: "15:00",
@@ -640,10 +640,10 @@ test("16. [회원 삭제 기능 및 파이어베이스 연동 정합성 검증] 
 });
 
 test("17. [회원 삭제 시 상담 및 채팅방 데이터 연쇄 정리 및 유령 계정 방지 검증]", () => {
-  // 1. 초기 데이터 설정: 교수(prof-baek), 학생(stud-lee, stud-kim)
+  // 1. 초기 데이터 설정: 교수(prof-shin), 학생(stud-lee, stud-kim)
   let users = [
     { id: "admin-1", role: "admin", name: "관리자" },
-    { id: "prof-baek", role: "professor", name: "백상아" },
+    { id: "prof-shin", role: "professor", name: "신나민" },
     { id: "stud-lee", role: "student", name: "이혜원" },
     { id: "stud-kim", role: "student", name: "김학생" },
   ];
@@ -652,41 +652,41 @@ test("17. [회원 삭제 시 상담 및 채팅방 데이터 연쇄 정리 및 �
     {
       id: "c-1",
       studentId: "stud-lee",
-      professorId: "prof-baek",
-      professorName: "백상아",
+      professorId: "prof-shin",
+      professorName: "신나민",
       status: "accepted",
     },
     {
       id: "c-2",
       studentId: "stud-kim",
-      professorId: "prof-baek",
-      professorName: "백상아",
+      professorId: "prof-shin",
+      professorName: "신나민",
       status: "pending",
     },
   ];
 
   let chats = [
-    // 1:1 대화방 (이혜원 - 백상아 교수)
+    // 1:1 대화방 (이혜원 - 신나민 교수)
     {
       id: "chat-direct-1",
       isGroup: false,
-      title: "백상아 교수님",
-      participants: ["stud-lee", "prof-baek"],
+      title: "신나민 교수님",
+      participants: ["stud-lee", "prof-shin"],
     },
     // 단체 대화방 (스터디 모임: 4명 참여 중)
     {
       id: "chat-group-1",
       isGroup: true,
       title: "스터디 모임",
-      participants: ["stud-lee", "stud-kim", "prof-baek"],
+      participants: ["stud-lee", "stud-kim", "prof-shin"],
     },
   ];
 
-  // 2. 관리자가 백상아 교수(prof-baek) 삭제 수행
-  const targetUid = "prof-baek";
+  // 2. 관리자가 신나민 교수(prof-shin) 삭제 수행
+  const targetUid = "prof-shin";
   users = users.filter((u) => u.id !== targetUid);
 
-  // 연쇄 삭제: 상담 데이터에서 prof-baek 관련 상담 완전 제거
+  // 연쇄 삭제: 상담 데이터에서 prof-shin 관련 상담 완전 제거
   consultations = consultations.filter(
     (c) => c.studentId !== targetUid && c.professorId !== targetUid
   );
@@ -703,7 +703,7 @@ test("17. [회원 삭제 시 상담 및 채팅방 데이터 연쇄 정리 및 �
     }));
 
   // 3. 검증
-  // 1) 상담 목록에 백상아 교수 관련 상담이 0건이어야 함
+  // 1) 상담 목록에 신나민 교수 관련 상담이 0건이어야 함
   assert.equal(consultations.length, 0);
 
   // 2) 1:1 대화방(chat-direct-1)이 완전히 제거되어 대화방 목록에 남지 않음

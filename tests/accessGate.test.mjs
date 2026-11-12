@@ -196,8 +196,8 @@ test("12. [프로필 사진 이니셜 생성] 일반 회원은 성을 뺀 이름
 
   // 2. 교수진: 성을 제외한 이름
   assert.equal(getAvatarInitials("신나민", "professor"), "나민");
-  assert.equal(getAvatarInitials("백상아 교수", "professor"), "상아");
-  assert.equal(getAvatarInitials("백상아 교수(교육공학)", "professor"), "상아");
+  assert.equal(getAvatarInitials("신나민 교수", "professor"), "나민");
+  assert.equal(getAvatarInitials("신나민 교수(교육공학)", "professor"), "나민");
 
   // 3. 2글자 복성 및 외자 이름
   assert.equal(getAvatarInitials("남궁혜원", "student"), "혜원");

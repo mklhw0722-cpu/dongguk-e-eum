@@ -192,8 +192,13 @@ export default function EditableCalendar({
           try {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) {
-              // 예시 데이터 필터링 제거
-              const clean = parsed.filter((item: CalendarEvent) => !isSampleCalendarEvent(item));
+              // 예시 데이터 필터링 제거 및 백상아 교수 잔여 일정 완전 정제
+              const clean = parsed.filter((item: CalendarEvent) => {
+                if (isSampleCalendarEvent(item)) return false;
+                if (item.id?.includes("c-req-1") || item.id?.includes("c-req-2")) return false;
+                if (item.title?.includes("백상아") || item.memo?.includes("백상아")) return false;
+                return true;
+              });
               if (clean.length !== parsed.length) {
                 localStorage.setItem(key, JSON.stringify(clean));
               }
@@ -287,9 +292,23 @@ export default function EditableCalendar({
   // 전체 이벤트 통합 (사용자가 직접 등록한 일정 + 승인된 대면 상담 일정 자동 연동)
   const allEvents = useMemo(() => {
     const existingIds = new Set(userEvents.map((ev) => ev.id));
+    const myId = currentUser?.id;
     const isProf = currentUser?.role === "professor" || currentRole === "professor";
     const consultEvents: CalendarEvent[] = (consultations || [])
-      .filter((c) => c.status === "accepted" && c.consultationMethod !== "채팅" && Boolean(c.preferredDate))
+      .filter((c) => {
+        if (c.status !== "accepted" || c.consultationMethod === "채팅" || !c.preferredDate) return false;
+        if (
+          c.id === "c-req-1" ||
+          c.id === "c-req-2" ||
+          c.professorId === "u-prof-1" ||
+          c.professorName?.includes("백상아")
+        ) {
+          return false;
+        }
+        // 상담 당사자(교수 본인 또는 신청 학생 본인)의 캘린더에만 노출 (관리자 등 제3자 캘린더에는 미노출)
+        if (!myId) return false;
+        return c.professorId === myId || c.studentId === myId;
+      })
       .map((c) => ({
         id: `consult-cal-${c.id}`,
         userId: currentUser?.id,
@@ -305,7 +324,9 @@ export default function EditableCalendar({
       }))
       .filter((ev) => !existingIds.has(ev.id));
 
-    return [...userEvents, ...consultEvents];
+    return [...userEvents, ...consultEvents].filter(
+      (ev) => !ev.title?.includes("백상아") && !ev.memo?.includes("백상아")
+    );
   }, [userEvents, consultations, currentUser?.id, currentUser?.role, currentRole]);
 
   // 날짜별 이벤트 매핑 (빠른 조회를 위해)

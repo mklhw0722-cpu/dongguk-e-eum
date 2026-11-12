@@ -387,7 +387,7 @@ const AppContext = createContext<AppContextValue | null>(null);
 const ROLE_DEFAULT_USER_ID: Record<UserRole, string> = {
   student: "u-student-1",
   alumni: "u-alumni-1",
-  professor: "u-prof-1",
+  professor: "",
   admin: "u-admin-1",
 };
 
