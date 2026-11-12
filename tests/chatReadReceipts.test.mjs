@@ -15,6 +15,9 @@ import {
   compareChatRoomsByLatestMessage,
   sortConversationsByLatestMessage,
   parseTimeStringToMs,
+  extractEntranceHakbun,
+  compareGroupChatMembers,
+  sortChatUsersForGroupCreation,
 } from "../src/lib/chatReadReceipts.ts";
 
 test("1. [1:1 채팅] 사용자 A가 B에게 메시지를 보내면 A 화면에 '1'이 표시되고, A 본인의 안 읽은 메시지 수는 0이다", () => {
@@ -617,4 +620,122 @@ test("20. [Firestore 보안 규칙 및 트랜잭션 동시성 검증] 대화방 
     /match \/chats\/\{chatId\}[\s\S]*?allow update:\s*if isApprovedUser\(\)\s*&&/
   );
 });
+
+test("21. [학번 추출 - extractEntranceHakbun] 2자리 학번, 4자리 입학연도, '2026학년도(22학번)', '99학번 이전', 10자리 학번을 정확하게 입학 학번 4자리 숫자로 파싱한다", () => {
+  // '24학번' -> 2024
+  assert.equal(extractEntranceHakbun({ studentIdOrYear: "24학번" }), 2024);
+  // '2022' -> 2022
+  assert.equal(extractEntranceHakbun({ studentIdOrYear: "2022" }), 2022);
+  // '2026학년도(22학번)' -> 졸업연도가 아닌 괄호 안 입학학번(22학번) 2022 우선 추출
+  assert.equal(extractEntranceHakbun({ studentIdOrYear: "2026학년도(22학번)" }), 2022);
+  // '99학번 이전' -> 1999
+  assert.equal(extractEntranceHakbun({ studentIdOrYear: "99학번 이전" }), 1999);
+  // 10자리 학번 '2023112345' -> 2023
+  assert.equal(extractEntranceHakbun({ studentIdOrYear: "2023112345" }), 2023);
+  // null / 빈 값 / 비정형 -> null
+  assert.equal(extractEntranceHakbun({ studentIdOrYear: "" }), null);
+  assert.equal(extractEntranceHakbun(null), null);
+  assert.equal(extractEntranceHakbun({ studentIdOrYear: "미정" }), null);
+});
+
+test("22. [재학생 정렬] 입학 학번 작은 순서(20 -> 21 -> 22...)로 정렬되고, 동일 학번은 한국어 이름 가나다순으로 정렬되며, 학번 미기재자는 맨 뒤에 위치한다", () => {
+  const users = [
+    { id: "u1", name: "홍길동", role: "student", studentIdOrYear: "24학번" },
+    { id: "u2", name: "강감찬", role: "student", studentIdOrYear: "21학번" },
+    { id: "u3", name: "김유신", role: "student", studentIdOrYear: "21학번" },
+    { id: "u4", name: "이순신", role: "student", studentIdOrYear: "20학번" },
+    { id: "u5", name: "나미정", role: "student", studentIdOrYear: "" },
+    { id: "u6", name: "안중근", role: "student", studentIdOrYear: "26학번" },
+  ];
+
+  const sorted = sortChatUsersForGroupCreation(users, "student");
+  // 20학번: 이순신 (u4)
+  // 21학번: 강감찬 (u2) -> 김유신 (u3)
+  // 24학번: 홍길동 (u1)
+  // 26학번: 안중근 (u6)
+  // 학번미기재: 나미정 (u5)
+  assert.deepEqual(
+    sorted.map((u) => u.id),
+    ["u4", "u2", "u3", "u1", "u6", "u5"]
+  );
+});
+
+test("23. [졸업생 정렬] 졸업 연도가 아닌 입학 학번 기준으로 작은 순서대로 정렬되며 동일 학번은 이름 가나다순, 미기재자는 맨 뒤로 정렬된다", () => {
+  const users = [
+    { id: "a1", name: "최선배", role: "alumni", studentIdOrYear: "2026학년도(22학번)" }, // 입학: 2022
+    { id: "a2", name: "강선배", role: "alumni", studentIdOrYear: "2024학년도(18학번)" }, // 입학: 2018
+    { id: "a3", name: "김선배", role: "alumni", studentIdOrYear: "2024학년도(18학번)" }, // 입학: 2018
+    { id: "a4", name: "고선배", role: "alumni", studentIdOrYear: "99학번 이전" },        // 입학: 1999
+    { id: "a5", name: "박선배", role: "alumni", studentIdOrYear: "20학번" },             // 입학: 2020
+    { id: "a6", name: "무학번", role: "alumni", studentIdOrYear: "" },                   // 입학: 미기재
+  ];
+
+  const sorted = sortChatUsersForGroupCreation(users, "alumni");
+  // 1999: 고선배 (a4)
+  // 2018: 강선배 (a2) -> 김선배 (a3) (동일학번 가나다순)
+  // 2020: 박선배 (a5)
+  // 2022: 최선배 (a1)
+  // 미기재: 무학번 (a6)
+  assert.deepEqual(
+    sorted.map((u) => u.id),
+    ["a4", "a2", "a3", "a5", "a1", "a6"]
+  );
+});
+
+test("24. [교수진 정렬] 학번 기준이 적용되지 않고 교수 이름의 한국어 가나다순(ko-KR)으로만 정렬된다", () => {
+  const professors = [
+    { id: "p1", name: "황교수", role: "professor", studentIdOrYear: "95학번" },
+    { id: "p2", name: "강교수", role: "professor", studentIdOrYear: "00학번" },
+    { id: "p3", name: "김교수", role: "professor", studentIdOrYear: "" },
+    { id: "p4", name: "남궁교수", role: "professor", studentIdOrYear: "88학번" },
+  ];
+
+  const sorted = sortChatUsersForGroupCreation(professors, "professor");
+  // 가나다순: 강교수 -> 김교수 -> 남궁교수 -> 황교수
+  assert.deepEqual(
+    sorted.map((u) => u.id),
+    ["p2", "p3", "p4", "p1"]
+  );
+});
+
+test("25. [동일 학번·이름 안정적 정렬] 학번과 이름이 완전히 같아도 사용자 ID(id)를 기준으로 일관된 순서를 보장한다", () => {
+  const users = [
+    { id: "user-b", name: "이동국", role: "student", studentIdOrYear: "23학번" },
+    { id: "user-a", name: "이동국", role: "student", studentIdOrYear: "23학번" },
+  ];
+
+  const sorted = sortChatUsersForGroupCreation(users, "student");
+  assert.deepEqual(
+    sorted.map((u) => u.id),
+    ["user-a", "user-b"]
+  );
+});
+
+test("26. [단체 채팅방 UI 소스코드 구조 검증] 탭(재학생/졸업생/교수진), 카운트, 검색, 빈 목록 안내, 탭 이동 시 선택 상태 유지가 구현되어 있다", () => {
+  const chatSrc = fs.readFileSync(new URL("../src/app/chat/page.tsx", import.meta.url), "utf8");
+
+  // 1) 3개 카테고리 탭 (재학생, 졸업생, 교수진)
+  assert.match(chatSrc, /key:\s*"student"[\s\S]*?label:\s*"재학생"/);
+  assert.match(chatSrc, /key:\s*"alumni"[\s\S]*?label:\s*"졸업생"/);
+  assert.match(chatSrc, /key:\s*"professor"[\s\S]*?label:\s*"교수진"/);
+
+  // 2) 탭에 인원 수 표시
+  assert.match(chatSrc, /groupStudentsList\.length/);
+  assert.match(chatSrc, /groupAlumniList\.length/);
+  assert.match(chatSrc, /groupProfessorList\.length/);
+
+  // 3) 카테고리별 정렬 적용 (sortChatUsersForGroupCreation)
+  assert.match(chatSrc, /sortChatUsersForGroupCreation\(list,\s*groupCategoryTab\)/);
+
+  // 4) 검색어 입력 창 및 검색 결과 필터링
+  assert.match(chatSrc, /groupUserSearchQuery/);
+  assert.match(chatSrc, /이름, 학번/);
+
+  // 5) 빈 목록 시 안내 문구
+  assert.match(chatSrc, /해당하는 회원이 없습니다/);
+
+  // 6) 탭 전환 시 선택 유지 (selectedUserIds 상태가 groupCategoryTab과 독립적으로 전역 유지)
+  assert.match(chatSrc, /selectedUserIds\.includes\(u\.id\)/);
+});
+
 

@@ -38,6 +38,9 @@ import {
   effectiveReadSeq,
   ReadStateRoom,
   sortConversationsByLatestMessage,
+  GroupChatCategoryTab,
+  sortChatUsersForGroupCreation,
+  formatChatMemberHakbun,
 } from "@/lib/chatReadReceipts";
 import {
   UserRole,
@@ -144,30 +147,6 @@ function formatUserChatProfileSubtitle(u: {
   return u.bio || `${name}님의 프로필입니다.`;
 }
 
-/**
- * 채팅방 참여 구성원 카드용 학번 포맷터
- * - 관리자/교수: 복전 및 학번 일체 미표시 (빈 문자열)
- * - 재학생/졸업생: '00학번'만 깔끔하게 표시
- */
-function formatChatMemberHakbun(u: {
-  role?: string;
-  studentIdOrYear?: string;
-  bio?: string;
-}): string {
-  if (u.role === "admin" || u.role === "professor") {
-    return "";
-  }
-  const raw = `${u.studentIdOrYear || ""} ${u.bio || ""}`.trim();
-  const matchHakbun = raw.match(/(\d{2})\s*학번/);
-  if (matchHakbun) return `${matchHakbun[1]}학번`;
-  const matchYear = raw.match(/20(\d{2})/);
-  if (matchYear) return `${matchYear[1]}학번`;
-  const matchOldYear = raw.match(/19(\d{2})/);
-  if (matchOldYear) return `${matchOldYear[1]}학번`;
-  const matchNum = raw.match(/^\d{2}/);
-  if (matchNum) return `${matchNum[0]}학번`;
-  return "";
-}
 
 export default function ChatPage() {
   const {
@@ -221,6 +200,9 @@ export default function ChatPage() {
   );
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [groupCategoryTab, setGroupCategoryTab] =
+    useState<GroupChatCategoryTab>("student");
+  const [groupUserSearchQuery, setGroupUserSearchQuery] = useState("");
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [inviteSelectedIds, setInviteSelectedIds] = useState<string[]>([]);
   const [groupTitle, setGroupTitle] = useState("");
@@ -512,6 +494,51 @@ export default function ChatPage() {
       (u.careerTrack && u.careerTrack.toLowerCase().includes(q))
     );
   });
+
+  // 단체 채팅방 개설용 후보 회원 (본인 제외)
+  const groupCandidates = useMemo(() => {
+    return availableUsers.filter((u) => u.id !== currentUser.id);
+  }, [availableUsers, currentUser.id]);
+
+  const groupStudentsList = useMemo(() => {
+    return groupCandidates.filter((u) => u.role === "student");
+  }, [groupCandidates]);
+
+  const groupAlumniList = useMemo(() => {
+    return groupCandidates.filter((u) => u.role === "alumni");
+  }, [groupCandidates]);
+
+  const groupProfessorList = useMemo(() => {
+    return groupCandidates.filter((u) => u.role === "professor");
+  }, [groupCandidates]);
+
+  // 단체 채팅방 모달에서 현재 선택된 탭의 검색 및 정렬 결과
+  const currentTabGroupUsers = useMemo(() => {
+    let list: (PublicChatUser | User)[] = [];
+    if (groupCategoryTab === "student") list = groupStudentsList;
+    else if (groupCategoryTab === "alumni") list = groupAlumniList;
+    else if (groupCategoryTab === "professor") list = groupProfessorList;
+
+    const q = groupUserSearchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((u) => {
+        const name = (u.name || "").toLowerCase();
+        const subtitle = formatUserChatProfileSubtitle(u).toLowerCase();
+        const hakbun = (u.studentIdOrYear || "").toLowerCase();
+        const track = (u.careerTrack || "").toLowerCase();
+        const major = (u.doubleMajor || "").toLowerCase();
+        return (
+          name.includes(q) ||
+          subtitle.includes(q) ||
+          hakbun.includes(q) ||
+          track.includes(q) ||
+          major.includes(q)
+        );
+      });
+    }
+
+    return sortChatUsersForGroupCreation(list, groupCategoryTab);
+  }, [groupCategoryTab, groupStudentsList, groupAlumniList, groupProfessorList, groupUserSearchQuery]);
 
   // 1:1 대화 요청 실행
   const handleStartDirect = async (targetUserId: string) => {
@@ -890,8 +917,10 @@ export default function ChatPage() {
             type="button"
             onClick={() => {
               setUserSearchQuery("");
+              setGroupUserSearchQuery("");
               setSelectedUserIds([]);
               setGroupTitle("");
+              setGroupCategoryTab("student");
               setModalMode("group");
               refreshApprovedMembers();
             }}
@@ -1665,11 +1694,96 @@ export default function ChatPage() {
                 </select>
               </div>
 
-              <div>
-                <label className="block font-bold mb-1">
-                  초대할 구성원 선택 ({selectedUserIds.length}명 선택됨)
-                </label>
-                <div className="max-h-52 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block font-bold">
+                    초대할 구성원 선택 ({selectedUserIds.length}명 선택됨)
+                  </label>
+                  {selectedUserIds.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedUserIds([])}
+                      className="text-[11px] font-semibold text-slate-400 hover:text-rose-600 transition cursor-pointer"
+                    >
+                      전체 선택 해제
+                    </button>
+                  )}
+                </div>
+
+                {/* 회원 검색창 */}
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={groupUserSearchQuery}
+                    onChange={(e) => setGroupUserSearchQuery(e.target.value)}
+                    placeholder="이름, 학번, 전공, 진로 분야 검색..."
+                    className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                  />
+                  {groupUserSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setGroupUserSearchQuery("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-slate-200 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* 3대 카테고리 탭: 재학생, 졸업생, 교수진 */}
+                <div className="flex gap-1.5 p-1 bg-slate-100 rounded-xl">
+                  {[
+                    { key: "student" as const, label: "재학생", count: groupStudentsList.length },
+                    { key: "alumni" as const, label: "졸업생", count: groupAlumniList.length },
+                    { key: "professor" as const, label: "교수진", count: groupProfessorList.length },
+                  ].map((tab) => {
+                    const isActive = groupCategoryTab === tab.key;
+                    const tabUserIds = (
+                      tab.key === "student"
+                        ? groupStudentsList
+                        : tab.key === "alumni"
+                        ? groupAlumniList
+                        : groupProfessorList
+                    ).map((u) => u.id);
+                    const selectedInTabCount = selectedUserIds.filter((id) =>
+                      tabUserIds.includes(id)
+                    ).length;
+
+                    return (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => setGroupCategoryTab(tab.key)}
+                        className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                          isActive
+                            ? "bg-white text-orange-600 shadow-xs"
+                            : "text-slate-600 hover:text-slate-900"
+                        }`}
+                      >
+                        <span>{tab.label}</span>
+                        <span
+                          className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                            isActive
+                              ? "bg-orange-100 text-orange-700"
+                              : "bg-slate-200 text-slate-600"
+                          }`}
+                        >
+                          {tab.count}
+                        </span>
+                        {selectedInTabCount > 0 && (
+                          <span
+                            className="w-1.5 h-1.5 rounded-full bg-orange-600"
+                            title={`${selectedInTabCount}명 선택됨`}
+                          />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* 회원 선택 목록 (카테고리별 정렬 적용) */}
+                <div className="max-h-56 overflow-y-auto divide-y divide-slate-100 border border-slate-200 rounded-2xl bg-white">
                   {approvedMembersError ? (
                     <div className="p-4 text-center text-xs text-rose-500">
                       회원 목록 조회 오류: {approvedMembersError}
@@ -1678,55 +1792,64 @@ export default function ChatPage() {
                     <div className="p-6 text-center text-xs text-slate-500">
                       승인 회원 목록을 불러오는 중...
                     </div>
-                  ) : availableUsers.filter((u) => u.id !== currentUser.id).length === 0 ? (
-                    <div className="p-6 text-center text-xs text-slate-400 space-y-1.5">
-                      <p className="font-semibold text-slate-600">초대 가능한 다른 승인 회원이 아직 없습니다.</p>
-                      <p className="text-[11px] text-slate-500">본인 계정을 제외한 다른 정회원이 승인되면 선택할 수 있습니다.</p>
-                      <button
-                        type="button"
-                        onClick={() => refreshApprovedMembers()}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 text-[11px] text-slate-700 hover:bg-slate-200 font-semibold"
-                      >
-                        <RefreshCw className="w-3 h-3" /> 다시 조회
-                      </button>
+                  ) : currentTabGroupUsers.length === 0 ? (
+                    <div className="p-8 text-center text-xs text-slate-400 space-y-1">
+                      <Users className="w-6 h-6 mx-auto text-slate-300 mb-1" />
+                      <p className="font-semibold text-slate-600">해당하는 회원이 없습니다.</p>
+                      {groupUserSearchQuery.trim() && (
+                        <p className="text-[11px] text-slate-400">검색 조건에 맞는 회원이 없습니다.</p>
+                      )}
                     </div>
                   ) : (
-                    availableUsers
-                      .filter((u) => u.id !== currentUser.id)
-                      .map((u) => {
-                        const checked = selectedUserIds.includes(u.id);
-                        return (
-                          <button
-                            key={u.id}
-                            type="button"
-                            onClick={() => toggleSelectGroupUser(u.id)}
-                            className={`w-full text-left p-3 flex items-center justify-between transition ${
+                    currentTabGroupUsers.map((u) => {
+                      const checked = selectedUserIds.includes(u.id);
+                      const hakbunLabel = formatChatMemberHakbun(u);
+                      return (
+                        <button
+                          key={u.id}
+                          type="button"
+                          onClick={() => toggleSelectGroupUser(u.id)}
+                          className={`w-full text-left p-3 flex items-center justify-between transition cursor-pointer ${
+                            checked
+                              ? "bg-orange-50/70"
+                              : "hover:bg-slate-50"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 flex items-center justify-center font-bold text-xs shrink-0 border border-slate-200">
+                              {u.avatarInitials || getAvatarInitials(u.name, u.role)}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-bold text-slate-900 text-xs sm:text-sm">
+                                  {u.name}
+                                </span>
+                                {hakbunLabel && (
+                                  <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-bold">
+                                    {hakbunLabel}
+                                  </span>
+                                )}
+                                <span className="text-[11px] text-slate-400">
+                                  {ROLE_LABELS[u.role] || "구성원"}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 truncate max-w-[260px]">
+                                {u.careerTrack || u.doubleMajor || u.specialty || formatUserChatProfileSubtitle(u)}
+                              </p>
+                            </div>
+                          </div>
+                          <div
+                            className={`w-5 h-5 rounded-md flex items-center justify-center border shrink-0 transition ${
                               checked
-                                ? "bg-orange-50 "
-                                : "hover:bg-slate-50"
+                                ? "bg-orange-600 border-orange-600 text-white"
+                                : "border-slate-300 bg-white"
                             }`}
                           >
-                            <div>
-                              <span className="font-bold text-slate-900">
-                                {u.name}
-                              </span>{" "}
-                              <span className="text-xs text-slate-500">
-                                ({ROLE_LABELS[u.role] || "구성원"}
-                                {u.careerTrack ? ` · ${u.careerTrack}` : ""})
-                              </span>
-                            </div>
-                            <div
-                              className={`w-5 h-5 rounded-md flex items-center justify-center border ${
-                                checked
-                                  ? "bg-orange-600 border-orange-600 text-white"
-                                  : "border-slate-300 "
-                              }`}
-                            >
-                              {checked && <Check className="w-3.5 h-3.5" />}
-                            </div>
-                          </button>
-                        );
-                      })
+                            {checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                          </div>
+                        </button>
+                      );
+                    })
                   )}
                 </div>
               </div>
