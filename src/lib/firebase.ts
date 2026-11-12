@@ -21,7 +21,11 @@ import {
   serverTimestamp,
   runTransaction,
 } from "firebase/firestore";
-import { compareBySeq } from "@/lib/chatReadReceipts";
+import {
+  compareBySeq,
+  compareChatRoomsByLatestMessage,
+  sortConversationsByLatestMessage,
+} from "@/lib/chatReadReceipts";
 import {
   getAuth,
   Auth,
@@ -1389,6 +1393,12 @@ export interface FirestoreChatRoom {
   participantDetails?: Record<string, FirestoreChatParticipantInfo>;
   lastMessageText: string;
   lastMessageAt: string;
+  /** 마지막 메시지 전송 시각 밀리초 (최신 메시지순 정렬용) */
+  lastMessageTimestamp?: number;
+  /** 마지막 메시지 전송 시각 ISO 8601 문자열 */
+  lastMessageIso?: string;
+  /** 대화방 생성 시각 밀리초 */
+  createdAtTimestamp?: number;
   lastSenderId?: string;
   createdBy: string;
   createdAt: string;
@@ -1704,11 +1714,7 @@ export function subscribeToUserChats(
         list.push({ id: d.id, ...(d.data() as any) });
       });
 
-      list.sort((a, b) => {
-        const timeA = a.lastMessageAt || a.createdAt || "";
-        const timeB = b.lastMessageAt || b.createdAt || "";
-        return timeB.localeCompare(timeA);
-      });
+      list.sort(compareChatRoomsByLatestMessage);
 
       onUpdate(list);
     },
@@ -1796,11 +1802,13 @@ export async function getOrCreateDirectChatInFirestore(
     console.info("기존 대화방 문서 없음 또는 조회 권한 예외(신규 대화방 개설 진행):", readErr);
   }
 
-  const nowTime = new Date().toLocaleTimeString("ko-KR", {
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const nowTime = new Date(nowMs).toLocaleTimeString("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
   });
-  const nowDate = new Date().toISOString().slice(0, 10);
+  const nowDate = nowIso.slice(0, 10);
 
   const newChat: FirestoreChatRoom = {
     id: chatId,
@@ -1830,6 +1838,9 @@ export async function getOrCreateDirectChatInFirestore(
     },
     lastMessageText: "대화가 시작되었습니다. 첫 인사를 건네보세요!",
     lastMessageAt: nowTime,
+    lastMessageTimestamp: nowMs,
+    lastMessageIso: nowIso,
+    createdAtTimestamp: nowMs,
     lastSenderId: currentUser.id,
     createdBy: currentUser.id,
     createdAt: nowDate,
@@ -1908,11 +1919,13 @@ export async function createGroupChatInFirestore(
     participantDetails[u.uid] = u;
   });
 
-  const nowTime = new Date().toLocaleTimeString("ko-KR", {
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const nowTime = new Date(nowMs).toLocaleTimeString("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
   });
-  const nowDate = new Date().toISOString().slice(0, 10);
+  const nowDate = nowIso.slice(0, 10);
 
   const initialCursorMap: Record<string, number> = {};
   participants.forEach((uid) => {
@@ -1928,6 +1941,9 @@ export async function createGroupChatInFirestore(
     participantDetails,
     lastMessageText: `${currentUser.name}님이 방을 개설했습니다.`,
     lastMessageAt: nowTime,
+    lastMessageTimestamp: nowMs,
+    lastMessageIso: nowIso,
+    createdAtTimestamp: nowMs,
     lastSenderId: currentUser.id,
     createdBy: currentUser.id,
     createdAt: nowDate,
@@ -1974,7 +1990,9 @@ export async function sendChatMessageInFirestore(
   const trimmed = content.trim();
   if (!trimmed) return;
 
-  const nowTime = new Date().toLocaleTimeString("ko-KR", {
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const nowTime = new Date(nowMs).toLocaleTimeString("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -1994,6 +2012,13 @@ export async function sendChatMessageInFirestore(
         : 0;
     const nextSeq = prevSeq + 1;
 
+    // 동시 전송이나 기기 시계 오차로 인한 타임스탬프 역행 방지 (단조 증가 보장)
+    const prevTs =
+      typeof chatData.lastMessageTimestamp === "number" && Number.isFinite(chatData.lastMessageTimestamp)
+        ? chatData.lastMessageTimestamp
+        : 0;
+    const effectiveTimestamp = Math.max(nowMs, prevTs + 1);
+
     tx.set(msgRef, {
       id: msgRef.id,
       chatId,
@@ -2012,6 +2037,8 @@ export async function sendChatMessageInFirestore(
       [`readSeq.${currentUser.id}`]: nextSeq,
       lastMessageText: trimmed,
       lastMessageAt: nowTime,
+      lastMessageTimestamp: effectiveTimestamp,
+      lastMessageIso: nowIso,
       lastSenderId: currentUser.id,
     });
   });

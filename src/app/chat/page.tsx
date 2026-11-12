@@ -37,6 +37,7 @@ import {
   computeMarkReadTarget,
   effectiveReadSeq,
   ReadStateRoom,
+  sortConversationsByLatestMessage,
 } from "@/lib/chatReadReceipts";
 import {
   UserRole,
@@ -475,25 +476,27 @@ export default function ChatPage() {
     }
   };
 
-  const filteredConversations = conversations
-    .filter((c) => {
-      // 1:1 대화방의 경우 상대방이 이미 탈퇴/삭제된 회원이면 대화 목록에서 제외
-      if (!c.isGroup) {
-        const otherId = c.memberIds.find((id) => id !== currentUser.id);
-        if (!otherId || !availableUsers.some((u) => u.id === otherId)) {
-          return false;
+  const filteredConversations = sortConversationsByLatestMessage(
+    conversations
+      .filter((c) => {
+        // 1:1 대화방의 경우 상대방이 이미 탈퇴/삭제된 회원이면 대화 목록에서 제외
+        if (!c.isGroup) {
+          const otherId = c.memberIds.find((id) => id !== currentUser.id);
+          if (!otherId || !availableUsers.some((u) => u.id === otherId)) {
+            return false;
+          }
         }
-      }
-      return true;
-    })
-    .filter((c) => {
-      const q = convSearch.trim().toLowerCase();
-      if (!q) return true;
-      return (
-        c.title.toLowerCase().includes(q) ||
-        c.lastMessageText.toLowerCase().includes(q)
-      );
-    });
+        return true;
+      })
+      .filter((c) => {
+        const q = convSearch.trim().toLowerCase();
+        if (!q) return true;
+        return (
+          c.title.toLowerCase().includes(q) ||
+          c.lastMessageText.toLowerCase().includes(q)
+        );
+      })
+  );
 
   // 대화 상대 검색용 사용자 목록 (본인 제외, 개인정보 보호: 학번/이메일 검색 제외, 이름 및 역할/전공/진로만 검색)
   const searchableUsers = availableUsers.filter((u) => {

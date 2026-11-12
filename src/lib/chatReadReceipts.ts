@@ -126,3 +126,173 @@ export function formatChatMemberHakbun(u: {
   if (matchNum) return `${matchNum[0]}학번`;
   return "";
 }
+
+/** 정렬 대상 대화방의 타임스탬프 필드 인터페이스 */
+export interface SortableChatRoom {
+  id?: string;
+  title?: string;
+  lastMessageTimestamp?: number | null;
+  lastMessageIso?: string | null;
+  lastMessageAt?: string | null;
+  createdAtTimestamp?: number | null;
+  createdAt?: string | null;
+}
+
+/**
+ * 한국어 또는 표준 시간 문자열("오후 11:03", "오전 09:15", "14:30")을 기준 날짜와 결합하여 밀리초로 변환합니다.
+ */
+export function parseTimeStringToMs(timeStr: string, baseDateStr?: string | null): number | null {
+  if (!timeStr || typeof timeStr !== "string") return null;
+  const trimmed = timeStr.trim();
+  if (!trimmed) return null;
+
+  // 1) 전체 날짜+시간 형태(ISO 8601 등)로 바로 파싱 가능한 경우
+  const directParse = Date.parse(trimmed);
+  if (!Number.isNaN(directParse) && directParse > 100000000000) {
+    return directParse;
+  }
+
+  // 2) "오전/오후 HH:MM" 또는 "AM/PM HH:MM" 또는 "HH:MM" 정규식 매칭
+  const match = trimmed.match(/(오전|오후|AM|PM|am|pm)?\s*(\d{1,2})[:시\s]+(\d{1,2})/);
+  if (!match) return null;
+
+  const meridian = (match[1] || "").toLowerCase();
+  let hours = parseInt(match[2], 10);
+  const minutes = parseInt(match[3], 10);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) return null;
+
+  if (meridian === "오후" || meridian === "pm") {
+    if (hours < 12) hours += 12;
+  } else if (meridian === "오전" || meridian === "am") {
+    if (hours === 12) hours = 0;
+  }
+
+  // 기준 날짜 결합: createdAt(예: "2026-11-12")이 있으면 해당 날짜에 시간을 결합
+  let year = 1970;
+  let month = 0;
+  let date = 1;
+
+  if (baseDateStr && typeof baseDateStr === "string") {
+    const bMatch = baseDateStr.match(/(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+    if (bMatch) {
+      year = parseInt(bMatch[1], 10);
+      month = parseInt(bMatch[2], 10) - 1;
+      date = parseInt(bMatch[3], 10);
+    } else {
+      const bParsed = Date.parse(baseDateStr.trim());
+      if (!Number.isNaN(bParsed) && bParsed > 0) {
+        const dObj = new Date(bParsed);
+        year = dObj.getFullYear();
+        month = dObj.getMonth();
+        date = dObj.getDate();
+      }
+    }
+  }
+
+  // 기준 날짜가 없거나 유효하지 않으면 2026년을 기본 기준년으로 설정(동국e음 기준)
+  if (year === 1970) {
+    const today = new Date();
+    year = today.getFullYear();
+    month = today.getMonth();
+    date = today.getDate();
+  }
+
+  return new Date(year, month, date, hours, minutes, 0, 0).getTime();
+}
+
+/**
+ * 대화방 객체에서 최신 메시지 정렬을 위한 단일 정규 밀리초(Epoch ms)를 안전하게 산출합니다.
+ *
+ * 우선순위:
+ * 1. lastMessageTimestamp (숫자 밀리초 - 정밀도 최고)
+ * 2. lastMessageIso (ISO 문자열 파싱)
+ * 3. lastMessageAt (한국어 시간 문자열 파싱 + createdAt 결합)
+ * 4. createdAtTimestamp (방 생성 시각 밀리초)
+ * 5. createdAt (방 생성 날짜 파싱)
+ * 6. ID 내 포함된 타임스탬프 (group_176295... 등)
+ * 7. 0 (필드가 아예 없는 레거시 방도 누락 없이 맨 아래에 안전하게 유지)
+ */
+export function resolveChatSortTimestamp(room: SortableChatRoom | null | undefined): number {
+  if (!room) return 0;
+
+  // 1. lastMessageTimestamp
+  if (
+    typeof room.lastMessageTimestamp === "number" &&
+    Number.isFinite(room.lastMessageTimestamp) &&
+    room.lastMessageTimestamp > 0
+  ) {
+    return Math.floor(room.lastMessageTimestamp);
+  }
+
+  // 2. lastMessageIso
+  if (typeof room.lastMessageIso === "string" && room.lastMessageIso.trim()) {
+    const isoMs = Date.parse(room.lastMessageIso.trim());
+    if (!Number.isNaN(isoMs) && isoMs > 0) {
+      return isoMs;
+    }
+  }
+
+  // 3. lastMessageAt
+  if (typeof room.lastMessageAt === "string" && room.lastMessageAt.trim()) {
+    const parsedMs = parseTimeStringToMs(room.lastMessageAt, room.createdAt);
+    if (parsedMs !== null && parsedMs > 0) {
+      return parsedMs;
+    }
+  }
+
+  // 4. createdAtTimestamp
+  if (
+    typeof room.createdAtTimestamp === "number" &&
+    Number.isFinite(room.createdAtTimestamp) &&
+    room.createdAtTimestamp > 0
+  ) {
+    return Math.floor(room.createdAtTimestamp);
+  }
+
+  // 5. createdAt
+  if (typeof room.createdAt === "string" && room.createdAt.trim()) {
+    const createdMs = Date.parse(room.createdAt.trim());
+    if (!Number.isNaN(createdMs) && createdMs > 0) {
+      return createdMs;
+    }
+  }
+
+  // 6. ID 내에 포함된 타임스탬프 (예: group_1762955000000_abc)
+  if (typeof room.id === "string") {
+    const matchId = room.id.match(/_(\d{10,13})_/);
+    if (matchId) {
+      const idMs = parseInt(matchId[1], 10);
+      if (!Number.isNaN(idMs) && idMs > 0) {
+        return idMs;
+      }
+    }
+  }
+
+  return 0;
+}
+
+/**
+ * 두 대화방을 최신 메시지 시각 기준으로 내림차순(최신이 앞) 비교합니다.
+ * - 시각이 동일한 경우 id를 기준으로 안정적인 정렬(stable sort)을 보장합니다.
+ */
+export function compareChatRoomsByLatestMessage(
+  a: SortableChatRoom,
+  b: SortableChatRoom
+): number {
+  const tsA = resolveChatSortTimestamp(a);
+  const tsB = resolveChatSortTimestamp(b);
+  if (tsB !== tsA) {
+    return tsB - tsA;
+  }
+  return (b.id || "").localeCompare(a.id || "");
+}
+
+/**
+ * 대화방 목록을 최신 메시지 시각 기준으로 내림차순 정렬하여 새 배열로 반환합니다.
+ */
+export function sortConversationsByLatestMessage<T extends SortableChatRoom>(
+  rooms: T[]
+): T[] {
+  if (!Array.isArray(rooms)) return [];
+  return [...rooms].sort(compareChatRoomsByLatestMessage);
+}
