@@ -1261,14 +1261,23 @@ export default function ChatPage() {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleLeaveCurrentChat}
+                    className="px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 inline-flex items-center gap-1 transition cursor-pointer"
+                    title="대화방 나가기"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>방 나가기</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => setShowMemberPanel((prev) => !prev)}
-                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 inline-flex items-center gap-1 transition"
+                    className="px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-100 inline-flex items-center gap-1 transition cursor-pointer"
                   >
                     <Info className="w-3.5 h-3.5 text-orange-600" />
-                    참여자 {showMemberPanel ? "닫기" : "관리"}
+                    <span>참여자 {showMemberPanel ? "닫기" : "보기"}</span>
                   </button>
                 </div>
               </div>
