@@ -77,6 +77,8 @@ export default function AuthPage() {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupStudentId, setSignupStudentId] = useState("");
+  const [signupAlumniHakbun, setSignupAlumniHakbun] = useState("19학번 졸업");
+  const [signupProfessorTitle, setSignupProfessorTitle] = useState("교육학과 전임교원");
   const [signupNote, setSignupNote] = useState("");
   const [signupLoading, setSignupLoading] = useState(false);
   const [signupError, setSignupError] = useState<string | null>(null);
@@ -178,7 +180,9 @@ export default function AuthPage() {
     const resolvedStudentIdOrYear =
       selectedRole === "student"
         ? admissionYearLabel
-        : signupStudentId.trim() || "학번 미기재";
+        : selectedRole === "alumni"
+        ? signupAlumniHakbun
+        : signupProfessorTitle;
 
     setSignupLoading(true);
     try {
@@ -650,17 +654,35 @@ export default function AuthPage() {
                     )}
                   </select>
                 </div>
+              ) : selectedRole === "alumni" ? (
+                <div>
+                  <label className="block font-bold text-ink mb-1.5">학번 *</label>
+                  <select
+                    value={signupAlumniHakbun}
+                    onChange={(e) => setSignupAlumniHakbun(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-surface-2 text-ink text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  >
+                    {Array.from({ length: 23 }, (_, i) => {
+                      const num = 22 - i; // 22부터 00까지 내림차순
+                      const prefix = num < 10 ? `0${num}` : `${num}`;
+                      return (
+                        <option key={prefix} value={`${prefix}학번 졸업`}>
+                          {prefix}학번 졸업
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
               ) : (
                 <div>
-                  <label className="block font-bold text-ink mb-1.5">학번 / 졸업연도 / 직함 *</label>
-                  <input
-                    type="text"
-                    required
-                    value={signupStudentId}
-                    onChange={(e) => setSignupStudentId(e.target.value)}
-                    placeholder="예: 18학번 졸업 / 교육학과 전임교원"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-surface-2 text-ink text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
+                  <label className="block font-bold text-ink mb-1.5">직함 *</label>
+                  <select
+                    value={signupProfessorTitle}
+                    onChange={(e) => setSignupProfessorTitle(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-surface-2 text-ink text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  >
+                    <option value="교육학과 전임교원">교육학과 전임교원</option>
+                  </select>
                 </div>
               )}
             </div>

@@ -501,15 +501,27 @@ export function AccessGateScreen({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="block text-xs font-bold text-slate-800 mb-1">
-              졸업 학번 표기 *
+              학번 *
             </label>
-            <input
-              type="text"
-              value={editStudentIdOrYear}
+            <select
+              value={
+                editStudentIdOrYear && editStudentIdOrYear.includes("학번 졸업")
+                  ? editStudentIdOrYear
+                  : "19학번 졸업"
+              }
               onChange={(e) => setEditStudentIdOrYear(e.target.value)}
-              placeholder="예: 18학번 졸업"
-              className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm text-slate-900"
-            />
+              className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 font-semibold"
+            >
+              {Array.from({ length: 23 }, (_, i) => {
+                const num = 22 - i;
+                const prefix = num < 10 ? `0${num}` : `${num}`;
+                return (
+                  <option key={prefix} value={`${prefix}학번 졸업`}>
+                    {prefix}학번 졸업
+                  </option>
+                );
+              })}
+            </select>
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-800 mb-1">
@@ -527,15 +539,15 @@ export function AccessGateScreen({
       ) : (
         <div>
           <label className="block text-xs font-bold text-slate-800 mb-1">
-            교원 소속 / 연구 분야 표기 *
+            직함 *
           </label>
-          <input
-            type="text"
-            value={editStudentIdOrYear}
+          <select
+            value={editStudentIdOrYear || "교육학과 전임교원"}
             onChange={(e) => setEditStudentIdOrYear(e.target.value)}
-            placeholder="예: 교육학과 교수 (교육공학 연구실)"
-            className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm text-slate-900"
-          />
+            className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-orange-500 font-semibold"
+          >
+            <option value="교육학과 전임교원">교육학과 전임교원</option>
+          </select>
         </div>
       )}
 
