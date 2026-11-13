@@ -133,6 +133,32 @@ export function canEditAndResubmitRegistration(status?: string | null): boolean 
 }
 
 /**
+ * 가입 승인 관리 대상 판별 (pending, needs_revision, supplement_requested, rejected)
+ * - 승인 대기, 보완 요청, 가입 반려 상태의 신청서만 해당
+ * - 승인 완료(approved) 및 이용 정지(suspended)는 제외
+ */
+export function isRegistrationPendingStatus(status?: string | null): boolean {
+  if (!status) return false;
+  return (
+    status === "pending" ||
+    status === "needs_revision" ||
+    status === "supplement_requested" ||
+    status === "rejected"
+  );
+}
+
+/**
+ * 전체 회원 관리 대상(정회원) 판별 (approved, suspended)
+ * - 가입 승인 완료 회원 및 승인 후 이용 정지 회원만 포함
+ * - 승인 대기(pending), 보완 요청(needs_revision), 가입 반려(rejected)는 원천 제외
+ */
+export function isFullMemberStatus(status?: string | null): boolean {
+  if (!status) return true; // 데모/레거시 기본 호환
+  if (isRegistrationPendingStatus(status)) return false;
+  return status === "approved" || status === "suspended";
+}
+
+/**
  * 승인 상태값 정규화 (외부 입력 또는 DB 값을 표준 상태로 판별)
  */
 export function normalizeApprovalStatus(
@@ -702,12 +728,18 @@ export function filterAndSortAdminUsers<
     roleFilter?: AdminUserRoleCategory;
     statusFilter?: AdminUserApprovalFilter;
     searchQuery?: string;
+    onlyFullMembers?: boolean;
   }
 ): T[] {
   if (!Array.isArray(users)) return [];
-  const { roleFilter = "all", statusFilter = "all", searchQuery = "" } = options;
+  const { roleFilter = "all", statusFilter = "all", searchQuery = "", onlyFullMembers = false } = options;
 
   let result = users;
+
+  // 0. 정회원 전용 필터링 (가입 대기, 보완 요청, 반려 회원 제외)
+  if (onlyFullMembers) {
+    result = result.filter((u) => isFullMemberStatus(u.approvalStatus));
+  }
 
   // 1. 역할 필터
   if (roleFilter !== "all") {

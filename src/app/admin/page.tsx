@@ -21,6 +21,8 @@ import {
   AdminUserApprovalFilter,
   filterAndSortAdminUsers,
   sortAdminUsers,
+  isRegistrationPendingStatus,
+  isFullMemberStatus,
 } from "@/lib/memberLifecycle";
 import {
   ShieldCheck,
@@ -100,15 +102,23 @@ export default function AdminPage() {
 
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
-  // 가입 승인 대기 목록 (승인 완료된 회원은 가입 승인창에서 제외)
+  // 가입 승인 대상 목록 (승인 대기, 보완 요청, 가입 반려 상태의 신청서만 포함)
   const pendingRealUsers = useMemo(
-    () => realUsersForAdmin.filter((u) => u.approvalStatus !== "approved"),
+    () =>
+      realUsersForAdmin.filter((u) => isRegistrationPendingStatus(u.approvalStatus)),
     [realUsersForAdmin]
   );
   const pendingApprovalRequests = useMemo(
-    () => approvalRequests.filter((r) => r.status !== "approved"),
+    () =>
+      approvalRequests.filter((r) => isRegistrationPendingStatus(r.status)),
     [approvalRequests]
   );
+
+  // 전체 회원 관리 대상 목록 (가입 승인 완료 회원 및 이용 정지 회원만 포함)
+  const fullMembersList = useMemo(() => {
+    const rawList = realUsersForAdmin.length > 0 ? realUsersForAdmin : users;
+    return rawList.filter((u) => isFullMemberStatus(u.approvalStatus));
+  }, [realUsersForAdmin, users]);
 
   // 회원 삭제 확인 및 단계별 결과 리포트 모달 상태
   const [deleteModalTarget, setDeleteModalTarget] = useState<{
@@ -481,7 +491,7 @@ export default function AdminPage() {
           }`}
         >
           <Users className="w-4 h-4" /> 전체 회원 관리 (
-          {realUsersForAdmin.length > 0 ? realUsersForAdmin.length : users.length})
+          {fullMembersList.length})
         </button>
         <button
           type="button"
@@ -860,7 +870,7 @@ export default function AdminPage() {
               { key: "professor", label: "교수진" },
               { key: "admin", label: "관리자" },
             ].map((tab) => {
-              const count = (realUsersForAdmin.length > 0 ? realUsersForAdmin : users).filter(
+              const count = fullMembersList.filter(
                 (u) => tab.key === "all" || u.role === tab.key
               ).length;
               return (
@@ -923,11 +933,8 @@ export default function AdminPage() {
                 onChange={(e) => setUserStatusFilter(e.target.value as AdminUserApprovalFilter)}
                 className="px-3 py-2 rounded-xl border border-line bg-surface-2 text-xs font-semibold text-ink focus:outline-orange-600"
               >
-                <option value="all">전체 승인 상태</option>
-                <option value="approved">승인 완료</option>
-                <option value="pending">승인 대기중</option>
-                <option value="needs_revision">보완 요청됨</option>
-                <option value="rejected">승인 반려됨</option>
+                <option value="all">전체 승인 상태 (승인 완료 & 이용 정지)</option>
+                <option value="approved">승인 완료 (정상 이용 중)</option>
                 <option value="suspended">이용 정지</option>
               </select>
             </div>
@@ -936,11 +943,12 @@ export default function AdminPage() {
           <div className="bg-surface rounded-2xl border border-line overflow-hidden shadow-xs">
             {/* 상단 안내 바 및 정렬 기준 안내 */}
             {(() => {
-              const targetList = realUsersForAdmin.length > 0 ? realUsersForAdmin : users;
+              const targetList = fullMembersList;
               const filteredUsers = filterAndSortAdminUsers(targetList, {
                 roleFilter: userRoleFilter,
                 statusFilter: userStatusFilter,
                 searchQuery: userSearchQuery,
+                onlyFullMembers: true,
               });
 
               const sortLabel =
@@ -960,9 +968,7 @@ export default function AdminPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-ink-2 flex items-center gap-1.5">
                         <Database className="w-4 h-4 text-brand-600" />
-                        {realUsersForAdmin.length > 0
-                          ? `Firebase 실제 등록 회원 (${realUsersForAdmin.length}명 중 ${filteredUsers.length}명 표시)`
-                          : `예시 회원 (${users.length}명 중 ${filteredUsers.length}명 표시)`}
+                        승인 완료 정회원 목록 ({fullMembersList.length}명 중 {filteredUsers.length}명 표시)
                       </span>
                       <span className="px-2 py-0.5 rounded-full bg-slate-200 text-ink-2 text-[11px] font-bold">
                         {sortLabel}

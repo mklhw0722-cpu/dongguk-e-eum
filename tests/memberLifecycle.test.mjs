@@ -20,6 +20,8 @@ import {
   compareAdminUsers,
   sortAdminUsers,
   filterAndSortAdminUsers,
+  isRegistrationPendingStatus,
+  isFullMemberStatus,
 } from "../src/lib/memberLifecycle.ts";
 
 const MOCK_FIREBASE_USER = { uid: "uid-student-2024" };
@@ -584,5 +586,129 @@ test("20. [단체 채팅방 및 타 시스템 영향 없음 검증] 단체 채�
   assert.match(chatSrc, /label:\s*"졸업생"/);
   assert.match(chatSrc, /label:\s*"교수진"/);
 });
+
+test("21. [가입 승인 대상과 전체 회원 관리 정회원 목록의 엄격한 분리 검증] pending/needs_revision/rejected는 가입 승인에만, approved/suspended는 전체 회원 관리에만 분류된다", () => {
+  // 1) 상태 판별 유틸리티 검증
+  assert.equal(isRegistrationPendingStatus("pending"), true);
+  assert.equal(isRegistrationPendingStatus("needs_revision"), true);
+  assert.equal(isRegistrationPendingStatus("supplement_requested"), true);
+  assert.equal(isRegistrationPendingStatus("rejected"), true);
+  assert.equal(isRegistrationPendingStatus("approved"), false);
+  assert.equal(isRegistrationPendingStatus("suspended"), false);
+
+  assert.equal(isFullMemberStatus("approved"), true);
+  assert.equal(isFullMemberStatus("suspended"), true);
+  assert.equal(isFullMemberStatus("pending"), false);
+  assert.equal(isFullMemberStatus("needs_revision"), false);
+  assert.equal(isFullMemberStatus("supplement_requested"), false);
+  assert.equal(isFullMemberStatus("rejected"), false);
+
+  // 2) 혼합 회원 목록 분리 검증
+  const mixedUsers = [
+    { id: "u-pen", name: "김대기", role: "student", approvalStatus: "pending" },
+    { id: "u-rev", name: "이보완", role: "student", approvalStatus: "needs_revision" },
+    { id: "u-rej", name: "박반려", role: "student", approvalStatus: "rejected" },
+    { id: "u-app1", name: "최승인", role: "student", approvalStatus: "approved" },
+    { id: "u-app2", name: "정교수", role: "professor", approvalStatus: "approved" },
+    { id: "u-sus", name: "강정지", role: "alumni", approvalStatus: "suspended" },
+  ];
+
+  const pendingList = mixedUsers.filter((u) => isRegistrationPendingStatus(u.approvalStatus));
+  const fullMemberList = mixedUsers.filter((u) => isFullMemberStatus(u.approvalStatus));
+
+  // 가입 승인 관리 대상: pending, needs_revision, rejected (총 3명)
+  assert.deepEqual(
+    pendingList.map((u) => u.id),
+    ["u-pen", "u-rev", "u-rej"]
+  );
+
+  // 전체 회원 관리 대상: approved, suspended (총 3명)
+  assert.deepEqual(
+    fullMemberList.map((u) => u.id),
+    ["u-app1", "u-app2", "u-sus"]
+  );
+
+  // 두 목록 간에 중복(교집합)이 완전히 0건이어야 함
+  const intersection = pendingList.filter((p) => fullMemberList.some((f) => f.id === p.id));
+  assert.equal(intersection.length, 0);
+});
+
+test("22. [관리자 승인 처리 후 정회원 목록 실시간 이동 및 카운트 갱신 시뮬레이션] 승인 시 대기 목록에서 제외되고 정회원 목록에 즉시 추가된다", () => {
+  let userList = [
+    { id: "stu-1", name: "신입생", role: "student", studentIdOrYear: "24학번", approvalStatus: "pending" },
+    { id: "stu-2", name: "재학생", role: "student", studentIdOrYear: "22학번", approvalStatus: "approved" },
+  ];
+
+  // 승인 전 상태
+  let pending = userList.filter((u) => isRegistrationPendingStatus(u.approvalStatus));
+  let full = userList.filter((u) => isFullMemberStatus(u.approvalStatus));
+  assert.equal(pending.length, 1);
+  assert.equal(full.length, 1);
+  assert.equal(full[0].id, "stu-2");
+
+  // 관리자가 stu-1을 'approved'로 승인 처리
+  userList = userList.map((u) => (u.id === "stu-1" ? { ...u, approvalStatus: "approved" } : u));
+
+  // 승인 후 실시간 반영 상태
+  pending = userList.filter((u) => isRegistrationPendingStatus(u.approvalStatus));
+  full = userList.filter((u) => isFullMemberStatus(u.approvalStatus));
+  assert.equal(pending.length, 0, "대기 목록에서 자동 제외");
+  assert.equal(full.length, 2, "정회원 목록에 자동 추가");
+
+  // 정렬 검증: 22학번(stu-2) -> 24학번(stu-1)
+  const sortedFull = sortAdminUsers(full, "student");
+  assert.deepEqual(
+    sortedFull.map((u) => u.id),
+    ["stu-2", "stu-1"]
+  );
+});
+
+test("23. [이용 정지 회원의 정회원 목록 보존 및 필터링 검증] suspended 회원이 전체 회원 목록에서 누락되지 않고 필터로 조회 가능하다", () => {
+  const users = [
+    { id: "u-active", name: "정상회원", role: "student", approvalStatus: "approved" },
+    { id: "u-suspended", name: "정지회원", role: "student", approvalStatus: "suspended" },
+  ];
+
+  // 전체 상태(all): 둘 다 노출
+  const allFull = filterAndSortAdminUsers(users, {
+    onlyFullMembers: true,
+    statusFilter: "all",
+  });
+  assert.equal(allFull.length, 2);
+
+  // 승인 완료(approved) 필터: 정상 회원만
+  const approvedOnly = filterAndSortAdminUsers(users, {
+    onlyFullMembers: true,
+    statusFilter: "approved",
+  });
+  assert.deepEqual(approvedOnly.map((u) => u.id), ["u-active"]);
+
+  // 이용 정지(suspended) 필터: 정지 회원만
+  const suspendedOnly = filterAndSortAdminUsers(users, {
+    onlyFullMembers: true,
+    statusFilter: "suspended",
+  });
+  assert.deepEqual(suspendedOnly.map((u) => u.id), ["u-suspended"]);
+});
+
+test("24. [관리자 센터 UI 소스코드 검증: 승인 대상 및 정회원 분리 구조] pendingRealUsers와 fullMembersList가 정확히 분리되어 사용된다", () => {
+  const adminSrc = fs.readFileSync(new URL("../src/app/admin/page.tsx", import.meta.url), "utf8");
+
+  // 1) pendingRealUsers가 isRegistrationPendingStatus로 필터링되는지 확인
+  assert.match(adminSrc, /realUsersForAdmin\.filter\(\(u\)\s*=>\s*isRegistrationPendingStatus\(u\.approvalStatus\)\)/);
+
+  // 2) fullMembersList가 isFullMemberStatus로 필터링되는지 확인
+  assert.match(adminSrc, /rawList\.filter\(\(u\)\s*=>\s*isFullMemberStatus\(u\.approvalStatus\)\)/);
+
+  // 3) 상단 메인 탭 '전체 회원 관리'에 fullMembersList.length가 표시되는지 확인
+  assert.match(adminSrc, /전체 회원 관리 \(\s*\{fullMembersList\.length\}\)/);
+
+  // 4) 역할별 카테고리 탭 카운트에 fullMembersList가 사용되는지 확인
+  assert.match(adminSrc, /fullMembersList\.filter\(\s*\(u\)\s*=>\s*tab\.key === "all" \|\| u\.role === tab\.key/);
+
+  // 5) 전체 회원 관리 목록 렌더링에 fullMembersList가 타겟으로 전달되는지 확인
+  assert.match(adminSrc, /filterAndSortAdminUsers\(targetList,\s*\{[\s\S]*?onlyFullMembers:\s*true/);
+});
+
 
 
