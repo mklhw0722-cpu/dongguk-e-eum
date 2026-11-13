@@ -45,6 +45,7 @@ import {
   Loader2,
   RefreshCw,
   Cloud,
+  Monitor,
 } from "lucide-react";
 
 const COURSE_CATEGORIES: CourseCategory[] = [
@@ -561,6 +562,21 @@ export default function GraduationPage() {
             공식 학업이수 가이드 원문 보기
             <ExternalLink className="w-4 h-4" />
           </a>
+        </div>
+      </div>
+
+      {/* 모바일 환경(768px 미만) PC 이용 권장 안내 배너 */}
+      <div
+        data-testid="graduation-mobile-pc-notice"
+        className="block md:hidden p-3.5 sm:p-4 rounded-2xl bg-orange-50/80 border border-orange-200/80 text-orange-950 shadow-2xs"
+        role="note"
+        aria-label="PC 환경 이용 권장 안내"
+      >
+        <div className="flex items-start gap-2.5">
+          <Monitor className="w-4 h-4 text-brand-600 shrink-0 mt-0.5" />
+          <p className="text-xs sm:text-sm font-medium leading-relaxed break-keep text-orange-950">
+            졸업요건 관리는 PC 환경에서 이용하는 것을 권장합니다. 보다 편리한 학점 입력과 이수 현황 확인을 위해 PC에서 접속해 주세요.
+          </p>
         </div>
       </div>
 

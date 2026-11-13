@@ -1188,3 +1188,39 @@ test("23. [특수교육학개론과 교육학개론 등 이종 강좌 중복 오
   );
   assert.equal(exactEduIntro.hasExactDuplicate, true);
 });
+
+test("34. [모바일 졸업요건 페이지 PC 이용 권장 안내] 768px 미만 모바일 전용 안내 배너 및 권장 문구가 구현되어 있다", () => {
+  const gradSrc = fs.readFileSync(new URL("../src/app/graduation/page.tsx", import.meta.url), "utf8");
+
+  // 1) 정확한 권장 안내 문구 확인
+  const expectedNotice = "졸업요건 관리는 PC 환경에서 이용하는 것을 권장합니다. 보다 편리한 학점 입력과 이수 현황 확인을 위해 PC에서 접속해 주세요.";
+  assert.ok(
+    gradSrc.includes(expectedNotice),
+    "안내 문구가 정확히 포함되어야 합니다."
+  );
+
+  // 2) 768px 미만(모바일)에서만 표시되고 PC에서는 숨김 (block md:hidden)
+  assert.match(
+    gradSrc,
+    /block\s+md:hidden[\s\S]*?graduation-mobile-pc-notice|graduation-mobile-pc-notice[\s\S]*?block\s+md:hidden/,
+    "화면 너비 768px 미만에서만 표시되고 PC 화면에서는 숨겨져야 합니다 (block md:hidden)."
+  );
+
+  // 3) 안내 아이콘(Monitor) 및 연한 배경색, break-keep 스타일 확인
+  assert.match(gradSrc, /<Monitor/);
+  assert.match(gradSrc, /bg-orange-50/);
+  assert.match(gradSrc, /break-keep/);
+
+  // 4) 위치: 페이지 제목(동국대학교 교육학과 졸업요건 자가점검 시스템) 아래, 졸업요건 입력 영역(섹션 1. 나의 기본 학사정보) 위에 배치
+  const titleIdx = gradSrc.indexOf("동국대학교 교육학과 졸업요건 자가점검 시스템");
+  const noticeIdx = gradSrc.indexOf("graduation-mobile-pc-notice");
+  const section1Idx = gradSrc.indexOf("1. 나의 기본 학사정보");
+
+  assert.ok(titleIdx !== -1, "페이지 제목이 존재해야 합니다.");
+  assert.ok(noticeIdx !== -1, "모바일 안내 배너가 존재해야 합니다.");
+  assert.ok(section1Idx !== -1, "섹션 1 입력 영역이 존재해야 합니다.");
+  assert.ok(
+    titleIdx < noticeIdx && noticeIdx < section1Idx,
+    "안내 문구는 페이지 제목 아래, 졸업요건 입력 영역 위에 배치되어야 합니다."
+  );
+});
