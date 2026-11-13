@@ -41,6 +41,8 @@ import {
   GroupChatCategoryTab,
   sortChatUsersForGroupCreation,
   formatChatMemberHakbun,
+  formatMessageDateDivider,
+  formatMessageTimeDisplay,
 } from "@/lib/chatReadReceipts";
 import {
   UserRole,
@@ -1372,88 +1374,118 @@ export default function ChatPage() {
                 onScroll={handleMessagesScroll}
                 className="flex-1 p-4 space-y-3 overflow-y-auto max-h-[400px]"
               >
-                {displayMessages.map((msg: any) => {
-                  if (msg.isSystemMessage) {
-                    return (
-                      <div key={msg.id} className="text-center my-2">
-                        <span className="inline-block px-3 py-1 rounded-full bg-slate-200/80 text-slate-600 text-[11px]">
-                          {msg.content}
-                        </span>
-                      </div>
-                    );
-                  }
-
-                  const isMe = msg.senderId === currentUser.id;
-                  const sender = availableUsers.find((u) => u.id === msg.senderId);
-                  const senderDisplayName =
-                    msg.senderName || sender?.name || "구성원";
-                  const senderDisplayRole = msg.senderRole
-                    ? ROLE_LABELS[msg.senderRole as UserRole]
-                    : sender
-                    ? ROLE_LABELS[sender.role]
-                    : "";
-                  const msgUnreadCount = unreadCountForMessage(
-                    msg,
-                    activeRoomReadState
-                  );
+                {displayMessages.map((msg: any, idx: number) => {
+                  const baseDateStr =
+                    activeConversation?.createdAt ||
+                    activeConversation?.lastMessageIso ||
+                    activeConversation?.lastMessageAt;
+                  const currentDateDivider = formatMessageDateDivider(msg, baseDateStr);
+                  const prevDateDivider =
+                    idx > 0
+                      ? formatMessageDateDivider(displayMessages[idx - 1], baseDateStr)
+                      : null;
+                  const showDateDivider =
+                    Boolean(currentDateDivider && currentDateDivider !== prevDateDivider);
+                  const formattedTime =
+                    formatMessageTimeDisplay(msg.createdAt) || msg.createdAt;
 
                   return (
-                    <div
-                      key={msg.id}
-                      className={`flex flex-col ${
-                        isMe ? "items-end" : "items-start"
-                      }`}
-                    >
-                      {!isMe && (
-                        <span className="text-[11px] font-semibold text-slate-500 mb-1 ml-1">
-                          {senderDisplayName}
-                          {senderDisplayRole ? ` · ${senderDisplayRole}` : ""}
-                        </span>
-                      )}
-                      <div className="flex items-end gap-1.5 max-w-[88%] sm:max-w-[75%]">
-                        {isMe && (
-                          <div className="flex flex-col items-end justify-end leading-tight shrink-0 gap-0.5">
-                            {msgUnreadCount > 0 && (
-                              <span
-                                data-testid={`msg-unread-count-${msg.id}`}
-                                title={`아직 읽지 않은 참여자 ${msgUnreadCount}명`}
-                                className="text-[11px] font-bold text-amber-600 tabular-nums"
-                              >
-                                {msgUnreadCount}
-                              </span>
-                            )}
-                            <span className="text-[10px] text-slate-400 whitespace-nowrap">
-                              {msg.createdAt}
-                            </span>
-                          </div>
-                        )}
+                    <React.Fragment key={msg.id || `msg-${idx}`}>
+                      {showDateDivider && (
                         <div
-                          className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-2xs break-words ${
-                            isMe
-                              ? "bg-[#f58220] text-white font-medium rounded-br-xs shadow-xs"
-                              : "bg-white  text-slate-800  border border-slate-200  rounded-bl-xs"
-                          }`}
+                          data-testid={`chat-date-divider-${msg.id || idx}`}
+                          className="flex items-center justify-center my-4 py-1 select-none"
+                          role="separator"
+                          aria-label={currentDateDivider!}
                         >
-                          {msg.content}
+                          <div className="flex-1 h-[1px] bg-slate-200" />
+                          <span className="px-3.5 py-1 text-[11px] font-medium text-slate-500 bg-slate-100 rounded-full mx-2 shadow-2xs whitespace-nowrap">
+                            {currentDateDivider}
+                          </span>
+                          <div className="flex-1 h-[1px] bg-slate-200" />
                         </div>
-                        {!isMe && (
-                          <div className="flex flex-col items-start justify-end leading-tight shrink-0 gap-0.5">
-                            {msgUnreadCount > 0 && (
-                              <span
-                                data-testid={`msg-unread-count-${msg.id}`}
-                                title={`아직 읽지 않은 참여자 ${msgUnreadCount}명`}
-                                className="text-[11px] font-bold text-amber-600 tabular-nums"
-                              >
-                                {msgUnreadCount}
+                      )}
+
+                      {msg.isSystemMessage ? (
+                        <div className="text-center my-2">
+                          <span className="inline-block px-3 py-1 rounded-full bg-slate-200/80 text-slate-600 text-[11px]">
+                            {msg.content}
+                          </span>
+                        </div>
+                      ) : (() => {
+                        const isMe = msg.senderId === currentUser.id;
+                        const sender = availableUsers.find((u) => u.id === msg.senderId);
+                        const senderDisplayName =
+                          msg.senderName || sender?.name || "구성원";
+                        const senderDisplayRole = msg.senderRole
+                          ? ROLE_LABELS[msg.senderRole as UserRole]
+                          : sender
+                          ? ROLE_LABELS[sender.role]
+                          : "";
+                        const msgUnreadCount = unreadCountForMessage(
+                          msg,
+                          activeRoomReadState
+                        );
+
+                        return (
+                          <div
+                            className={`flex flex-col ${
+                              isMe ? "items-end" : "items-start"
+                            }`}
+                          >
+                            {!isMe && (
+                              <span className="text-[11px] font-semibold text-slate-500 mb-1 ml-1">
+                                {senderDisplayName}
+                                {senderDisplayRole ? ` · ${senderDisplayRole}` : ""}
                               </span>
                             )}
-                            <span className="text-[10px] text-slate-400 whitespace-nowrap">
-                              {msg.createdAt}
-                            </span>
+                            <div className="flex items-end gap-1.5 max-w-[88%] sm:max-w-[75%]">
+                              {isMe && (
+                                <div className="flex flex-col items-end justify-end leading-tight shrink-0 gap-0.5">
+                                  {msgUnreadCount > 0 && (
+                                    <span
+                                      data-testid={`msg-unread-count-${msg.id}`}
+                                      title={`아직 읽지 않은 참여자 ${msgUnreadCount}명`}
+                                      className="text-[11px] font-bold text-amber-600 tabular-nums"
+                                    >
+                                      {msgUnreadCount}
+                                    </span>
+                                  )}
+                                  <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                                    {formattedTime}
+                                  </span>
+                                </div>
+                              )}
+                              <div
+                                className={`px-4 py-2.5 rounded-2xl text-xs sm:text-sm leading-relaxed shadow-2xs break-words ${
+                                  isMe
+                                    ? "bg-[#f58220] text-white font-medium rounded-br-xs shadow-xs"
+                                    : "bg-white  text-slate-800  border border-slate-200  rounded-bl-xs"
+                                }`}
+                              >
+                                {msg.content}
+                              </div>
+                              {!isMe && (
+                                <div className="flex flex-col items-start justify-end leading-tight shrink-0 gap-0.5">
+                                  {msgUnreadCount > 0 && (
+                                    <span
+                                      data-testid={`msg-unread-count-${msg.id}`}
+                                      title={`아직 읽지 않은 참여자 ${msgUnreadCount}명`}
+                                      className="text-[11px] font-bold text-amber-600 tabular-nums"
+                                    >
+                                      {msgUnreadCount}
+                                    </span>
+                                  )}
+                                  <span className="text-[10px] text-slate-400 whitespace-nowrap">
+                                    {formattedTime}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
-                        )}
-                      </div>
-                    </div>
+                        );
+                      })()}
+                    </React.Fragment>
                   );
                 })}
                 <div ref={messagesEndRef} />

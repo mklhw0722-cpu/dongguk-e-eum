@@ -428,3 +428,152 @@ export function sortChatUsersForGroupCreation<T extends { id?: string; name?: st
   if (!Array.isArray(users)) return [];
   return [...users].sort((a, b) => compareGroupChatMembers(a, b, category));
 }
+
+/**
+ * 한국 표준시(KST, UTC+9, Asia/Seoul) 기준 카카오톡 스타일 날짜 구분선 포맷터
+ * 출력 형식 예시: "2026년 11월 13일 금요일"
+ */
+const KST_DATE_DIVIDER_FORMATTER = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+  weekday: "long",
+});
+
+/**
+ * Date 객체 또는 밀리초 타임스탬프를 한국 표준시 기준 "YYYY년 M월 D일 요일" 문자열로 변환합니다.
+ */
+export function formatChatDateDivider(dateOrMs: Date | number): string {
+  const d = typeof dateOrMs === "number" ? new Date(dateOrMs) : dateOrMs;
+  if (!d || Number.isNaN(d.getTime())) return "";
+  return KST_DATE_DIVIDER_FORMATTER.format(d);
+}
+
+/**
+ * 다양한 형태의 채팅 메시지 객체에서 밀리초 단위 타임스탬프(Epoch ms)를 안전하게 추출합니다.
+ *
+ * 지원 형식:
+ * 1. Firestore Timestamp 객체: toMillis() 또는 seconds * 1000 + nanoseconds/1M
+ * 2. msg.timestamp (숫자 밀리초 또는 Date 객체)
+ * 3. msg.createdAtTimestamp (숫자 밀리초)
+ * 4. msg.createdAtIso (ISO 8601 문자열)
+ * 5. msg.createdAt (날짜+시간 문자열, 또는 시간 전용 문자열 + baseDateStr 결합)
+ * 6. msg.id (msg-sys-1794... 또는 msg-1794... 형태의 타임스탬프)
+ * 7. 시간 정보가 전혀 없는 경우 null 반환 (임의의 날짜를 조작하지 않음)
+ */
+export function resolveMessageTimestampMs(msg: any, baseDateStr?: string): number | null {
+  if (!msg) return null;
+
+  // 1. msg.timestamp (Firestore Timestamp / Date / 숫자)
+  if (msg.timestamp) {
+    if (typeof msg.timestamp.toMillis === "function") {
+      const ms = msg.timestamp.toMillis();
+      if (typeof ms === "number" && Number.isFinite(ms) && ms > 100000000000) {
+        return Math.floor(ms);
+      }
+    }
+    if (typeof msg.timestamp.seconds === "number" && Number.isFinite(msg.timestamp.seconds)) {
+      const ms = msg.timestamp.seconds * 1000 + Math.floor((msg.timestamp.nanoseconds || 0) / 1000000);
+      if (ms > 100000000000) {
+        return Math.floor(ms);
+      }
+    }
+    if (msg.timestamp instanceof Date && !Number.isNaN(msg.timestamp.getTime())) {
+      return msg.timestamp.getTime();
+    }
+    if (typeof msg.timestamp === "number" && Number.isFinite(msg.timestamp) && msg.timestamp > 100000000000) {
+      return Math.floor(msg.timestamp);
+    }
+  }
+
+  // 2. msg.createdAtTimestamp (숫자 밀리초)
+  if (
+    typeof msg.createdAtTimestamp === "number" &&
+    Number.isFinite(msg.createdAtTimestamp) &&
+    msg.createdAtTimestamp > 100000000000
+  ) {
+    return Math.floor(msg.createdAtTimestamp);
+  }
+
+  // 3. msg.createdAtIso (ISO 8601 문자열)
+  if (typeof msg.createdAtIso === "string" && msg.createdAtIso.trim()) {
+    const parsed = Date.parse(msg.createdAtIso.trim());
+    if (!Number.isNaN(parsed) && parsed > 100000000000) {
+      return parsed;
+    }
+  }
+
+  // 4. msg.createdAt (문자열)
+  if (typeof msg.createdAt === "string" && msg.createdAt.trim()) {
+    const trimmed = msg.createdAt.trim();
+    // 4-1) 전체 날짜 파싱 가능한 경우 (예: "2026-11-13 14:30:00", "2026.11.13")
+    const directParse = Date.parse(trimmed);
+    if (!Number.isNaN(directParse) && directParse > 100000000000) {
+      return directParse;
+    }
+
+    // 4-2) 시간 문자열인 경우 ("오후 02:30", "14:30" 등) baseDateStr과 결합
+    const timeParsed = parseTimeStringToMs(trimmed, baseDateStr);
+    if (timeParsed !== null && timeParsed > 100000000000) {
+      return timeParsed;
+    }
+  }
+
+  // 5. msg.id 내 포함된 타임스탬프 (예: msg-sys-1794557452394)
+  if (typeof msg.id === "string") {
+    const idMatch = msg.id.match(/(?:msg|sys|message)[-_](\d{12,14})\b/);
+    if (idMatch) {
+      const parsedIdTime = parseInt(idMatch[1], 10);
+      if (Number.isFinite(parsedIdTime) && parsedIdTime > 100000000000) {
+        return parsedIdTime;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 메시지 객체에서 카카오톡 스타일 날짜 구분선 텍스트("2026년 11월 13일 금요일")를 산출합니다.
+ * 날짜 정보가 전혀 없는 메시지는 null을 반환하여 임의의 가짜 날짜가 표시되지 않도록 보호합니다.
+ */
+export function formatMessageDateDivider(msg: any, baseDateStr?: string): string | null {
+  const ts = resolveMessageTimestampMs(msg, baseDateStr);
+  if (ts === null) return null;
+  return formatChatDateDivider(ts);
+}
+
+/**
+ * 두 메시지의 전송 일자가 한국 표준시(Asia/Seoul) 기준으로 다른 날짜인지 판별합니다.
+ */
+export function isDifferentChatDate(msgA: any, msgB: any, baseDateStr?: string): boolean {
+  const dateA = formatMessageDateDivider(msgA, baseDateStr);
+  const dateB = formatMessageDateDivider(msgB, baseDateStr);
+  if (!dateA || !dateB) return false;
+  return dateA !== dateB;
+}
+
+/**
+ * 메시지 말풍선 옆에 표시할 전송 시간(오전/오후 HH:MM)을 안전하게 포맷팅합니다.
+ */
+export function formatMessageTimeDisplay(timeOrIso?: string | null): string {
+  if (!timeOrIso || typeof timeOrIso !== "string") return "";
+  const trimmed = timeOrIso.trim();
+  // 이미 "오전/오후 HH:MM" 또는 "HH:MM" 형식인 경우 그대로 유지
+  if (/^(오전|오후|AM|PM|am|pm)?\s*\d{1,2}:\d{2}$/.test(trimmed)) {
+    return trimmed;
+  }
+  // ISO 8601 등 전체 날짜+시간 형식인 경우 "오전/오후 HH:MM"으로 변환
+  const parsed = Date.parse(trimmed);
+  if (!Number.isNaN(parsed)) {
+    return new Intl.DateTimeFormat("ko-KR", {
+      timeZone: "Asia/Seoul",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    }).format(new Date(parsed));
+  }
+  return trimmed;
+}
+

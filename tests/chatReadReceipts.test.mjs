@@ -18,6 +18,11 @@ import {
   extractEntranceHakbun,
   compareGroupChatMembers,
   sortChatUsersForGroupCreation,
+  formatChatDateDivider,
+  resolveMessageTimestampMs,
+  formatMessageDateDivider,
+  isDifferentChatDate,
+  formatMessageTimeDisplay,
 } from "../src/lib/chatReadReceipts.ts";
 
 test("1. [1:1 채팅] 사용자 A가 B에게 메시지를 보내면 A 화면에 '1'이 표시되고, A 본인의 안 읽은 메시지 수는 0이다", () => {
@@ -736,6 +741,129 @@ test("26. [단체 채팅방 UI 소스코드 구조 검증] 탭(재학생/졸업�
 
   // 6) 탭 전환 시 선택 유지 (selectedUserIds 상태가 groupCategoryTab과 독립적으로 전역 유지)
   assert.match(chatSrc, /selectedUserIds\.includes\(u\.id\)/);
+});
+
+test("27. [날짜 구분선 포맷] 한국 표준시(Asia/Seoul) 기준 'YYYY년 M월 D일 요일' 형식으로 정확히 변환된다", () => {
+  // 2026년 11월 13일 (금요일) KST 테스트
+  // UTC 2026-11-13T03:00:00Z -> KST 2026-11-13 12:00:00 (금요일)
+  const d = new Date("2026-11-13T03:00:00Z");
+  const formatted = formatChatDateDivider(d);
+  assert.equal(formatted, "2026년 11월 13일 금요일");
+
+  // 밀리초 타임스탬프 입력 지원
+  assert.equal(formatChatDateDivider(d.getTime()), "2026년 11월 13일 금요일");
+
+  // 유효하지 않은 입력 시 빈 문자열 반환
+  assert.equal(formatChatDateDivider(new Date(NaN)), "");
+});
+
+test("28. [자정 전후 날짜 구분] UTC 기준과 한국(KST) 기준의 자정 전후 시점이 올바른 한국 날짜와 요일로 계산된다", () => {
+  // UTC 2026-11-12T14:59:00Z -> KST 2026-11-12 23:59:00 (목요일)
+  const beforeMidnight = new Date("2026-11-12T14:59:00Z");
+  assert.equal(formatChatDateDivider(beforeMidnight), "2026년 11월 12일 목요일");
+
+  // UTC 2026-11-12T15:01:00Z -> KST 2026-11-13 00:01:00 (금요일)
+  const afterMidnight = new Date("2026-11-12T15:01:00Z");
+  assert.equal(formatChatDateDivider(afterMidnight), "2026년 11월 13일 금요일");
+
+  const msg1 = { timestamp: beforeMidnight };
+  const msg2 = { timestamp: afterMidnight };
+
+  // 두 메시지가 서로 다른 날짜임을 올바르게 감지
+  assert.equal(isDifferentChatDate(msg1, msg2), true);
+  assert.equal(isDifferentChatDate(msg1, msg1), false);
+});
+
+test("29. [메시지 타임스탬프 추출] Firestore Timestamp, Date, ISO, time string, ID 타임스탬프를 안전하게 추출한다", () => {
+  // 1) Firestore toMillis()
+  const msgWithToMillis = {
+    timestamp: { toMillis: () => 1794557452000 },
+  };
+  assert.equal(resolveMessageTimestampMs(msgWithToMillis), 1794557452000);
+
+  // 2) Firestore seconds & nanoseconds
+  const msgWithSeconds = {
+    timestamp: { seconds: 1794557452, nanoseconds: 500000000 },
+  };
+  assert.equal(resolveMessageTimestampMs(msgWithSeconds), 1794557452500);
+
+  // 3) createdAtTimestamp
+  const msgWithCreatedTs = {
+    createdAtTimestamp: 1794557452000,
+  };
+  assert.equal(resolveMessageTimestampMs(msgWithCreatedTs), 1794557452000);
+
+  // 4) createdAtIso
+  const msgWithIso = {
+    createdAtIso: "2026-11-13T12:00:00.000Z",
+  };
+  assert.equal(resolveMessageTimestampMs(msgWithIso), Date.parse("2026-11-13T12:00:00.000Z"));
+
+  // 5) createdAt 시간 문자열 + baseDateStr
+  const msgWithTime = {
+    createdAt: "오후 02:30",
+  };
+  const timeMs = resolveMessageTimestampMs(msgWithTime, "2026-11-13");
+  assert.ok(timeMs !== null);
+  assert.equal(formatChatDateDivider(timeMs), "2026년 11월 13일 금요일");
+
+  // 6) msg.id 타임스탬프 (시스템 메시지 등)
+  const msgWithId = {
+    id: "msg-sys-1794557452000",
+  };
+  assert.equal(resolveMessageTimestampMs(msgWithId), 1794557452000);
+
+  // 7) 시간 정보가 아예 없는 경우 null 반환 (가짜 임의 날짜 생성 방지)
+  const emptyMsg = { content: "시간 없는 메시지" };
+  assert.equal(resolveMessageTimestampMs(emptyMsg), null);
+  assert.equal(formatMessageDateDivider(emptyMsg), null);
+});
+
+test("30. [날짜 구분선 배치 로직] 첫 메시지 표시, 동일 날짜 중복 제거, 날짜 변경 시 새 구분선, 시스템 메시지 연동 검증", () => {
+  const msgs = [
+    { id: "m1", timestamp: new Date("2026-11-12T10:00:00+09:00"), content: "안녕하세요 1" },
+    { id: "m2", timestamp: new Date("2026-11-12T11:00:00+09:00"), content: "네 안녕하세요 2" },
+    { id: "m3", isSystemMessage: true, timestamp: new Date("2026-11-13T09:00:00+09:00"), content: "새 참여자 입장" },
+    { id: "m4", timestamp: new Date("2026-11-13T10:00:00+09:00"), content: "오늘 회의 일정입니다" },
+  ];
+
+  // 각 메시지 인덱스별 구분선 출력 여부 시뮬레이션
+  const dividers = msgs.map((msg, idx) => {
+    const cur = formatMessageDateDivider(msg);
+    const prev = idx > 0 ? formatMessageDateDivider(msgs[idx - 1]) : null;
+    return cur && cur !== prev ? cur : null;
+  });
+
+  assert.deepEqual(dividers, [
+    "2026년 11월 12일 목요일", // 첫 메시지 위에 표시
+    null,                      // 같은 날이므로 중복 표시 안 함
+    "2026년 11월 13일 금요일", // 자정 넘어 날짜 바뀌었으므로 새 날짜 표시 (시스템 메시지 포함)
+    null,                      // 13일의 다음 메시지이므로 중복 표시 안 함
+  ]);
+});
+
+test("31. [메시지 시간 표기] formatMessageTimeDisplay는 오전/오후 HH:MM 형식을 안전하게 보장한다", () => {
+  assert.equal(formatMessageTimeDisplay("오후 02:30"), "오후 02:30");
+  assert.equal(formatMessageTimeDisplay("14:30"), "14:30");
+  const isoTime = formatMessageTimeDisplay("2026-11-13T05:30:00Z"); // 14:30 KST
+  assert.match(isoTime, /오후\s*0?2:30|2:30/);
+});
+
+test("32. [채팅 화면 UI 소스코드 검증] 카카오톡 스타일 날짜 구분선(중앙 정렬, 구분선 라인, role=separator)이 적용되어 있다", () => {
+  const chatSrc = fs.readFileSync(new URL("../src/app/chat/page.tsx", import.meta.url), "utf8");
+
+  // 1) formatMessageDateDivider 및 formatMessageTimeDisplay import 확인
+  assert.match(chatSrc, /formatMessageDateDivider/);
+  assert.match(chatSrc, /formatMessageTimeDisplay/);
+
+  // 2) 날짜 구분선 DOM 및 role="separator"
+  assert.match(chatSrc, /role="separator"/);
+  assert.match(chatSrc, /data-testid=\{`chat-date-divider-\$\{msg\.id/);
+
+  // 3) 중앙 정렬 및 라인 스타일 (flex, justify-center, bg-slate-200)
+  assert.match(chatSrc, /flex items-center justify-center/);
+  assert.match(chatSrc, /bg-slate-200/);
+  assert.match(chatSrc, /rounded-full/);
 });
 
 
